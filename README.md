@@ -13,3 +13,7 @@ We believe there remains huge whitespace in the notice-and-commenting systems in
 *   **Ease of Commenting:** Laypeople are often unable or simply too uninterested to pursue long, complex commenting procedures or hash through the nuances of a proper response. We handle the commenting medium itself (ie. via Federal Register, or Regulations.gov, or direct contact) and let people focus on their comments.
 
 Made with love by Praneel Patel and Emilia Hernandez @ The Courtyards Institute [https://www.courtyardsinstitute.org/]
+
+
+**Known Issues:** 
+1. Within stratification_scripts/2024distribution.py, the sampling will often cap out at 10,000 docs per search. This means not all documents will be collected under a quarterly or longer search timeframe. For our usecase, however, 80,000 document search will suffice as a reasonable porportion. 

@@ -6,7 +6,6 @@ from typing import Optional, Dict
 
 import pandas as pd
 import requests
-from plotnine import aes, element_blank, element_rect, ggplot, geom_histogram, labs, theme, theme_minimal
 from tqdm import tqdm
 
 
@@ -22,9 +21,6 @@ SESSION = requests.Session()
 REG_PATH_RE = re.compile(r"/document/([A-Za-z0-9-]+)")
 REG_QUERY_RE = re.compile(r"[?&]D=([A-Za-z0-9-]+)")
 
-# Styling
-PRIMARY = "#2596be"
-METAL_GREY = "#b0b0b0"  # approximation
 
 
 def extract_regsid(record: dict) -> Optional[str]:
@@ -114,7 +110,8 @@ def regs_comment_count(document_id: str, api_key: Optional[str], max_retries: in
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Distribution of comments for 2024 Federal Register Public Inspection docs")
+    # Disable abbreviation so flags like --end aren't misparsed
+    parser = argparse.ArgumentParser(description="Distribution of comments for Federal Register documents by year", allow_abbrev=False)
     parser.add_argument("--year", type=int, default=2024)
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--output-dir", type=str, default=os.path.join(os.path.dirname(__file__), "output"))
@@ -126,6 +123,15 @@ def main() -> None:
     parser.add_argument("--fr-batch-size", type=int, default=100, help="Batch size for FR document details fetch")
     parser.add_argument("--sampling", type=str, default="quarterly", choices=["daily", "quarterly"], help="Sampling strategy: daily (full year) or quarterly (efficient sampling)")
     args = parser.parse_args()
+
+    # If FR_YEAR env is present, enforce it as the year to avoid any CLI/env mismatch
+    env_year = os.environ.get("FR_YEAR")
+    if env_year and str(args.year) != str(env_year):
+        try:
+            args.year = int(env_year)
+            print(f"Note: Overriding --year with FR_YEAR={env_year} to ensure consistency with runner")
+        except ValueError:
+            print(f"Warning: FR_YEAR={env_year} is not a valid integer; using --year={args.year}")
 
     os.makedirs(args.output_dir, exist_ok=True)
 
@@ -224,7 +230,7 @@ def main() -> None:
             comment_eligible.append(rec)
             explicit_comment_count += 1
     
-    print(f"Total 2024 docs: {len(all_results)}; Comment-eligible: {len(comment_eligible)}")
+    print(f"Total {args.year} docs: {len(all_results)}; Comment-eligible: {len(comment_eligible)}")
     print(f"  - PRORULE documents: {prorule_count}")
     print(f"  - Explicit comment indicators: {explicit_comment_count}")
 
@@ -327,26 +333,7 @@ def main() -> None:
         f"mean={stats['mean']:.2f}, p75={int(stats['75%'])}, max={int(stats['max'])}"
     )
 
-    # Plot distribution (all docs; zeros included)
-    plot = (
-        ggplot(df, aes(x="comment_count"))
-        + geom_histogram(binwidth=1, fill=PRIMARY, color=PRIMARY)
-        + theme_minimal()
-        + theme(
-            panel_background=element_rect(fill=METAL_GREY),
-            plot_background=element_rect(fill=METAL_GREY),
-            panel_grid_major=element_blank(),
-            panel_grid_minor=element_blank(),
-        )
-        + labs(
-            title=f"Distribution of Comments for Federal Register Documents ({args.year})",
-            x="Number of comments",
-            y="Number of documents",
-        )
-    )
-    png_path = os.path.join(args.output_dir, f"comments_distribution_{args.year}.png")
-    plot.save(png_path, width=10, height=6, dpi=300)
-    print(f"Saved plot: {png_path}")
+    # Plotting removed per request; only CSV output is generated
 
 
 if __name__ == "__main__":
