@@ -1,1 +1,0 @@
-#calendar heatmap (2024) of daily total comments with a heatmap putting the number of comments per day on a spectrum (one of the color schemes) but a very dull almost monotonic scheme, and a dark pop color for days with 0 comments on more than 50% of items on the active docket. Visual match to your “Democracy dies in the shadows” story.

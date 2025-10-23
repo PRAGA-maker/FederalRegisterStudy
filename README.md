@@ -16,5 +16,19 @@ Made with love by Emilia Hernandez [https://emiliahernandez.com/] and Praneel Pa
 
 
 **Known Issues:** 
-1. Within stratification_scripts/2024distribution.py, the sampling will often cap out at 10,000 docs per search. This means not all documents will be collected under a quarterly or longer search timeframe. For our usecase, however, 80,000 document search will suffice as a reasonable porportion.
-  UPDATE: FIXED! Searching over days.
+1. Within `stratification_scripts/2024distribution.py`, the sampling will often cap out at 10,000 docs per search. This means not all documents will be collected under a quarterly or longer search timeframe. For our usecase, however, 80,000 document search will suffice as a reasonable porportion.
+   UPDATE: FIXED! Searching over days.
+
+2. Data access limitations (counts and channels):
+   - What we can access:
+     - Federal Register document metadata (titles, dates, agencies, types)
+     - Regulations.gov authoritative comment counts for participating agencies (via `commentCount` or `meta.totalElements`)
+     - Mappings between FR docs and Regulations.gov (`regs_document_id` when present)
+     - Comment period dates when provided
+   - What we cannot reliably access:
+     - Comment counts for non-participating agency portals (e.g., FCC ECFS, FERC, SEC)
+     - Email/mail submission volumes (no centralized API)
+     - Counts for agency-specific portals outside Regulations.gov
+   - Our approach:
+     - Classify submission channels (`regs.gov`, agency portals, email/addresses, other).
+     - Compute comment-count percentiles only for the `regs.gov` channel where counts are authoritative; report other channels separately.
