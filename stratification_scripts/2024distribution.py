@@ -1,6 +1,5 @@
 import argparse
 import os
-import re
 import time
 from typing import Optional, Dict
 
@@ -9,50 +8,13 @@ import requests
 from tqdm import tqdm
 
 
-# Endpoints
+# API Endpoints
 FR_DOCS_URL = "https://www.federalregister.gov/api/v1/documents.json"
 REGS_DOC_URL = "https://api.regulations.gov/v4/documents/{documentId}"
-FR_DOCS_BULK_URL_TMPL = "https://www.federalregister.gov/api/v1/documents/{docnums}.json"
 
 # HTTP session (connection pooling)
 SESSION = requests.Session()
 
-# Precompiled regex for regs.gov IDs
-REG_PATH_RE = re.compile(r"/document/([A-Za-z0-9-]+)")
-REG_QUERY_RE = re.compile(r"[?&]D=([A-Za-z0-9-]+)")
-
-
-
-def extract_regsid(record: dict) -> Optional[str]:
-    candidates = []
-    for k in (
-        "comment_url",
-        "comments_url",
-        "regulations_dot_gov_url",
-        "regulations_dot_gov_docket_url",
-        "action_comments_url",
-        "comment_url_html",
-    ):
-        v = record.get(k)
-        if isinstance(v, str):
-            candidates.append(v)
-    for k, v in record.items():
-        if isinstance(v, str) and "regulations.gov" in v:
-            candidates.append(v)
-    r_path = REG_PATH_RE
-    r_query = REG_QUERY_RE
-    for url in candidates:
-        m1 = r_path.search(url)
-        if m1:
-            return m1.group(1)
-        m2 = r_query.search(url)
-        if m2:
-            return m2.group(1)
-    for k in ("regulations_dot_gov_document_id", "regs_document_id"):
-        v = record.get(k)
-        if isinstance(v, str) and v:
-            return v
-    return None
 
 
 def fetch_document_details(document_number: str, max_retries: int = 3) -> Optional[dict]:
@@ -119,9 +81,6 @@ def main() -> None:
     parser.add_argument("--regs-rpm", type=int, default=30, help="Throttle Regulations.gov lookups to requests per minute (<=50 recommended)")
     parser.add_argument("--fr-sleep", type=float, default=0.2, help="Sleep seconds between FR page fetches")
     parser.add_argument("--retries", type=int, default=10, help="Max retries for 429/5xx responses")
-    parser.add_argument("--include-dockets", action="store_true", default=False, help="Also fetch FR dockets (second pass) for missing counts")
-    parser.add_argument("--fr-batch-size", type=int, default=100, help="Batch size for FR document details fetch")
-    parser.add_argument("--sampling", type=str, default="quarterly", choices=["daily", "quarterly"], help="Sampling strategy: daily (full year) or quarterly (efficient sampling)")
     args = parser.parse_args()
 
     # If FR_YEAR env is present, enforce it as the year to avoid any CLI/env mismatch
@@ -135,19 +94,10 @@ def main() -> None:
 
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # Fetch FR documents that allow commenting in 2024
+    # Fetch FR documents that allow commenting for the specified year
+    # Query each day individually to avoid hitting the 10,000 result limit
     all_results = []
-    if args.sampling == "quarterly":
-        # Use quarterly sampling for efficiency
-        dates = pd.date_range(start=f"{args.year}-01-01", end=f"{args.year}-12-31", freq="QS").strftime("%Y-%m-%d").tolist()
-        # Add a few more strategic dates throughout the year
-        dates.extend([
-            f"{args.year}-03-15", f"{args.year}-06-15", f"{args.year}-09-15", f"{args.year}-12-15"
-        ])
-        dates = sorted(set(dates))  # Remove duplicates and sort
-    else:
-        # Use daily sampling (original approach)
-        dates = pd.date_range(start=f"{args.year}-01-01", end=f"{args.year}-12-31").strftime("%Y-%m-%d").tolist()
+    dates = pd.date_range(start=f"{args.year}-01-01", end=f"{args.year}-12-31").strftime("%Y-%m-%d").tolist()
     reached_limit = False
     
     # If limiting documents, use an open-ended bar so we can stop early before 366 days
@@ -160,9 +110,8 @@ def main() -> None:
                 params = {
                     "per_page": 1000,
                     "page": page,
-                    "conditions[publication_date]": day,
+                    "conditions[publication_date][is]": day,
                     "conditions[type][]": ["PRORULE", "NOTICE"],
-                    # Removed fields[] parameter - FR API returns reasonable defaults without it
                 }
                 
                 # retry on failure per page
@@ -211,28 +160,10 @@ def main() -> None:
     if args.limit is not None:
         all_results = all_results[: args.limit]
 
-    # Filter to only documents that allow commenting (client-side filter)
-    comment_eligible = []
-    prorule_count = 0
-    explicit_comment_count = 0
-    
-    for rec in all_results:
-        # Always include PRORULE documents as they typically accept comments
-        if rec.get("type") == "Proposed Rule":
-            comment_eligible.append(rec)
-            prorule_count += 1
-        # Also include if any explicit comment indicators present
-        elif (
-            rec.get("accepting_comments_on_regulations_dot_gov") is True
-            or rec.get("comment_url") is not None
-            or rec.get("comments_close_on") is not None
-        ):
-            comment_eligible.append(rec)
-            explicit_comment_count += 1
-    
-    print(f"Total {args.year} docs: {len(all_results)}; Comment-eligible: {len(comment_eligible)}")
-    print(f"  - PRORULE documents: {prorule_count}")
-    print(f"  - Explicit comment indicators: {explicit_comment_count}")
+    # Include all PRORULE and NOTICE documents for enrichment
+    # Will filter after enrichment to keep only those that actually accept comments
+    comment_eligible = all_results
+    print(f"Total {args.year} docs fetched (PRORULE + NOTICE): {len(all_results)}")
 
     # Enrich comment counts from FR data directly, fallback to Regulations.gov
     rows = []
@@ -293,21 +224,26 @@ def main() -> None:
         agencies = rec.get("agencies") or []
         agency_names = ", ".join([a.get("name") for a in agencies if isinstance(a, dict) and a.get("name")])
 
-        rows.append(
-            {
-                "document_number": rec.get("document_number"),
-                "title": rec.get("title"),
-                "agency": agency_names,
-                "publication_date": rec.get("publication_date"),
-                "comment_url": comment_url,
-                "comments_close_on": comments_close_on,
-                "regs_document_id": regs_document_id,
-                "comment_count": comment_count,
-                "source": source,
-            }
-        )
+        # Include if PRORULE (almost always accepts comments) or has comment mechanism indicators
+        if (rec.get("type") == "Proposed Rule" or 
+            comment_url is not None or 
+            comments_close_on is not None or 
+            regs_document_id is not None):
+            rows.append(
+                {
+                    "document_number": rec.get("document_number"),
+                    "title": rec.get("title"),
+                    "agency": agency_names,
+                    "publication_date": rec.get("publication_date"),
+                    "comment_url": comment_url,
+                    "comments_close_on": comments_close_on,
+                    "regs_document_id": regs_document_id,
+                    "comment_count": comment_count,
+                    "source": source,
+                }
+            )
 
-    print(f"Total rows: {len(rows)}")
+    print(f"\nFiltered to {len(rows)} comment-eligible documents (from {len(all_results)} total)")
     print(f"Data sources: FR={fr_source_count}, Regs.gov={regs_source_count}, Unknown={len(rows)-fr_source_count-regs_source_count}")
     if rows:
         print(f"Sample row: {rows[0]}")
@@ -344,27 +280,31 @@ LESSONS LEARNED
 
 what works:
 - use documents.json not public_inspection_documents.json for published docs
-- daily loop with publication_date=YYYY-MM-DD for precise date filtering
-- filter by type[]=PRORULE,NOTICE to get comment-eligible docs
-- request specific fields to reduce payload size
+- conditions[publication_date][is]=YYYY-MM-DD - must include [is] operator for date filter to work!
+- daily loop through 365 days avoids 10k result limit on year-long queries
+- filter by type[]=PRORULE,NOTICE to get comment-eligible docs server-side
 - use persistent http session for connection pooling
-- precompile regex patterns for performance
 - cache regulations.gov lookups to avoid duplicate api calls
 - throttle regs.gov calls with rpm limits (30-50 recommended)
 - use exponential backoff for 429/5xx responses
-- client-side filter for comment eligibility: accepting_comments_on_regulations_dot_gov=true OR comment_url present OR comments_close_on not null
+- fetch detail endpoint for each doc to get comment fields (list api lacks them)
+- filter after enrichment not before - need detail data to know if doc accepts comments
+- client-side filter: keep PRORULE OR has comment_url/comments_close_on/regs_document_id
 - prefer fr regulations_dot_gov_info.comments_count over regs.gov api when available
 - use tqdm for progress bars on network-bound operations
-- batch fr detail fetches only when absolutely needed
 
 what doesnt work:
+- conditions[publication_date] without [is] operator - api silently ignores it and returns current docs
+- filtering before enrichment - list api response lacks comment fields so you cant tell what accepts comments
+- assuming all NOTICE docs accept comments - many are informational only
+- assuming PRORULE always has comment_url in list response - it doesnt, need detail fetch
+- requesting fields[] parameter - breaks the query and returns 0 results
 - public inspection docs rarely have comment counts or regs.gov mappings
 - single large paginated queries can hit api limits or timeout
 - fetching all fr docs then filtering is inefficient vs server-side filtering
 - hardcoding api keys in public code
 - not handling rate limits leads to 429 errors
 - not using connection pooling wastes time on tcp handshakes
-- regex compilation in loops is slow
 - not caching duplicate regs.gov lookups wastes api quota
 
 functionality needed:
@@ -379,15 +319,23 @@ functionality needed:
 - summary statistics (min, p25, median, mean, p75, max)
 
 api endpoints and fields:
-- fr documents.json: publication_date, type[], comment_url, accepting_comments_on_regulations_dot_gov, comments_close_on, regulations_dot_gov_info.comments_count
+- fr list: documents.json returns basic doc info (title, type, agencies, publication_date) but NOT comment fields
+- fr detail: documents/{docId}.json returns full doc including comments_close_on, regulations_dot_gov_info.comments_count
 - regs.gov v4: /documents/{documentId} with commentCount field, requires x-api-key header
-- fr bulk details: /documents/{doc1,doc2,...}.json for batch fetching
 
 data quality issues:
 - many fr docs dont have comment periods
 - pi docs often lack regs.gov mappings
 - comment counts may be missing or stale
 - some docs have multiple regs.gov documents in dockets (can overcount)
+- broken date filter returns current year data regardless of requested year - validate dates in results!
+
+typical results per year:
+- ~24-27k total docs fetched (PRORULE + NOTICE types)
+- ~6-8k comment-eligible after filtering (PRORULE + NOTICE with comment mechanisms)
+- ~2-2.5k PRORULE docs (almost all accept comments)
+- ~4-5k NOTICE docs with comment periods
+- trump years (2017-2020) have fewer regulations overall
 
 """
 

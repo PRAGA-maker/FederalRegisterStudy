@@ -75,7 +75,7 @@ Examples:
   python stratification_scripts/output/run_multi_year.py --start 2020 --end 2024
   
   # Run for 2022 only with custom parameters
-  python stratification_scripts/output/run_multi_year.py --start 2022 --end 2022 --limit 100 --sampling daily
+  python stratification_scripts/output/run_multi_year.py --start 2022 --end 2022 --limit 100
   
   # Run with regulations.gov API key
   python stratification_scripts/output/run_multi_year.py --start 2020 --end 2024 --regs-api-key YOUR_KEY
@@ -102,10 +102,6 @@ Examples:
     parser.add_argument("--regs-rpm", type=int, default=30, help="Regulations.gov requests per minute")
     parser.add_argument("--fr-sleep", type=float, default=0.2, help="Sleep between FR page fetches")
     parser.add_argument("--retries", type=int, default=10, help="Max retries for failed requests")
-    parser.add_argument("--include-dockets", action="store_true", help="Include FR dockets")
-    parser.add_argument("--fr-batch-size", type=int, default=100, help="FR document batch size")
-    parser.add_argument("--sampling", type=str, default="quarterly", 
-                       choices=["daily", "quarterly"], help="Sampling strategy")
     
     # Control arguments
     parser.add_argument("--continue-on-error", action="store_true", 
@@ -144,10 +140,6 @@ Examples:
     additional_args.extend(["--regs-rpm", str(args.regs_rpm)])
     additional_args.extend(["--fr-sleep", str(args.fr_sleep)])
     additional_args.extend(["--retries", str(args.retries)])
-    if args.include_dockets:
-        additional_args.append("--include-dockets")
-    additional_args.extend(["--fr-batch-size", str(args.fr_batch_size)])
-    additional_args.extend(["--sampling", args.sampling])
     
     # Process each year
     years = list(range(args.start, args.end + 1))
