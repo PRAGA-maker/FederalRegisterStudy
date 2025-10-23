@@ -71,6 +71,63 @@ def regs_comment_count(document_id: str, api_key: Optional[str], max_retries: in
     return None
 
 
+def regs_doc_detail(document_id: str, api_key: Optional[str], max_retries: int = 3) -> Optional[dict]:
+    """Fetch full document details from Regulations.gov including openForComment status."""
+    if not document_id:
+        return None
+    headers = {"X-Api-Key": api_key} if api_key else {}
+    backoff = 1.0
+    for _ in range(max_retries):
+        try:
+            r = SESSION.get(
+                REGS_DOC_URL.format(documentId=document_id),
+                headers=headers,
+                timeout=20,
+            )
+        except requests.RequestException:
+            time.sleep(backoff)
+            backoff = min(backoff * 2, 16)
+            continue
+        if r.status_code == 200:
+            return r.json()
+        if r.status_code in (429, 500, 502, 503, 504):
+            time.sleep(backoff)
+            backoff = min(backoff * 2, 16)
+            continue
+        return None
+    return None
+
+
+def regs_comment_total_by_object_id(object_id: str, api_key: Optional[str], max_retries: int = 3) -> Optional[int]:
+    """Fetch total comment count via comments search API (authoritative via meta.totalElements)."""
+    if not object_id:
+        return None
+    headers = {"X-Api-Key": api_key} if api_key else {}
+    backoff = 1.0
+    for _ in range(max_retries):
+        try:
+            r = SESSION.get(
+                "https://api.regulations.gov/v4/comments",
+                headers=headers,
+                params={"filter[commentOnId]": object_id, "page[size]": 1},
+                timeout=20,
+            )
+        except requests.RequestException:
+            time.sleep(backoff)
+            backoff = min(backoff * 2, 16)
+            continue
+        if r.status_code == 200:
+            data = r.json()
+            total = data.get("meta", {}).get("totalElements")
+            return int(total) if isinstance(total, (int, str)) and str(total).isdigit() else None
+        if r.status_code in (429, 500, 502, 503, 504):
+            time.sleep(backoff)
+            backoff = min(backoff * 2, 16)
+            continue
+        return None
+    return None
+
+
 def main() -> None:
     # Disable abbreviation so flags like --end aren't misparsed
     parser = argparse.ArgumentParser(description="Distribution of comments for Federal Register documents by year", allow_abbrev=False)
@@ -170,14 +227,13 @@ def main() -> None:
     regs_cache: Dict[str, int] = {}
     min_interval = 60.0 / args.regs_rpm if args.regs_rpm and args.regs_rpm > 0 else 0.0
     last_call_ts = 0.0
-    fr_source_count = 0
-    regs_source_count = 0
     
     for rec in tqdm(comment_eligible, desc="Enriching", unit="doc"):
         # Fetch document details to get comment information
         doc_number = rec.get("document_number")
-        comment_count = 0
-        source = "unknown"
+        comment_count = None
+        count_source = "unknown"
+        eligibility_reason = None
         comment_url = None
         comments_close_on = None
         regs_document_id = None
@@ -189,46 +245,83 @@ def main() -> None:
                 comment_url = details.get("comment_url")
                 comments_close_on = details.get("comments_close_on")
                 
-                # Get comment count from regulations_dot_gov_info
+                # Get Regs document ID
                 fr_info = details.get("regulations_dot_gov_info", {})
                 if isinstance(fr_info, dict):
-                    comment_count = fr_info.get("comments_count", 0)
                     regs_document_id = fr_info.get("document_id")
-                    if isinstance(comment_count, int) and comment_count >= 0:
-                        source = "federalregister"
-                        fr_source_count += 1
                 
-                # If still no comment count, try Regulations.gov API fallback
-                if source == "unknown" and regs_document_id:
-                    cc = None
+                # ALWAYS prefer Regulations.gov when we can map the document
+                if regs_document_id:
+                    # Check cache first
                     if regs_document_id in regs_cache:
-                        cc = regs_cache[regs_document_id]
+                        comment_count = regs_cache[regs_document_id]
+                        count_source = "regulations.gov-cached"
                     else:
+                        # Throttle API calls
                         now = time.time()
                         wait = min_interval - (now - last_call_ts)
                         if wait > 0:
                             time.sleep(wait)
-                        val = regs_comment_count(regs_document_id, args.regs_api_key, max_retries=args.retries)
+                        
+                        # Try document detail endpoint first
+                        regs_detail = regs_doc_detail(regs_document_id, args.regs_api_key, max_retries=args.retries)
                         last_call_ts = time.time()
-                        if isinstance(val, int):
-                            regs_cache[regs_document_id] = val
-                            cc = val
-                    if isinstance(cc, int):
+                        
+                        if regs_detail:
+                            attrs = (regs_detail.get("data") or {}).get("attributes") or {}
+                            cc = attrs.get("commentCount")
+                            if isinstance(cc, int) and cc >= 0:
+                                comment_count = cc
+                                count_source = "regulations.gov"
+                                regs_cache[regs_document_id] = cc
+                            else:
+                                # Fallback: use comments search API (authoritative via meta.totalElements)
+                                obj_id = attrs.get("objectId")
+                                if obj_id:
+                                    # Additional throttle for second call
+                                    now = time.time()
+                                    wait = min_interval - (now - last_call_ts)
+                                    if wait > 0:
+                                        time.sleep(wait)
+                                    mt = regs_comment_total_by_object_id(obj_id, args.regs_api_key, max_retries=args.retries)
+                                    last_call_ts = time.time()
+                                    if isinstance(mt, int):
+                                        comment_count = mt
+                                        count_source = "regulations.gov-meta"
+                                        regs_cache[regs_document_id] = mt
+                
+                # Only if still unknown, consider FR's embedded count as a hint
+                if comment_count is None and isinstance(fr_info, dict):
+                    cc = fr_info.get("comments_count")
+                    if isinstance(cc, int) and cc >= 0:
                         comment_count = cc
-                        source = "regulations.gov"
-                        regs_source_count += 1
+                        count_source = "federalregister"
         
+        # Default to 0 if still unknown
         if not isinstance(comment_count, int) or comment_count < 0:
             comment_count = 0
 
         agencies = rec.get("agencies") or []
         agency_names = ", ".join([a.get("name") for a in agencies if isinstance(a, dict) and a.get("name")])
 
-        # Include if PRORULE (almost always accepts comments) or has comment mechanism indicators
-        if (rec.get("type") == "Proposed Rule" or 
-            comment_url is not None or 
-            comments_close_on is not None or 
-            regs_document_id is not None):
+        # Determine eligibility and reason
+        doc_type = rec.get("type")
+        if doc_type == "Proposed Rule":
+            eligibility_reason = "prorule"
+        elif regs_document_id and (comment_url or comments_close_on):
+            # NOTICE with Regs.gov mapping AND comment mechanism
+            if comment_url and "regulations.gov" in (comment_url or "").lower():
+                eligibility_reason = "regs.gov"
+            elif comments_close_on:
+                eligibility_reason = "regs.gov"
+            else:
+                eligibility_reason = "external"
+        elif comment_url or comments_close_on:
+            # Has comment mechanism but no Regs.gov mapping (likely external)
+            eligibility_reason = "external"
+        
+        # Include if we determined eligibility
+        if eligibility_reason:
             rows.append(
                 {
                     "document_number": rec.get("document_number"),
@@ -239,14 +332,25 @@ def main() -> None:
                     "comments_close_on": comments_close_on,
                     "regs_document_id": regs_document_id,
                     "comment_count": comment_count,
-                    "source": source,
+                    "count_source": count_source,
+                    "eligibility_reason": eligibility_reason,
                 }
             )
 
     print(f"\nFiltered to {len(rows)} comment-eligible documents (from {len(all_results)} total)")
-    print(f"Data sources: FR={fr_source_count}, Regs.gov={regs_source_count}, Unknown={len(rows)-fr_source_count-regs_source_count}")
+
+    # Count by eligibility reason
     if rows:
-        print(f"Sample row: {rows[0]}")
+        df_temp = pd.DataFrame(rows)
+        print("\nEligibility breakdown:")
+        for reason, count in df_temp["eligibility_reason"].value_counts().items():
+            print(f"  {reason}: {count}")
+        
+        print("\nCount source breakdown:")
+        for source, count in df_temp["count_source"].value_counts().items():
+            print(f"  {source}: {count}")
+        
+        print(f"\nSample row: {rows[0]}")
     else:
         print("WARNING: No data collected - check API parameters and network connection")
         return
@@ -263,11 +367,28 @@ def main() -> None:
     df["comment_count"] = df["comment_count"].fillna(0).astype(int)
     total_docs = len(df)
     stats = df["comment_count"].describe(percentiles=[0.25, 0.5, 0.75])
+    
+    # Overall stats
     print(
-        f"Comment-eligible docs: {total_docs}; "
+        f"\nOVERALL - Comment-eligible docs: {total_docs}; "
         f"min={int(stats['min'])}, p25={int(stats['25%'])}, median={int(stats['50%'])}, "
         f"mean={stats['mean']:.2f}, p75={int(stats['75%'])}, max={int(stats['max'])}"
     )
+
+    # Stats for Regs.gov-mapped documents only (more reliable counts)
+    regs_mapped = df[df["eligibility_reason"].isin(["prorule", "regs.gov"])]
+    if len(regs_mapped) > 0:
+        regs_stats = regs_mapped["comment_count"].describe(percentiles=[0.25, 0.5, 0.75])
+        print(
+            f"\nREGS.GOV-MAPPED - Docs: {len(regs_mapped)}; "
+            f"min={int(regs_stats['min'])}, p25={int(regs_stats['25%'])}, median={int(regs_stats['50%'])}, "
+            f"mean={regs_stats['mean']:.2f}, p75={int(regs_stats['75%'])}, max={int(regs_stats['max'])}"
+        )
+
+    # Stats for external comment mechanisms (counts likely unavailable/0)
+    external = df[df["eligibility_reason"] == "external"]
+    if len(external) > 0:
+        print(f"\nEXTERNAL - Docs: {len(external)} (counts likely unavailable via API)")
 
     # Plotting removed per request; only CSV output is generated
 
@@ -290,7 +411,11 @@ what works:
 - fetch detail endpoint for each doc to get comment fields (list api lacks them)
 - filter after enrichment not before - need detail data to know if doc accepts comments
 - client-side filter: keep PRORULE OR has comment_url/comments_close_on/regs_document_id
-- prefer fr regulations_dot_gov_info.comments_count over regs.gov api when available
+- ALWAYS prefer regs.gov api over fr embedded counts (fr counts often stale/0)
+- use regs.gov document detail commentCount when available
+- fallback to regs.gov comments search meta.totalElements for authoritative totals
+- only use fr embedded count if regs.gov unavailable (last resort)
+- track count_source and eligibility_reason for data quality audits
 - use tqdm for progress bars on network-bound operations
 
 what doesnt work:

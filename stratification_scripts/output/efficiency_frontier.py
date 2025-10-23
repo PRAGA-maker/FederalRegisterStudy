@@ -1,0 +1,1 @@
+#Lorenz curve + Gini of comments-per-document (2024; and by year since 2015). Makes the “few blockbusters vs many ignored” problem obvious. >> Need to think about: How can we present this as an "efficiency frontier” problem? 
