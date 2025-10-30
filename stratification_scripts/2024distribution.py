@@ -1,6 +1,9 @@
 import argparse
 import os
 import time
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass, field
 from typing import Optional, Dict, Iterable, List
 
 import pandas as pd
@@ -40,104 +43,214 @@ def fetch_document_details(document_number: str, max_retries: int = 3) -> Option
         return None
     return None
 
-class RegsClient:
-    """Thin Regulations.gov v4 client with shared throttle and caches."""
 
-    def __init__(self, api_key: Optional[str], rpm: int = 30) -> None:
-        self.headers = {"X-Api-Key": api_key} if api_key else {}
-        self.min_interval = 60.0 / rpm if rpm and rpm > 0 else 0.0
-        self.last_call_ts = 0.0
+@dataclass
+class _KeyState:
+    """Track state for a single API key."""
+    key: str
+    rpm: int = 16
+    hourly_limit: int = 1000
+    used_this_window: int = 0
+    window_start: float = field(default_factory=lambda: time.time())
+    next_ready_at: float = 0.0
+    disabled: bool = False
+
+    @property
+    def min_interval(self) -> float:
+        """Minimum seconds between requests for this key's RPM limit."""
+        return 60.0 / self.rpm if self.rpm > 0 else 0.0
+
+    def tick(self) -> None:
+        """Reset hourly window if 3600 seconds have elapsed."""
+        now = time.time()
+        if now - self.window_start >= 3600:
+            self.window_start = now
+            self.used_this_window = 0
+
+
+class MultiKeyLimiter:
+    """
+    Fair scheduler over multiple api.data.gov keys.
+    
+    - acquire() blocks until a key is available (RPM + hourly budget + Retry-After).
+    - on_429(key, retry_after) pushes that key's next_ready_at into the future.
+    - on_auth_fail(key) permanently disables the key for the run.
+    """
+    
+    def __init__(self, keys: List[str], per_key_rpm: int = 16, per_key_hourly: int = 1000):
+        if not keys:
+            raise ValueError("No API keys provided")
+        self._lock = threading.Lock()
+        self._keys: List[_KeyState] = [
+            _KeyState(k.strip(), per_key_rpm, per_key_hourly) 
+            for k in keys if k.strip()
+        ]
+
+    def acquire(self) -> str:
+        """Block until a key is available and return it."""
+        while True:
+            with self._lock:
+                now = time.time()
+                # Refresh windows and compute earliest availability
+                best: Optional[_KeyState] = None
+                best_ready = float("inf")
+                
+                for ks in self._keys:
+                    ks.tick()
+                    if ks.disabled:
+                        continue
+                    
+                    # If hourly budget exhausted, set next_ready to end of window
+                    if ks.used_this_window >= ks.hourly_limit:
+                        wait = ks.window_start + 3600 - now
+                        ks.next_ready_at = max(ks.next_ready_at, now + max(wait, 0.0))
+                    
+                    ready_at = max(ks.next_ready_at, now)  # at least now
+                    if ready_at < best_ready:
+                        best_ready, best = ready_at, ks
+
+                if best is None:
+                    # All disabled
+                    active_count = sum(1 for k in self._keys if not k.disabled)
+                    if active_count == 0:
+                        print(f"[WARNING] All {len(self._keys)} API keys have been disabled due to auth failures")
+                    sleep_for = 5.0
+                else:
+                    sleep_for = max(0.0, best_ready - now)
+
+                if sleep_for <= 0.0 and best is not None:
+                    # We can use this key now
+                    best.used_this_window += 1
+                    # Advance RPM gate
+                    best.next_ready_at = now + best.min_interval
+                    return best.key
+
+            # Sleep outside the lock
+            time.sleep(min(sleep_for, 60.0))
+
+    def on_429(self, key: str, retry_after_seconds: Optional[int]) -> None:
+        """Handle 429 response by pushing key's next_ready_at forward."""
+        with self._lock:
+            for ks in self._keys:
+                if ks.key == key:
+                    wait = int(retry_after_seconds or 0)
+                    ks.next_ready_at = max(ks.next_ready_at, time.time() + min(max(wait, 1), 120))
+                    # Back off RPM a bit after a 429 to be gentle
+                    ks.rpm = max(1, int(ks.rpm * 0.9))
+                    return
+
+    def on_auth_fail(self, key: str) -> None:
+        """Permanently disable a key that failed authentication."""
+        with self._lock:
+            for ks in self._keys:
+                if ks.key == key:
+                    ks.disabled = True
+                    return
+
+
+class RegsClient:
+    """Regulations.gov v4 client with multi-key rotation and caching."""
+
+    def __init__(self, api_keys, per_key_rpm: int = 16, per_key_hourly: int = 1000) -> None:
+        # Parse comma-separated string into list if needed
+        if isinstance(api_keys, str):
+            api_keys = [k.strip() for k in api_keys.split(",") if k.strip()]
+        elif api_keys is None:
+            api_keys = []
+        
+        self.limiter = MultiKeyLimiter(api_keys, per_key_rpm, per_key_hourly) if api_keys else None
         self.doc_detail_by_document_id: Dict[str, dict] = {}
         self.total_by_object_id: Dict[str, int] = {}
 
-    def _throttle(self) -> None:
-        if self.min_interval <= 0:
-            return
-        wait = self.min_interval - (time.time() - self.last_call_ts)
-        if wait > 0:
-            time.sleep(wait)
-        self.last_call_ts = time.time()
+    def _get(self, url: str, params=None, timeout: int = 20, max_retries: int = 3) -> Optional[requests.Response]:
+        """Unified GET request handler with multi-key rotation and retry logic."""
+        if self.limiter is None:
+            # No keys configured, return None
+            return None
+            
+        backoff = 1.0
+        for _ in range(max_retries):
+            key = self.limiter.acquire()
+            
+            try:
+                r = SESSION.get(url, params=params, headers={"X-Api-Key": key}, timeout=timeout)
+            except requests.RequestException:
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 16)
+                continue
 
-    def _handle_retry_after(self, r: requests.Response) -> None:
-        try:
-            retry_after = int(r.headers.get("Retry-After", "0"))
-            if retry_after > 0:
-                time.sleep(min(retry_after, 60))
-        except Exception:
-            pass
+            if r.status_code == 200:
+                return r
+            
+            if r.status_code in (401, 403):
+                # Bad/expired key: disable it for this run
+                print(f"[Regs.gov] Auth failed (HTTP {r.status_code}) for key {key[:8]}..., disabling key")
+                self.limiter.on_auth_fail(key)
+                continue
+            
+            if r.status_code == 429:
+                # Honor Retry-After for the specific key that triggered it
+                retry_after = None
+                try:
+                    retry_after = int(r.headers.get("Retry-After", "0"))
+                except Exception:
+                    pass
+                
+                print(f"[Regs.gov] 429 throttle on key {key[:8]}..., retry-after={retry_after}s, backing off")
+                self.limiter.on_429(key, retry_after)
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 16)
+                continue
+            
+            if r.status_code in (500, 502, 503, 504):
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 16)
+                continue
+            
+            # Non-retriable error
+            return r
+        
+        return None
 
     def get_document_detail(self, document_id: str, max_retries: int = 3) -> Optional[dict]:
+        """Fetch document detail from Regulations.gov."""
         if not document_id:
             return None
         if document_id in self.doc_detail_by_document_id:
             return self.doc_detail_by_document_id[document_id]
-        backoff = 1.0
-        for _ in range(max_retries):
-            try:
-                self._throttle()
-                r = SESSION.get(
-                    REGS_DOC_URL.format(documentId=document_id),
-                    headers=self.headers,
-                    timeout=20,
-                )
-            except requests.RequestException:
-                time.sleep(backoff)
-                backoff = min(backoff * 2, 16)
-                continue
-            if r.status_code == 200:
-                data = r.json()
-                self.doc_detail_by_document_id[document_id] = data
-                return data
-            if r.status_code == 429:
-                self._handle_retry_after(r)
-                time.sleep(backoff)
-                backoff = min(backoff * 2, 16)
-                continue
-            if r.status_code in (500, 502, 503, 504):
-                time.sleep(backoff)
-                backoff = min(backoff * 2, 16)
-                continue
-            return None
+        
+        r = self._get(REGS_DOC_URL.format(documentId=document_id), max_retries=max_retries)
+        if r and r.status_code == 200:
+            data = r.json()
+            self.doc_detail_by_document_id[document_id] = data
+            return data
+        
         return None
 
     def get_comment_total_by_object_id(self, object_id: str, max_retries: int = 3) -> Optional[int]:
+        """Fetch comment total from Regulations.gov by object ID."""
         if not object_id:
             return None
         if object_id in self.total_by_object_id:
             return self.total_by_object_id[object_id]
-        backoff = 1.0
-        for _ in range(max_retries):
-            try:
-                self._throttle()
-                r = SESSION.get(
-                    REGS_COMMENTS_URL,
-                    headers=self.headers,
-                    params={"filter[commentOnId]": object_id, "page[size]": 1},
-                    timeout=20,
-                )
-            except requests.RequestException:
-                time.sleep(backoff)
-                backoff = min(backoff * 2, 16)
-                continue
-            if r.status_code == 200:
-                data = r.json()
-                total = data.get("meta", {}).get("totalElements")
-                if isinstance(total, int) or (isinstance(total, str) and str(total).isdigit()):
-                    val = int(total)
-                    self.total_by_object_id[object_id] = val
-                    return val
-                return None
-            if r.status_code == 429:
-                self._handle_retry_after(r)
-                time.sleep(backoff)
-                backoff = min(backoff * 2, 16)
-                continue
-            if r.status_code in (500, 502, 503, 504):
-                time.sleep(backoff)
-                backoff = min(backoff * 2, 16)
-                continue
+        
+        r = self._get(
+            REGS_COMMENTS_URL,
+            params={"filter[commentOnId]": object_id, "page[size]": 1},
+            max_retries=max_retries
+        )
+        
+        if not r or r.status_code != 200:
             return None
-        return None
+        
+        data = r.json() or {}
+        total = (data.get("meta") or {}).get("totalElements")
+        try:
+            val = int(total)
+            self.total_by_object_id[object_id] = val
+            return val
+        except Exception:
+            return None
 
 
 def classify_submission_channel(comment_url: Optional[str], regs_document_id: Optional[str]) -> str:
@@ -306,8 +419,17 @@ def main() -> None:
     parser.add_argument("--year", type=int, default=2024)
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--output-dir", type=str, default=os.path.join(os.path.dirname(__file__), "output"))
-    parser.add_argument("--regs-api-key", type=str, default=os.environ.get("REGS_API_KEY"))
-    parser.add_argument("--regs-rpm", type=int, default=30, help="Throttle Regulations.gov lookups to requests per minute (<=50 recommended)")
+    parser.add_argument("--regs-api-key", type=str, default=os.environ.get("REGS_API_KEY"), 
+                        help="Single Regulations.gov API key (deprecated, use --regs-api-keys)")
+    parser.add_argument("--regs-api-keys", type=str, default=os.environ.get("REGS_API_KEYS"),
+                        help="Comma-separated list of Regulations.gov API keys for rotation")
+    parser.add_argument("--regs-rpm", type=int, default=30, help="[Deprecated] Use --per-key-rpm instead")
+    parser.add_argument("--per-key-rpm", type=int, default=16, 
+                        help="Requests per minute per API key (default 16 = ~960/hr, stays under 1000/hr limit)")
+    parser.add_argument("--per-key-hourly", type=int, default=1000,
+                        help="Hourly request limit per API key (default 1000)")
+    parser.add_argument("--concurrent-workers", type=int, default=None,
+                        help="Number of concurrent enrichment workers (default: min(8, num_keys*2), or 1 if single key)")
     parser.add_argument("--fr-sleep", type=float, default=0.2, help="Sleep seconds between FR page fetches")
     parser.add_argument("--retries", type=int, default=10, help="Max retries for 429/5xx responses")
     parser.add_argument("--min-age-hours", type=int, default=0, help="Exclude docs newer than this many hours from stats only")
@@ -325,6 +447,28 @@ def main() -> None:
 
     os.makedirs(args.output_dir, exist_ok=True)
 
+    # Backward compatibility: prefer --regs-api-keys, fallback to --regs-api-key
+    api_keys = args.regs_api_keys
+    if not api_keys and args.regs_api_key:
+        api_keys = args.regs_api_key
+    
+    # Parse keys and determine worker count
+    if isinstance(api_keys, str):
+        keys_list = [k.strip() for k in api_keys.split(",") if k.strip()]
+    else:
+        keys_list = []
+    
+    num_keys = len(keys_list)
+    if args.concurrent_workers is not None:
+        workers = args.concurrent_workers
+    elif num_keys > 1:
+        workers = min(8, num_keys * 2)
+    else:
+        workers = 1
+    
+    if not args.quiet and num_keys > 0:
+        print(f"Using {num_keys} API key(s) with {workers} concurrent worker(s)")
+
     # Fetch FR documents day-by-day
     all_results: List[dict] = list(iter_fr_documents_by_day(args.year, args.fr_sleep, args.limit, args.retries))
 
@@ -336,11 +480,30 @@ def main() -> None:
 
     # Enrich
     rows: List[dict] = []
-    regs = RegsClient(api_key=args.regs_api_key, rpm=args.regs_rpm)
-    for rec in tqdm(comment_eligible, desc="Enriching", unit="doc"):
-        enriched = enrich_record(rec, regs, args.retries)
-        if enriched:
-            rows.append(enriched)
+    regs = RegsClient(api_keys=api_keys, per_key_rpm=args.per_key_rpm, per_key_hourly=args.per_key_hourly)
+    
+    if workers == 1:
+        # Single-threaded path for backward compatibility
+        for rec in tqdm(comment_eligible, desc="Enriching", unit="doc"):
+            enriched = enrich_record(rec, regs, args.retries)
+            if enriched:
+                rows.append(enriched)
+    else:
+        # Multi-threaded path with ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            # Submit all enrichment tasks
+            futures = {
+                executor.submit(enrich_record, rec, regs, args.retries): rec
+                for rec in comment_eligible
+            }
+            
+            # Collect results as they complete
+            with tqdm(total=len(comment_eligible), desc="Enriching", unit="doc") as pbar:
+                for future in as_completed(futures):
+                    enriched = future.result()
+                    if enriched:
+                        rows.append(enriched)
+                    pbar.update(1)
 
     if not args.quiet:
         print(f"\nFiltered to {len(rows)} comment-eligible documents (from {len(all_results)} total)")
@@ -434,6 +597,10 @@ what works:
 - use persistent http session for connection pooling
 - cache regulations.gov lookups to avoid duplicate api calls
 - throttle regs.gov calls with rpm limits (30-50 recommended)
+- multi-key rotation with per-key rpm and hourly limits avoids single-key throttling
+- concurrent requests with ThreadPoolExecutor speeds up enrichment significantly
+- per-key retry-after tracking prevents cascading 429s across keys
+- terminal logging helps diagnose api key and rate limit issues in real-time
 - use exponential backoff for 429/5xx responses
 - fetch detail endpoint for each doc to get comment fields (list api lacks them)
 - filter after enrichment not before - need detail data to know if doc accepts comments

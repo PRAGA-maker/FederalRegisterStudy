@@ -99,9 +99,9 @@ Examples:
     # Optional arguments that get passed through to the distribution script
     parser.add_argument("--limit", type=int, help="Limit number of documents per year")
     parser.add_argument("--regs-api-key", type=str, help="Regulations.gov API key")
-    parser.add_argument("--regs-rpm", type=int, default=30, help="Regulations.gov requests per minute")
+    parser.add_argument("--regs-rpm", type=int, default=16, help="Regulations.gov requests per minute")
     parser.add_argument("--fr-sleep", type=float, default=0.2, help="Sleep between FR page fetches")
-    parser.add_argument("--retries", type=int, default=10, help="Max retries for failed requests")
+    parser.add_argument("--retries", type=int, default=3, help="Max retries for failed requests")
     
     # Control arguments
     parser.add_argument("--continue-on-error", action="store_true", 
