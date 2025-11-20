@@ -316,9 +316,12 @@ def classify_comments(
         comment_text = row.get("comment_text", "")
         attachment_text = row.get("attachment_text", "")
         
-        # Check if we have any text data at all
-        has_comment_text = comment_text and comment_text.strip() != ""
-        has_attachment_text = attachment_text and attachment_text.strip() != ""
+        # Check if we have any text data at all (gate before metadata or LLM work)
+        has_comment_text = bool(comment_text and comment_text.strip())
+        has_attachment_text = bool(attachment_text and attachment_text.strip())
+        if not has_comment_text and not has_attachment_text:
+            excluded_count += 1
+            continue
         
         # Try metadata classification first
         category = classify_from_metadata(row)
@@ -329,10 +332,6 @@ def classify_comments(
         elif has_comment_text or has_attachment_text:
             # Has text data - needs LLM classification
             needs_llm.append(row)
-        else:
-            # No text, no metadata - exclude entirely from calculations
-            excluded_count += 1
-            continue
     
     print(f"  Classified via metadata: {len(metadata_results)}/{len(df_unclassified)} ({100*len(metadata_results)/len(df_unclassified):.1f}%)")
     print(f"  Excluded (no data): {excluded_count}/{len(df_unclassified)} ({100*excluded_count/len(df_unclassified):.1f}%)")

@@ -845,15 +845,15 @@ def main() -> None:
         if args.makeup is None:
             print("ERROR: Could not find makeup CSV. Please specify --makeup")
             return
-    
+
     makeup_path = Path(args.makeup)
     if not makeup_path.exists():
         print(f"ERROR: {makeup_path} not found")
         return
-    
+
     # Auto-create output directory
     if args.out_dir is None:
-        base_outdir = Path(__file__).parent / "makeup" / "data" / "plots"
+        base_outdir = Path(__file__).parent.parent / "makeup" / "data" / "plots"
         outdir = base_outdir / str(args.year)
     else:
         outdir = Path(args.out_dir)
@@ -877,7 +877,7 @@ def main() -> None:
         if col not in df.columns:
             print(f"ERROR: Missing required column: {col}")
             return
-    
+
     print(f"Loaded {len(df):,} rows")
     
     print("Preprocessing...")
@@ -915,3 +915,16 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+# learnings from building the plotting suite:
+#
+# - always write plots into stratification_scripts/makeup/data/plots/<year> so they travel with
+#   the data and don't clutter the output/ directory
+# - auto-create the directory to avoid runtime errors when running on clean machines
+# - agency names often contain commas so explode_agencies must split and trim safely
+# - category labels must match CATEGORY_ORDER exactly or the donut chart outputs zeros
+# - log scales on workload plots need care (use symlog or clip to avoid log(0) issues)
+# - keep matplotlib styling consistent (apply_clean_style) so visuals look like the brief
+# - deduplicate comment_id before plotting to avoid double-counting from joins
+# - annotate top agencies sparingly or the compass becomes unreadable

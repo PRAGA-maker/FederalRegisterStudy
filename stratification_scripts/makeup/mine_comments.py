@@ -49,6 +49,153 @@ class RegsThrottle:
         self.last_call_ts = time.time()
 
 
+def calculate_sample_size(population_size: int, confidence: float = 0.95, margin: float = 0.05) -> int:
+    """Calculate statistical sample size for proportion estimation with finite population correction.
+    
+    Args:
+        population_size: Total population size
+        confidence: Confidence level (0.95 for 95% CI, 0.99 for 99% CI)
+        margin: Margin of error (0.05 for ±5%)
+    
+    Returns:
+        Required sample size (always returns at least population_size for small populations)
+    """
+    if population_size <= 0:
+        return 0  # No population
+    
+    # For very small populations, always sample ALL to ensure coverage
+    if population_size < 10:
+        return population_size  # 100% sampling for tiny strata
+    
+    # Z-score for confidence level
+    Z = 1.96 if confidence == 0.95 else 2.576  # 95% or 99%
+    p = 0.5  # Maximum variance assumption (most conservative)
+    E = margin
+    
+    # Calculate sample size for infinite population
+    n_infinite = (Z**2 * p * (1 - p)) / (E**2)
+    
+    # Apply finite population correction
+    n_corrected = n_infinite / (1 + (n_infinite - 1) / population_size)
+    
+    # Always fetch all if population is smaller than required sample
+    return min(int(n_corrected) + 1, population_size)
+
+
+def build_stratified_sample_plan(
+    df_docs: pl.DataFrame,
+    all_comment_ids: Dict[str, List[str]],
+) -> Tuple[set, pl.DataFrame]:
+    """Build stratified sampling plan across (agency × comment_bin).
+    
+    Creates strata based on agency and comment count bins, calculates statistical
+    sample size for each stratum, and returns the set of comment IDs to fetch.
+    
+    Args:
+        df_docs: DataFrame with columns [document_number, agency, comment_count]
+        all_comment_ids: Dict mapping document_number -> list of comment IDs
+    
+    Returns:
+        - Set of comment IDs to fetch
+        - Stratification summary DataFrame
+    """
+    print("\n" + "="*60)
+    print("STRATIFIED SAMPLING PLAN")
+    print("="*60)
+    
+    # Assign comment bins to each document
+    print("\nAssigning documents to comment bins...")
+    df_docs = df_docs.with_columns([
+        pl.when(pl.col("comment_count") <= 10).then(pl.lit("0-10"))
+          .when(pl.col("comment_count") <= 100).then(pl.lit("11-100"))
+          .when(pl.col("comment_count") <= 1000).then(pl.lit("101-1000"))
+          .when(pl.col("comment_count") <= 10000).then(pl.lit("1001-10000"))
+          .otherwise(pl.lit("10000+"))
+          .alias("comment_bin")
+    ])
+    
+    # Group by strata (agency × comment_bin)
+    print("Grouping into strata by agency × comment_bin...")
+    strata = df_docs.group_by(["agency", "comment_bin"]).agg([
+        pl.col("document_number").alias("doc_numbers"),
+        pl.col("comment_count").sum().alias("total_comments"),
+        pl.col("document_number").count().alias("num_docs"),
+    ])
+    
+    # Calculate sample sizes for each stratum
+    print("Calculating sample sizes per stratum (95% CI, ±5% margin)...")
+    strata = strata.with_columns([
+        pl.col("total_comments").map_elements(
+            lambda x: calculate_sample_size(x, confidence=0.95, margin=0.05),
+            return_dtype=pl.Int64
+        ).alias("sample_size")
+    ])
+    
+    # Sort for readable display
+    strata = strata.sort(["agency", "comment_bin"])
+    
+    # Display summary
+    print("\nStrata summary:")
+    print(strata)
+    
+    # Build fetch list by pooling IDs from each stratum
+    ids_to_fetch = set()
+    sampled_strata = 0
+    full_strata = 0
+    
+    print("\nBuilding fetch list per stratum:")
+    for row in tqdm(strata.iter_rows(named=True), total=len(strata), desc="Stratifying", unit="stratum"):
+        agency = row["agency"]
+        comment_bin = row["comment_bin"]
+        doc_numbers = row["doc_numbers"]
+        sample_size = row["sample_size"]
+        total_comments = row["total_comments"]
+        num_docs = row["num_docs"]
+        
+        # Pool all comment IDs from documents in this stratum
+        pooled_ids = []
+        for doc_num in doc_numbers:
+            pooled_ids.extend(all_comment_ids.get(doc_num, []))
+        
+        # Handle edge case: fewer IDs than expected
+        if len(pooled_ids) < total_comments * 0.9:  # Allow 10% discrepancy
+            print(f"  WARN: {agency:30s} / {comment_bin:12s} - expected ~{total_comments} IDs, found {len(pooled_ids)}")
+        
+        # Sample or take all
+        if len(pooled_ids) <= sample_size:
+            # Fetch all comments in this stratum
+            ids_to_fetch.update(pooled_ids)
+            full_strata += 1
+            action = "ALL"
+            pct = "100.0"
+        else:
+            # Random sample from pooled IDs
+            sampled = random.sample(pooled_ids, sample_size)
+            ids_to_fetch.update(sampled)
+            sampled_strata += 1
+            action = f"SAMPLE {sample_size:,}/{len(pooled_ids):,}"
+            pct = f"{100*sample_size/len(pooled_ids):.1f}"
+        
+        print(f"  {action:20s}: {agency:30s} / {comment_bin:12s} - {num_docs:4d} docs, {pct:>5s}%")
+    
+    # Final summary
+    print(f"\n{'='*60}")
+    print(f"Stratification complete:")
+    print(f"  Total strata: {len(strata)}")
+    print(f"  Full sampling (100%): {full_strata}")
+    print(f"  Partial sampling: {sampled_strata}")
+    print(f"  Total population: {strata['total_comments'].sum():,} comments")
+    print(f"  Comments to fetch: {len(ids_to_fetch):,}")
+    
+    total_pop = strata['total_comments'].sum()
+    if total_pop > 0:
+        print(f"  Sampling ratio: {100*len(ids_to_fetch)/total_pop:.1f}%")
+    
+    print(f"{'='*60}\n")
+    
+    return ids_to_fetch, strata
+
+
 def download_and_extract_pdf_text(
     pdf_url: str,
     headers: Dict[str, str],
@@ -505,80 +652,213 @@ def mine_comments(
         existing_ids = set(df_existing["comment_id"].to_list())
         print(f"Loaded {len(existing_ids)} existing comments")
     
-    # Collect comments with full metadata
-    all_comments = []
-    
-    for row in tqdm(df_docs.iter_rows(named=True), total=len(df_docs), desc="Documents"):
-        doc_number = row.get("document_number")
-        regs_doc_id = row.get("regs_document_id")
-        comment_count = row.get("comment_count", 0)
+    # STRATIFIED SAMPLING PATH
+    if fetch_strategy == "stratified":
+        print("\n" + "="*60)
+        print("STAGE 1: COLLECTING COMMENT IDs")
+        print("="*60 + "\n")
         
-        # Get regs_document_id if missing
-        if not regs_doc_id and doc_number:
-            regs_doc_id = get_regs_document_id_via_fr(doc_number, retries)
+        # Stage 1: Collect ALL comment IDs for ALL documents
+        all_comment_ids = {}  # document_number -> [comment_id1, comment_id2, ...]
+        doc_metadata = {}  # document_number -> {agency, comment_count, ...}
+        
+        for row in tqdm(df_docs.iter_rows(named=True), total=len(df_docs), desc="Collecting IDs"):
+            doc_number = row.get("document_number")
+            regs_doc_id = row.get("regs_document_id")
+            agency = row.get("agency", "Unknown")
+            comment_count = row.get("comment_count", 0)
+            
+            # Get regs_document_id if missing
+            if not regs_doc_id and doc_number:
+                regs_doc_id = get_regs_document_id_via_fr(doc_number, retries)
+                if not regs_doc_id:
+                    continue
+            
             if not regs_doc_id:
                 continue
-        
-        if not regs_doc_id:
-            continue
-        
-        # Get objectId
-        object_id = get_object_id_for_regs_document(regs_doc_id, headers, throttle, retries)
-        if not object_id:
-            continue
-        
-        # Stage 1: Collect comment IDs from list endpoint
-        comment_ids = []
-        # Use max_comments_per_doc as limit if specified
-        limit_for_doc = max_comments_per_doc if max_comments_per_doc else None
-        for item in iter_comments_for_object(object_id, headers, throttle, retries, limit_comments=limit_for_doc):
-            if not isinstance(item, dict):
-                continue
-            cid = item.get("id") or item.get("commentId")
-            if cid and cid not in existing_ids:
-                comment_ids.append(cid)
-        
-        if not comment_ids:
-            continue
-        
-        # Skip documents with too many comments if limit is set
-        if max_comments_per_doc and len(comment_ids) > max_comments_per_doc:
-            tqdm.write(f"  {doc_number}: Skipping (has {len(comment_ids)} comments, limit is {max_comments_per_doc})")
-            continue
-        
-        # Stage 2: Decide sampling strategy
-        should_sample, sample_rate = should_sample_comments(len(comment_ids), fetch_strategy)
-        
-        if should_sample:
-            n_sample = int(len(comment_ids) * sample_rate)
-            n_sample = max(1, min(n_sample, len(comment_ids)))
-            sampled_ids = random.sample(comment_ids, n_sample)
-            tqdm.write(f"  {doc_number}: Sampling {n_sample}/{len(comment_ids)} comments ({sample_rate*100:.1f}%)")
-        else:
-            sampled_ids = comment_ids
-            tqdm.write(f"  {doc_number}: Fetching all {len(comment_ids)} comments")
-        
-        # Stage 3: Fetch full details for selected comments
-        for comment_id in sampled_ids:
-            detail_data = fetch_comment_detail(comment_id, headers, throttle, retries)
-            if not detail_data:
+            
+            # Get objectId
+            object_id = get_object_id_for_regs_document(regs_doc_id, headers, throttle, retries)
+            if not object_id:
                 continue
             
-            fields = extract_comment_fields_from_detail(detail_data, headers, throttle)
-            if not fields or not fields.get("comment_id"):
+            # Collect comment IDs from list endpoint
+            comment_ids = []
+            limit_for_doc = max_comments_per_doc if max_comments_per_doc else None
+            
+            try:
+                for item in iter_comments_for_object(object_id, headers, throttle, retries, limit_comments=limit_for_doc):
+                    if not isinstance(item, dict):
+                        continue
+                    cid = item.get("id") or item.get("commentId")
+                    if cid and cid not in existing_ids:
+                        comment_ids.append(cid)
+            except Exception as e:
+                tqdm.write(f"  ERROR collecting IDs for {doc_number}: {e}")
                 continue
             
-            # Add document_number
-            fields["document_number"] = doc_number
-            all_comments.append(fields)
-            existing_ids.add(comment_id)
+            if not comment_ids:
+                continue
+            
+            # Skip documents with too many comments if limit is set
+            if max_comments_per_doc and len(comment_ids) > max_comments_per_doc:
+                tqdm.write(f"  {doc_number}: Skipping (has {len(comment_ids)} comments, limit is {max_comments_per_doc})")
+                continue
+            
+            # Store IDs and metadata
+            all_comment_ids[doc_number] = comment_ids
+            doc_metadata[doc_number] = {
+                "agency": agency,
+                "comment_count": len(comment_ids),
+            }
+            
+            tqdm.write(f"  {doc_number}: Collected {len(comment_ids)} comment IDs (agency: {agency})")
+        
+        print(f"\nStage 1 complete: Collected {sum(len(ids) for ids in all_comment_ids.values()):,} comment IDs from {len(all_comment_ids)} documents")
+        
+        # Build DataFrame for stratification
+        strat_data = []
+        for doc_num, ids in all_comment_ids.items():
+            meta = doc_metadata[doc_num]
+            strat_data.append({
+                "document_number": doc_num,
+                "agency": meta["agency"],
+                "comment_count": meta["comment_count"],
+            })
+        
+        if not strat_data:
+            print("No documents with comments found")
+            return
+        
+        df_for_stratification = pl.DataFrame(strat_data)
+        
+        # Stage 2: Stratified sampling
+        print("\n" + "="*60)
+        print("STAGE 2: STRATIFIED SAMPLING")
+        print("="*60 + "\n")
+        
+        ids_to_fetch, strata_summary = build_stratified_sample_plan(df_for_stratification, all_comment_ids)
+        
+        if not ids_to_fetch:
+            print("No comments selected for fetching")
+            return
+        
+        # Create reverse mapping: comment_id -> document_number
+        comment_to_doc = {}
+        for doc_num, ids in all_comment_ids.items():
+            for cid in ids:
+                if cid in ids_to_fetch:
+                    comment_to_doc[cid] = doc_num
+        
+        # Stage 3: Fetch details for selected comments
+        print("\n" + "="*60)
+        print("STAGE 3: FETCHING COMMENT DETAILS")
+        print("="*60 + "\n")
+        
+        all_comments = []
+        failed_fetches = 0
+        
+        for comment_id in tqdm(ids_to_fetch, desc="Fetching details", unit="comment"):
+            try:
+                detail_data = fetch_comment_detail(comment_id, headers, throttle, retries)
+                if not detail_data:
+                    failed_fetches += 1
+                    continue
+                
+                fields = extract_comment_fields_from_detail(detail_data, headers, throttle)
+                if not fields or not fields.get("comment_id"):
+                    failed_fetches += 1
+                    continue
+                
+                # Add document_number
+                doc_num = comment_to_doc.get(comment_id, "Unknown")
+                fields["document_number"] = doc_num
+                all_comments.append(fields)
+                existing_ids.add(comment_id)
+                
+            except Exception as e:
+                tqdm.write(f"  ERROR fetching {comment_id}: {e}")
+                failed_fetches += 1
+                continue
+        
+        print(f"\nStage 3 complete: Fetched {len(all_comments):,} comments ({failed_fetches} failed)")
+    
+    # LEGACY SAMPLING PATHS (smart/all/sample)
+    else:
+        all_comments = []
+        
+        for row in tqdm(df_docs.iter_rows(named=True), total=len(df_docs), desc="Documents"):
+            doc_number = row.get("document_number")
+            regs_doc_id = row.get("regs_document_id")
+            comment_count = row.get("comment_count", 0)
+            
+            # Get regs_document_id if missing
+            if not regs_doc_id and doc_number:
+                regs_doc_id = get_regs_document_id_via_fr(doc_number, retries)
+                if not regs_doc_id:
+                    continue
+            
+            if not regs_doc_id:
+                continue
+            
+            # Get objectId
+            object_id = get_object_id_for_regs_document(regs_doc_id, headers, throttle, retries)
+            if not object_id:
+                continue
+            
+            # Stage 1: Collect comment IDs from list endpoint
+            comment_ids = []
+            # Use max_comments_per_doc as limit if specified
+            limit_for_doc = max_comments_per_doc if max_comments_per_doc else None
+            for item in iter_comments_for_object(object_id, headers, throttle, retries, limit_comments=limit_for_doc):
+                if not isinstance(item, dict):
+                    continue
+                cid = item.get("id") or item.get("commentId")
+                if cid and cid not in existing_ids:
+                    comment_ids.append(cid)
+            
+            if not comment_ids:
+                continue
+            
+            # Skip documents with too many comments if limit is set
+            if max_comments_per_doc and len(comment_ids) > max_comments_per_doc:
+                tqdm.write(f"  {doc_number}: Skipping (has {len(comment_ids)} comments, limit is {max_comments_per_doc})")
+                continue
+            
+            # Stage 2: Decide sampling strategy
+            should_sample, sample_rate = should_sample_comments(len(comment_ids), fetch_strategy)
+            
+            if should_sample:
+                n_sample = int(len(comment_ids) * sample_rate)
+                n_sample = max(1, min(n_sample, len(comment_ids)))
+                sampled_ids = random.sample(comment_ids, n_sample)
+                tqdm.write(f"  {doc_number}: Sampling {n_sample}/{len(comment_ids)} comments ({sample_rate*100:.1f}%)")
+            else:
+                sampled_ids = comment_ids
+                tqdm.write(f"  {doc_number}: Fetching all {len(comment_ids)} comments")
+            
+            # Stage 3: Fetch full details for selected comments
+            for comment_id in sampled_ids:
+                detail_data = fetch_comment_detail(comment_id, headers, throttle, retries)
+                if not detail_data:
+                    continue
+                
+                fields = extract_comment_fields_from_detail(detail_data, headers, throttle)
+                if not fields or not fields.get("comment_id"):
+                    continue
+                
+                # Add document_number
+                fields["document_number"] = doc_number
+                all_comments.append(fields)
+                existing_ids.add(comment_id)
     
     if not all_comments:
         print("No new comments found")
         return
     
     # Write to CSV with all 22 columns
-    df_new = pl.DataFrame(all_comments)
+    # Use large infer_schema_length to handle varying field types across all rows
+    df_new = pl.DataFrame(all_comments, infer_schema_length=len(all_comments))
     
     # Reorder columns to put document_number first
     column_order = [
@@ -612,15 +892,28 @@ def mine_comments(
     
     if output_csv.exists():
         df_existing = pl.read_csv(str(output_csv))
+        
         # Ensure both DataFrames have same columns with proper types
         for col in df_new.columns:
             if col not in df_existing.columns:
-                # Cast to match the new dataframe's type
+                # Add missing column to existing with same type as new
                 df_existing = df_existing.with_columns(pl.lit(None).cast(df_new[col].dtype).alias(col))
+            else:
+                # Column exists in both - ensure types match
+                if df_existing[col].dtype != df_new[col].dtype:
+                    # Cast existing to match new (new data schema is authoritative)
+                    try:
+                        df_existing = df_existing.with_columns(pl.col(col).cast(df_new[col].dtype))
+                    except Exception as e:
+                        print(f"  WARNING: Could not cast {col} from {df_existing[col].dtype} to {df_new[col].dtype}: {e}")
+                        # Fallback: cast new to match existing
+                        df_new = df_new.with_columns(pl.col(col).cast(df_existing[col].dtype))
+        
         for col in df_existing.columns:
             if col not in df_new.columns:
-                # Cast to match the existing dataframe's type
+                # Add missing column to new with same type as existing
                 df_new = df_new.with_columns(pl.lit(None).cast(df_existing[col].dtype).alias(col))
+        
         # Reorder columns to match
         df_existing = df_existing.select(df_new.columns)
         df_combined = pl.concat([df_existing, df_new])
@@ -650,14 +943,14 @@ def main() -> None:
     parser.add_argument("--year", type=int, default=2024)
     parser.add_argument("--limit", type=int, default=None, help="Limit number of documents")
     parser.add_argument("--max-comments-per-doc", type=int, default=None, help="Skip documents with more than this many comments (cost control)")
-    parser.add_argument("--rpm", type=int, default=30, help="Requests per minute")
+    parser.add_argument("--rpm", type=int, default=80, help="Requests per minute")
     parser.add_argument("--retries", type=int, default=10, help="Max retries for API calls")
     parser.add_argument(
         "--fetch-strategy",
         type=str,
-        default="smart",
-        choices=["all", "sample", "smart"],
-        help="Sampling strategy: all (fetch every comment), sample (10%%), smart (all if <=1000, else sample)",
+        default="stratified",
+        choices=["all", "sample", "smart", "stratified"],
+        help="Sampling strategy: stratified (agency×comment_bin power calc), smart (<=1000 all else 10%%), all, sample (10%%)",
     )
     args = parser.parse_args()
     
@@ -691,15 +984,25 @@ if __name__ == "__main__":
 #   "included" array - this is required for pdf text extraction
 #
 # sampling strategies:
-# - smart sampling (fetch all for <=1000 comments, sample 10% otherwise with 5k cap) gives good
-#   coverage while staying fast
+# - stratified sampling (default) bins by agency × comment_count and uses power calculation to
+#   determine sample size per stratum (95% CI, ±5% margin = ~384 samples per stratum)
+# - bins are 0-10, 11-100, 101-1k, 1k-10k, 10k+ to capture different docket sizes
+# - CRITICAL: never skip small strata - if a stratum has <10 comments, we sample ALL of them to
+#   ensure representative coverage across the distribution (that's the whole point of stratification)
+# - stratified approach guarantees representative coverage across all agencies and prevents
+#   mega-dockets from dominating the sample
+# - typical sampling ratio is 50-70% of total population due to many small strata requiring
+#   100% sampling (when population < 384)
+# - smart sampling (legacy: fetch all for <=1000 comments, sample 10% otherwise) doesn't
+#   guarantee cross-agency coverage but is faster for quick tests
 # - --max-comments-per-doc is essential for cost control - skips documents with too many comments
 #   before burning api quota and openai credits
 # - use --limit to cap number of documents for testing/development
 #
 # rate limiting:
-# - throttling is critical - regs.gov rate limits hard at 1000/hr without API key, 1000/hr with
-#   key per their docs (but we use 30 rpm = 1800/hr to be safe since they seem flexible)
+# - throttling is critical - regs.gov officially limits to 1000/hr but can handle up to 5000/hr
+#   with API key (use --rpm 80 for 4800/hr to stay safe)
+# - default is 80 rpm which gives ~15 hours for ID collection stage and reasonable detail fetch times
 # - exponential backoff on 429/5xx is essential for reliability
 # - rate limiting applies to both comment list calls AND attachment downloads
 #
@@ -731,7 +1034,9 @@ if __name__ == "__main__":
 # polars gotchas:
 # - polars is way faster than pandas for large CSVs but syntax takes getting used to
 # - when concatenating dataframes with new columns, you need to explicitly add missing columns
-#   with pl.lit(None).cast(dtype) to match schemas
+#   with pl.lit(None).cast(dtype) to match schemas and cast existing columns to match new schema
+# - use infer_schema_length=len(data) when creating dataframes from dicts to handle varying
+#   field types across rows (e.g., some rows have strings, others have None)
 # - use .iter_rows(named=True) to iterate as dicts for easier field access
 #
 # performance tips:
