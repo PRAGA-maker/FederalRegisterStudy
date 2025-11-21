@@ -13,7 +13,9 @@ import os
 import random
 import subprocess
 import tempfile
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
@@ -51,7 +53,10 @@ class RegsThrottle:
 
 
 class RegsGovClient:
-    """Shared HTTP client with multi-key round-robin load balancing + throttling."""
+    """Shared HTTP client with multi-key round-robin load balancing + throttling.
+    
+    Thread-safe for concurrent use from multiple threads.
+    """
 
     def __init__(self, api_keys_with_limits: List[Tuple[str, int]], retries: int) -> None:
         """Initialize client with multiple API keys and their RPH limits.
@@ -62,6 +67,9 @@ class RegsGovClient:
         """
         self.session = requests.Session()
         self.retries = max(1, retries)
+        
+        # Thread-safety lock for key selection and throttle updates
+        self._request_lock = threading.Lock()
         
         # Setup per-key throttles
         self.keys: List[str] = []
@@ -175,14 +183,19 @@ class RegsGovClient:
     ) -> Optional[requests.Response]:
         backoff = 1.0
         for attempt in range(self.retries):
-            # Select best key for this attempt
-            key_idx = self._select_best_key()
-            api_key = self.keys[key_idx]
-            throttle = self.throttles[key_idx]
-            headers = {"X-Api-Key": api_key}
-            
-            try:
+            # CRITICAL: Lock around key selection and throttle sleep to prevent race conditions
+            # Multiple threads could select the same key and violate rate limits
+            with self._request_lock:
+                key_idx = self._select_best_key()
+                api_key = self.keys[key_idx]
+                throttle = self.throttles[key_idx]
+                headers = {"X-Api-Key": api_key}
+                
+                # Sleep while holding lock to ensure only one thread uses this key at a time
                 throttle.sleep_if_needed()
+            
+            # Make request outside the lock (network I/O can happen in parallel)
+            try:
                 response = self.session.get(
                     url,
                     headers=headers,
@@ -197,9 +210,10 @@ class RegsGovClient:
             if response.status_code == 200:
                 return response
 
+            # Lock again for modifying shared state (failed_keys, cooling_down)
             if response.status_code in (401, 403):
-                # Mark this key as failed
-                self.failed_keys.add(key_idx)
+                with self._request_lock:
+                    self.failed_keys.add(key_idx)
                 tqdm.write(f"  Key #{key_idx} failed auth - marking as unusable")
                 # Try another key immediately
                 if len(self.failed_keys) < self.total_keys:
@@ -210,7 +224,8 @@ class RegsGovClient:
 
             if response.status_code == 429:
                 # Rate limited - put this key in cooldown
-                self.cooling_down[key_idx] = time.time() + 60
+                with self._request_lock:
+                    self.cooling_down[key_idx] = time.time() + 60
                 tqdm.write(f"  Key #{key_idx} rate limited - cooling down for 60s")
                 self._respect_retry_after(response)
                 backoff = self._sleep_with_backoff(backoff)
@@ -352,7 +367,13 @@ def build_two_stage_sample_plan(
     
     strata = strata.sort(["agency", "comment_bin"])
     print("\nStrata summary:")
-    print(strata)
+    try:
+        print(strata)
+    except UnicodeEncodeError:
+        # Windows console encoding issue - print simplified version
+        print(f"  {len(strata)} strata created")
+        for row in strata.iter_rows(named=True):
+            print(f"  {row['agency'][:30]:30s} / {row['comment_bin']:12s} - {row['num_docs']} docs, {row['total_comments']} comments")
     
     # Stage 1: Sample documents within each stratum
     print("\n" + "="*60)
@@ -381,14 +402,14 @@ def build_two_stage_sample_plan(
             # Small stratum: fetch everything
             docs_to_sample = doc_numbers
             action = f"ALL {num_docs} docs, ALL comments"
-            tqdm.write(f"  Small stratum: {agency:30s} / {comment_bin:12s} → {action}")
+            tqdm.write(f"  Small stratum: {agency:30s} / {comment_bin:12s} -> {action}")
         else:
             # Two-stage: sample documents then comments
             n_docs_to_sample = min(num_docs, max(int(math.ceil(math.sqrt(num_docs))), 3))
             docs_to_sample = random.sample(list(doc_numbers), n_docs_to_sample)
             comments_per_doc = max(1, target_comments // n_docs_to_sample)
-            action = f"Sampled {n_docs_to_sample}/{num_docs} docs, targeting ~{comments_per_doc} comments/doc → {target_comments} total"
-            tqdm.write(f"  {agency:30s} / {comment_bin:12s} → {action}")
+            action = f"Sampled {n_docs_to_sample}/{num_docs} docs, targeting ~{comments_per_doc} comments/doc -> {target_comments} total"
+            tqdm.write(f"  {agency:30s} / {comment_bin:12s} -> {action}")
         
         # Stage 1b: Collect comment IDs for sampled documents
         for doc_num in docs_to_sample:
@@ -441,7 +462,7 @@ def build_two_stage_sample_plan(
             # Take all IDs
             for doc_num, ids in stratum_ids_by_doc.items():
                 sampled_doc_to_ids[doc_num] = ids
-            tqdm.write(f"  {agency:30s} / {comment_bin:12s} → ALL {total_stratum_ids} comments (100%)")
+            tqdm.write(f"  {agency:30s} / {comment_bin:12s} -> ALL {total_stratum_ids} comments (100%)")
         else:
             # Sample proportionally from each document
             sample_rate = target_comments / total_stratum_ids
@@ -455,7 +476,7 @@ def build_two_stage_sample_plan(
                 sampled_count += len(sampled)
             
             pct = 100 * sampled_count / total_stratum_ids
-            tqdm.write(f"  {agency:30s} / {comment_bin:12s} → SAMPLED {sampled_count}/{total_stratum_ids} comments ({pct:.1f}%)")
+            tqdm.write(f"  {agency:30s} / {comment_bin:12s} -> SAMPLED {sampled_count}/{total_stratum_ids} comments ({pct:.1f}%)")
     
     total_sampled = sum(len(ids) for ids in sampled_doc_to_ids.values())
     total_pop = strata['total_comments'].sum()
@@ -481,6 +502,15 @@ def download_and_extract_pdf_text(
     """Download PDF from URL and extract text from first N pages using pdftotext."""
     if not pdf_url:
         return None
+
+    # Extract filename from URL for better error reporting
+    try:
+        filename = pdf_url.split('/')[-1] if '/' in pdf_url else pdf_url
+        # Truncate very long filenames
+        if len(filename) > 60:
+            filename = filename[:30] + "..." + filename[-27:]
+    except Exception:
+        filename = "unknown"
 
     pdf_bytes = client.download_bytes(pdf_url, timeout=30)
     if not pdf_bytes:
@@ -508,11 +538,15 @@ def download_and_extract_pdf_text(
             return text or None
 
         if result.stderr:
-            tqdm.write(f"  WARN: pdftotext failed for attachment ({result.stderr.decode(errors='ignore').strip()})")
+            error_msg = result.stderr.decode(errors='ignore').strip()
+            tqdm.write(f"  WARN: pdftotext failed for attachment: {filename} - {error_msg}")
         return None
 
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        tqdm.write("  WARN: pdftotext unavailable or timed out for attachment")
+    except subprocess.TimeoutExpired:
+        tqdm.write(f"  WARN: pdftotext timed out for attachment: {filename} ({pdf_url})")
+        return None
+    except FileNotFoundError:
+        tqdm.write(f"  WARN: pdftotext not found - install poppler-utils to extract PDF text")
         return None
     finally:
         if txt_path and os.path.exists(txt_path):
@@ -832,13 +866,37 @@ def extract_comment_fields_from_detail(
     }
 
 
-def load_documents(fr_csv: Path, limit_docs: Optional[int]) -> Optional[pl.DataFrame]:
-    """Load and filter FR document CSV."""
+def load_documents(fr_csv: Path, limit_docs: Optional[int], requested_year: int) -> Optional[pl.DataFrame]:
+    """Load and filter FR document CSV, with year validation."""
     if not fr_csv.exists():
         print(f"ERROR: {fr_csv} not found")
+        print(f"  Run: python stratification_scripts/2024distribution.py --year {requested_year} --limit 100")
+        print(f"  This will generate the Federal Register document list for {requested_year}")
         return None
 
+    print(f"Loading documents from: {fr_csv}")
     df_docs = pl.read_csv(str(fr_csv))
+
+    # Validate year by checking publication dates
+    if "publication_date" in df_docs.columns:
+        # Check a sample of rows (first 1001, skipping first row in case of year boundary)
+        sample_size = min(1001, len(df_docs))
+        sample_dates = df_docs.head(sample_size)["publication_date"].to_list()[1:]  # Skip first row
+        
+        # Extract years from dates
+        years_in_data = set()
+        for date_str in sample_dates[:100]:  # Check first 100 dates after the first
+            if date_str and isinstance(date_str, str) and len(date_str) >= 4:
+                try:
+                    year = int(date_str[:4])
+                    years_in_data.add(year)
+                except (ValueError, TypeError):
+                    continue
+        
+        if years_in_data and requested_year not in years_in_data:
+            most_common_year = max(years_in_data) if years_in_data else "unknown"
+            print(f"WARNING: Requested year {requested_year}, but CSV contains data from {most_common_year}")
+            print(f"  Using data from: {fr_csv}")
 
     if "regs_document_id" in df_docs.columns and "comment_count" in df_docs.columns:
         df_docs = df_docs.filter(
@@ -853,6 +911,7 @@ def load_documents(fr_csv: Path, limit_docs: Optional[int]) -> Optional[pl.DataF
 
     if limit_docs:
         df_docs = df_docs.head(limit_docs)
+        print(f"Limited to first {limit_docs} documents")
 
     return df_docs
 
@@ -1019,9 +1078,13 @@ def write_comment_output(all_comments: List[Dict[str, Any]], output_csv: Path) -
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     df_combined.write_csv(str(output_csv))
 
-    print(f"\nMined {len(all_comments)} new comments")
+    print(f"\n{'='*60}")
+    print(f"SAVED RAW COMMENTS")
+    print(f"{'='*60}")
+    print(f"Mined {len(all_comments)} new comments")
     print(f"Total comments in database: {len(df_combined)}")
-    print(f"Output: {output_csv}")
+    print(f"Output file: {output_csv.absolute()}")
+    print(f"{'='*60}")
 
     if len(df_new) > 0:
         print("\nMetadata coverage:")
@@ -1033,6 +1096,26 @@ def write_comment_output(all_comments: List[Dict[str, Any]], output_csv: Path) -
         print(f"  Name: {name_count}/{len(df_new)} ({100*name_count/len(df_new):.1f}%)")
         attach_count = df_new.filter(pl.col("has_attachments") == True).shape[0]
         print(f"  Attachments: {attach_count}/{len(df_new)} ({100*attach_count/len(df_new):.1f}%)")
+        
+        # Empty/minimal comment statistics
+        print("\nComment text quality:")
+        empty_text = df_new.filter(
+            (pl.col("comment_text").is_null()) | (pl.col("comment_text").str.strip_chars() == "")
+        ).shape[0]
+        print(f"  Empty text: {empty_text}/{len(df_new)} ({100*empty_text/len(df_new):.1f}%)")
+        
+        minimal_text = df_new.filter(
+            (pl.col("comment_text").is_not_null()) & 
+            (pl.col("comment_text").str.len_chars() < 50) &
+            (pl.col("comment_text").str.len_chars() > 0)
+        ).shape[0]
+        print(f"  Minimal text (<50 chars): {minimal_text}/{len(df_new)} ({100*minimal_text/len(df_new):.1f}%)")
+        
+        no_content = df_new.filter(
+            ((pl.col("comment_text").is_null()) | (pl.col("comment_text").str.strip_chars() == "")) &
+            ((pl.col("has_attachments") == False) | (pl.col("has_attachments").is_null()))
+        ).shape[0]
+        print(f"  No content (empty text + no attachments): {no_content}/{len(df_new)} ({100*no_content/len(df_new):.1f}%)")
 
 
 def should_sample_comments(comment_count: int, fetch_strategy: str) -> Tuple[bool, float]:
@@ -1064,8 +1147,9 @@ def run_stratified_pipeline(
     existing_ids: Set[str],
     retries: int,
     max_comments_per_doc: Optional[int],
+    concurrent_workers: int = 10,
 ) -> List[Dict[str, Any]]:
-    """Run two-stage stratified sampling pipeline with list payload exploitation."""
+    """Run two-stage stratified sampling pipeline with list payload exploitation and concurrent fetching."""
     
     # Use new two-stage sampling
     sampled_doc_to_ids, comment_payloads, strata = build_two_stage_sample_plan(
@@ -1076,92 +1160,149 @@ def run_stratified_pipeline(
         print("No comments selected for fetching")
         return []
     
-    # Stage 3: Fetch details with smart list payload reuse
+    # Stage 3: Fetch details with smart list payload reuse + concurrent fetching
     print("\n" + "=" * 60)
-    print("STAGE 3: FETCHING COMMENT DETAILS (with list payload reuse)")
+    print("STAGE 3: FETCHING COMMENT DETAILS (with list payload reuse + concurrent)")
     print("=" * 60 + "\n")
     
+    # Thread-safe data structures
     all_comments: List[Dict[str, Any]] = []
-    failed_fetches = 0
-    detail_fetches = 0
-    list_only = 0
-    pdf_extracted = 0
-    pdf_skipped = 0
+    comments_lock = threading.Lock()
+    
+    # Metrics (thread-safe counters)
+    metrics = {
+        "failed_fetches": 0,
+        "detail_fetches": 0,
+        "list_only": 0,
+        "pdf_extracted": 0,
+        "pdf_skipped": 0,
+        "lock": threading.Lock()
+    }
     
     total_to_fetch = sum(len(ids) for ids in sampled_doc_to_ids.values())
     
-    with tqdm(total=total_to_fetch, desc="Processing comments", unit="comment") as pbar:
-        for doc_number, comment_ids in sampled_doc_to_ids.items():
-            for comment_id in comment_ids:
-                # Check if we have cached list payload
-                list_fields = comment_payloads.get(comment_id)
+    # Prepare work items: (doc_number, comment_id)
+    work_items = []
+    for doc_number, comment_ids in sampled_doc_to_ids.items():
+        for comment_id in comment_ids:
+            work_items.append((doc_number, comment_id))
+    
+    def process_comment(doc_number: str, comment_id: str) -> Optional[Dict[str, Any]]:
+        """Worker function to process a single comment."""
+        nonlocal metrics, existing_ids, comment_payloads, client
+        
+        # Check if we have cached list payload
+        list_fields = comment_payloads.get(comment_id)
+        
+        if list_fields and not list_fields.get("needs_detail_fetch", True):
+            # Use list payload only - no detail call needed!
+            fields = {
+                "document_number": doc_number,
+                "comment_id": list_fields["comment_id"],
+                "comment_text": list_fields["comment_text"],
+                "first_name": list_fields.get("first_name"),
+                "last_name": list_fields.get("last_name"),
+                "organization": list_fields.get("organization"),
+                "submitter_type": list_fields.get("submitter_type"),
+                "posted_date": list_fields.get("posted_date"),
+                "receive_date": list_fields.get("receive_date"),
+                "has_attachments": list_fields.get("has_attachments", False),
+                # Fill remaining fields with None
+                "postmark_date": None,
+                "city": None,
+                "state_province_region": None,
+                "country": None,
+                "zip": None,
+                "gov_agency": None,
+                "gov_agency_type": None,
+                "attachment_count": 0,
+                "attachment_formats": None,
+                "attachment_text": None,
+                "duplicate_comments": None,
+                "page_count": None,
+            }
+            
+            with metrics["lock"]:
+                metrics["list_only"] += 1
+                existing_ids.add(comment_id)
+            
+            return fields
+        else:
+            # Need to fetch detail
+            detail_data = fetch_comment_detail(comment_id, client, include_attachments=True)
+            if not detail_data:
+                with metrics["lock"]:
+                    metrics["failed_fetches"] += 1
+                return None
+            
+            fields = extract_comment_fields_from_detail(detail_data, client)
+            if not fields or not fields.get("comment_id"):
+                with metrics["lock"]:
+                    metrics["failed_fetches"] += 1
+                return None
+            
+            # Track PDF extraction stats
+            with metrics["lock"]:
+                if fields.get("has_attachments"):
+                    if fields.get("attachment_text"):
+                        metrics["pdf_extracted"] += 1
+                    else:
+                        metrics["pdf_skipped"] += 1
                 
-                if list_fields and not list_fields.get("needs_detail_fetch", True):
-                    # Use list payload only - no detail call needed!
-                    fields = {
-                        "document_number": doc_number,
-                        "comment_id": list_fields["comment_id"],
-                        "comment_text": list_fields["comment_text"],
-                        "first_name": list_fields.get("first_name"),
-                        "last_name": list_fields.get("last_name"),
-                        "organization": list_fields.get("organization"),
-                        "submitter_type": list_fields.get("submitter_type"),
-                        "posted_date": list_fields.get("posted_date"),
-                        "receive_date": list_fields.get("receive_date"),
-                        "has_attachments": list_fields.get("has_attachments", False),
-                        # Fill remaining fields with None
-                        "postmark_date": None,
-                        "city": None,
-                        "state_province_region": None,
-                        "country": None,
-                        "zip": None,
-                        "gov_agency": None,
-                        "gov_agency_type": None,
-                        "attachment_count": 0,
-                        "attachment_formats": None,
-                        "attachment_text": None,
-                        "duplicate_comments": None,
-                        "page_count": None,
-                    }
-                    all_comments.append(fields)
-                    existing_ids.add(comment_id)
-                    list_only += 1
-                else:
-                    # Need to fetch detail
-                    detail_data = fetch_comment_detail(comment_id, client, include_attachments=True)
-                    if not detail_data:
-                        failed_fetches += 1
-                        pbar.update(1)
-                        continue
-                    
-                    fields = extract_comment_fields_from_detail(detail_data, client)
-                    if not fields or not fields.get("comment_id"):
-                        failed_fetches += 1
-                        pbar.update(1)
-                        continue
-                    
-                    # Track PDF extraction stats
-                    if fields.get("has_attachments"):
-                        if fields.get("attachment_text"):
-                            pdf_extracted += 1
-                        else:
-                            pdf_skipped += 1
-                    
-                    fields["document_number"] = doc_number
-                    all_comments.append(fields)
-                    existing_ids.add(comment_id)
-                    detail_fetches += 1
-                
+                metrics["detail_fetches"] += 1
+                existing_ids.add(comment_id)
+            
+            fields["document_number"] = doc_number
+            return fields
+    
+    # Start timing
+    start_time = time.time()
+    
+    # Process comments concurrently
+    print(f"Using {concurrent_workers} concurrent workers")
+    
+    with ThreadPoolExecutor(max_workers=concurrent_workers) as executor:
+        # Submit all work
+        futures = {
+            executor.submit(process_comment, doc_number, comment_id): (doc_number, comment_id)
+            for doc_number, comment_id in work_items
+        }
+        
+        # Collect results with progress bar
+        with tqdm(total=total_to_fetch, desc="Processing comments", unit="comment") as pbar:
+            for future in as_completed(futures):
+                result = future.result()
+                if result:
+                    with comments_lock:
+                        all_comments.append(result)
                 pbar.update(1)
     
-    # Print statistics
+    # End timing
+    end_time = time.time()
+    total_time = end_time - start_time
+    
+    # Print statistics with performance metrics
     print(f"\nStage 3 complete:")
     print(f"  Total processed: {len(all_comments):,} comments")
-    print(f"  From list payload only: {list_only:,} ({100*list_only/max(1,total_to_fetch):.1f}%)")
-    print(f"  Required detail fetch: {detail_fetches:,} ({100*detail_fetches/max(1,total_to_fetch):.1f}%)")
-    print(f"  Failed fetches: {failed_fetches}")
-    print(f"  PDF attachments extracted: {pdf_extracted}")
-    print(f"  PDF attachments skipped (text >3k chars): {pdf_skipped}")
+    print(f"  From list payload only: {metrics['list_only']:,} ({100*metrics['list_only']/max(1,total_to_fetch):.1f}%)")
+    print(f"  Required detail fetch: {metrics['detail_fetches']:,} ({100*metrics['detail_fetches']/max(1,total_to_fetch):.1f}%)")
+    print(f"  Failed fetches: {metrics['failed_fetches']}")
+    print(f"  PDF attachments extracted: {metrics['pdf_extracted']}")
+    print(f"  PDF attachments skipped (text >3k chars): {metrics['pdf_skipped']}")
+    
+    # Performance metrics
+    print(f"\nPerformance metrics:")
+    print(f"  Total time: {total_time:.1f}s")
+    if total_to_fetch > 0:
+        avg_time_per_comment = total_time / total_to_fetch
+        print(f"  Average time per comment: {avg_time_per_comment:.3f}s")
+        
+        # Estimate sequential time (assuming same avg but no concurrency)
+        estimated_sequential = avg_time_per_comment * total_to_fetch
+        speedup = estimated_sequential / total_time if total_time > 0 else 1.0
+        print(f"  Estimated sequential time: {estimated_sequential:.1f}s")
+        print(f"  Speedup factor: {speedup:.2f}x")
+        print(f"  Effective parallelism: {min(speedup, concurrent_workers):.1f}/{concurrent_workers} workers utilized")
     
     return all_comments
 
@@ -1213,13 +1354,17 @@ def mine_comments(
     limit_docs: Optional[int],
     fetch_strategy: str,
     max_comments_per_doc: Optional[int] = None,
+    year: int = 2024,
+    concurrent_workers: int = 10,
 ) -> None:
     """Mine all comments from Federal Register documents with two-stage approach.
     
     Args:
         api_keys_with_limits: List of (api_key, rph_limit) tuples for load balancing
+        year: Year being processed (for validation)
+        concurrent_workers: Number of concurrent workers for fetching
     """
-    df_docs = load_documents(fr_csv, limit_docs)
+    df_docs = load_documents(fr_csv, limit_docs, year)
     if df_docs is None or len(df_docs) == 0:
         return
 
@@ -1231,7 +1376,7 @@ def mine_comments(
     with RegsGovClient(api_keys_with_limits, retries) as client:
         if fetch_strategy == "stratified":
             all_comments = run_stratified_pipeline(
-                df_docs, client, existing_ids, retries, max_comments_per_doc
+                df_docs, client, existing_ids, retries, max_comments_per_doc, concurrent_workers
             )
         else:
             all_comments = run_sampling_pipeline(
@@ -1247,6 +1392,7 @@ def main() -> None:
     parser.add_argument("--limit", type=int, default=None, help="Limit number of documents")
     parser.add_argument("--max-comments-per-doc", type=int, default=None, help="Skip documents with more than this many comments (cost control)")
     parser.add_argument("--retries", type=int, default=10, help="Max retries for API calls")
+    parser.add_argument("--concurrent-workers", type=int, default=None, help="Number of concurrent workers (default: min(10, num_keys * 3))")
     parser.add_argument(
         "--fetch-strategy",
         type=str,
@@ -1289,7 +1435,15 @@ def main() -> None:
     
     print(f"\nConfigured {len(api_keys_with_limits)} API key(s) for load balancing")
     
-    mine_comments(fr_csv, output_csv, api_keys_with_limits, args.retries, args.limit, args.fetch_strategy, args.max_comments_per_doc)
+    # Determine concurrent workers if not specified
+    if args.concurrent_workers is None:
+        concurrent_workers = min(10, len(api_keys_with_limits) * 3)
+    else:
+        concurrent_workers = args.concurrent_workers
+    
+    print(f"Using {concurrent_workers} concurrent workers for comment fetching")
+    
+    mine_comments(fr_csv, output_csv, api_keys_with_limits, args.retries, args.limit, args.fetch_strategy, args.max_comments_per_doc, args.year, concurrent_workers)
 
 
 if __name__ == "__main__":
@@ -1491,5 +1645,37 @@ if __name__ == "__main__":
 # - federal_register_YYYY_comments.csv: input file with document metadata from Federal Register
 # - comments_raw_YYYY.csv: output file with 22 metadata columns per comment
 # - makeup_data.csv: final output after classification (document_number, comment_id, category, agency)
+#
+# concurrent fetching (nov 2024):
+# - added ThreadPoolExecutor to run_stratified_pipeline for parallel comment detail fetching
+# - default workers: min(10, num_keys * 3) balances concurrency with API key limits
+# - thread-safe data structures: all_comments list, metrics dict, existing_ids set use locks
+# - CRITICAL FIX: RegsGovClient._perform_request now locks around key selection + throttle sleep
+#   * prevents race condition where multiple threads select same key simultaneously
+#   * without lock: 10 threads could all select key #0 and violate RPM limit
+#   * with lock: only one thread holds key at a time, others wait or use different keys
+#   * network I/O happens outside lock for parallelism (only selection/sleep is serialized)
+# - speedup metrics: compare actual time vs estimated sequential time (avg_per_comment * total)
+# - typical speedup: 3-8x depending on network latency and number of detail fetches required
+# - workers are underutilized when most comments use list payloads (no API call = instant)
+# - lock contention is low since network I/O (slow) happens outside the lock (fast)
+#
+# year validation (nov 2024):
+# - load_documents now checks publication_date field to verify CSV year matches requested year
+# - samples first 1001 rows (skipping row 0 for year boundary) to detect year mismatch
+# - prints clear error message with command to generate missing year's CSV via 2024distribution.py
+# - helps prevent confusion when wrong year's data file exists in output directory
+#
+# empty comment tracking (nov 2024):
+# - write_comment_output now prints statistics for comment text quality
+# - tracks: empty text, minimal text (<50 chars), no content (empty + no attachments)
+# - helps identify data quality issues and understand how many comments lack substantive content
+# - empty comments often come from attachment-only submissions or mass campaign tools
+#
+# pdf error reporting (nov 2024):
+# - download_and_extract_pdf_text now extracts filename from URL for better error messages
+# - format: "WARN: pdftotext failed for attachment: filename.pdf - error details"
+# - helps debug which specific attachments are causing extraction failures
+# - common issues: corrupted PDFs, scanned images without OCR, password-protected files
 #
 

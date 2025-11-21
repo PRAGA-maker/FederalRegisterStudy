@@ -385,6 +385,7 @@ def classify_comments(
     # Save metadata results
     if metadata_results:
         save_results(results_csv, metadata_results, "metadata")
+        print(f"\nSaved metadata classifications to: {results_csv.absolute()}")
     
     # Phase 2: LLM classification for remaining
     if not needs_llm:
@@ -517,8 +518,12 @@ def join_and_write_output(comments_csv: Path, results_csv: Path, fr_csv: Path, o
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     df_output.write_csv(str(output_csv))
     
-    print(f"\nOutput written to {output_csv}")
+    print(f"\n{'='*60}")
+    print(f"SAVED CLASSIFIED COMMENTS")
+    print(f"{'='*60}")
+    print(f"Output file: {output_csv.absolute()}")
     print(f"Total classified: {len(df_output)}")
+    print(f"{'='*60}")
     
     # Summary stats
     if len(df_output) > 0:
@@ -543,7 +548,7 @@ def main() -> None:
     comments_csv = script_dir / "data" / f"comments_raw_{args.year}.csv"
     results_csv = script_dir / "data" / f"makeup_results_{args.year}.csv"
     fr_csv = script_dir.parent / "output" / f"federal_register_{args.year}_comments.csv"
-    output_csv = script_dir.parent / "output" / "makeup_data.csv"
+    output_csv = script_dir.parent / "output" / f"makeup_data_{args.year}.csv"
     
     # Get API key
     api_key = os.environ.get("OPENAI_API_KEY")
@@ -638,4 +643,16 @@ if __name__ == "__main__":
 # - use cheap models (gpt-4o-mini) for simple classification tasks
 # - truncate prompts to 2000 chars to reduce input token costs
 # - only extract first 2 pages of pdf attachments to keep token counts manageable
+#
+# year-specific outputs (nov 2024):
+# - output_csv now includes year suffix: makeup_data_2015.csv, makeup_data_2020.csv, etc.
+# - prevents overwriting data from different years when running multi-year analyses
+# - each year's classification results are preserved independently for comparison
+# - downstream plotting scripts (makeup_plots.py) should also use year-specific paths
+#
+# enhanced output messages (nov 2024):
+# - added prominent "SAVED CLASSIFIED COMMENTS" banner with file path
+# - prints absolute path to make it easy to find output files
+# - metadata classification phase now prints when results are saved
+# - helps track pipeline progress and locate intermediate outputs
 

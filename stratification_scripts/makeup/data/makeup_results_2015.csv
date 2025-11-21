@@ -1,0 +1,2028 @@
+comment_id,category,prompt_used,model
+APHIS-2014-0018-0046,Academic/Industry/Expert (incl. small/local business),metadata,metadata
+BOEM-2014-0077-0026,Academic/Industry/Expert (incl. small/local business),metadata,metadata
+APHIS-2014-0018-0059,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+Dear Mr. Shea, <br/><br/>As the association representing local livestock auction markets in the state of South Carolina, we are writing to provide comments on the proposed rule regarding Approved Livestock Marketing Facilities (Docket No. APHIS-2014-0018). <br/><br/>Generally, we support the comments submitted by Dan Harris, president of the national Livestock Marketing Association. In particular, we share his concerns with the Farm of Origin changes to the ADT rule limiting the feasibility of us continue to do business with our out-of-state customers. Adult cattle coming into our markets are documented and inspected upon arrival, so this adjustment is unnecessary. <br/><br/>We also feel strongly that the agreement should remain in the regulation so markets have the ability to formally comment on any changes just as we are doing now. <br/><br/>In addition, we agree that the language in the proposed agreement should be adjusted so it is clear livestock markets are not solely responsible for all livestock movement and animal health requirements. Our producers, veterinarians, and animal health officials also play an important role. <br/><br/>Our final comment is unique to South Carolina. We have state inspectors that attend each of our livestock auctions. We feel this resource market owners should be able to be utilize, if they chose to do so, to help address the shortage of private veterinarians and increase traceability. This could be accomplished by allowing these state inspectors the ability to write health papers or alternative movement documents to keep livestock moving. <br/><br/>If you have any questions about these comments, please contact John Kissee at 770-596-0128. <br/><br/>South Carolina Livestock Marketing Association <br/>",gpt-5-nano
+APHIS-2014-0018-0008,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+To whom it may concern,<br/><br/>I am a law student in my final year of law school at Nova Southeastern University in Fort Lauderdale, Florida. Your proposed rule stood out to me as I had previously taken an animal law seminar in which I wrote a paper focusing, in part, on the interstate transportation of rodeo broncs. In doing so, I spoke about the federal Twenty-Eight Hour Law (49 USC 80502) as well as the regulations adopted by the United States Department of Agriculture as mentioned in 9 C.F.R. 89. Noticing that your proposed rule overlaps with much of research I encountered in writing my paper, I would offer the following comments as to the proposed revision to Part 71.<br/><span style='padding-left: 30px'></span>I understand the practicality of your decision to revise 71.20 as simply requiring a veterinarian on-call rather than on the premise at all times, however I am concern that the language in this section is too board as to who determines whether an animal may need an interstate certificate of veterinary inspection (ICVI) before leaving the facility after sale. For example, should this determinate be left up to someone who profits financially from having these animals shipped to another facility despite their health conditions, I have serious concerns for its vague phrasing.<br/><span style='padding-left: 30px'></span>Further, the restatement in 71.20(a) of 8303 of the Animal Health Protection Act (AHPA, 7 U.S.C. 8301 et seq.) stating that APHIS may carry out operations and measures to control, or eradicate any pest or disease of livestock also seems rather ambiguous. I understand that should pests or disease be detected in livestock, there is a strong health and safety interest in having them eradicated, however being a strong animal welfare advocate I would simply ask that this be done as humanely as possible by adding said language to your restatement.<br/><br/>Sincerely,<br/>Jennifer Trunk",gpt-5-nano
+APHIS-2014-0018-0057,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+Please see attached comments from The Humane Society of the United States and the American Society for the Prevention of Cruelty to Animals.",gpt-5-nano
+APHIS-2014-0018-0068,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+Dear Sir or Madam:<br/><br/>Attached please find R-CALF USA&#39;s comments in Docket No. APHIS-2014-0018.  Thank you.<br/><br/>Bill Bullard, CEO<br/>R-CALF USA<br/>P.O. Box 30715 <br/>Billings, MT 59107<br/>",gpt-5-nano
+APHIS-2014-0018-0003,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+As to back tag placement: The most effective placement is in the hollow behind the shoulder. When placed back by the hip if a cow is mounted prior to the glue drying the tag is often dislodged. Tags also stay much better in the spring when animals are sheading if a curry comb is used to remove loose hair prior to application. Having worked the tagging chute at an auction yard for 3 years prior to my 26 year veterinary career where I have used numerous back tags I have found this to be the most effective placement.",gpt-5-nano
+APHIS-2014-0018-0002,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+all exemptions should be taken away. if livestock ove from state to state, before they leave the original state they should be certified as healthful. I do not believe sick livestock should be moved from the original site. it dos not matter whether they move to a livestock facility. I do not believe unhealthy livestock should be moved to any new site. I do not believe that regulations that protect America should be done away with. ",gpt-5-nano
+APHIS-2014-0018-0015,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+See Attached",gpt-5-nano
+APHIS-2014-0018-0045,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+Indiana State Board of Animal Health comments are in the attached document. ",gpt-5-nano
+APHIS-2014-0018-0012,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+See attached file(s)",gpt-5-nano
+APHIS-2014-0018-0009,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+[SEE ATTACHED COMMENT]",gpt-5-nano
+APHIS-2014-0018-0065,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+The Florida Association of Livestock Markets supports the comments made by LMA on this proposed rule. <br/><br/>We appreciate USDA&#39;s engagement of stakeholders in this commenting process and hope that adjustments are made based on the feedback. <br/><br/>We&#39;re particularly interested in seeing changes to the market duties in the approved livestock marketing facility agreement to avoid situations where markets are taking on a policing role or being asked to agree to things they legally cannot do - such as not allowing a livestock owner to ship cattle. <br/><br/>We also hope USDA backs away from the proposed ADT changes relating to Farm of Origin. <br/><br/>Sincerely, <br/>Florida Association of Livestock Markets",gpt-5-nano
+APHIS-2014-0018-0063,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+The Georgia Livestock Markets Association supports the comments made by Livestock Marketing Association regarding this proposed rule. In particular, our feedback includes: <br/><br/><span style='padding-left: 30px'></span>Support for the ability to use an existing document rather than an owner shipper statement<br/><span style='padding-left: 30px'></span>Opposition of the Farm of Origin component added to the ADT rule <br/><span style='padding-left: 30px'></span>Support for USDAs proposal to allow a veterinarian be on call rather than present during the sale. <br/><span style='padding-left: 30px'></span>Support for LMAs recommendations for changes to the Approved Livestock Marketing Facility agreement language<br/><span style='padding-left: 30px'></span>Strong preference that this agreement language remain in the regulations rather than a separate document<br/><br/>Thank you for the opportunity to provide feedback. <br/><br/>Sincerely, <br/>Georgia Livestock Markets Association <br/>",gpt-5-nano
+APHIS-2014-0018-0064,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+Please see the attached comments from North Carolina LMA. ",gpt-5-nano
+APHIS-2014-0018-0007,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+The industry desperately needs these changes! As a Livestock Market operator in southern Michigan since 1956, we have seen many changes over the years, notably a decrease of Livestock Marketing options. We have several customers from northern Ohio that choose us to market their slaughter cattle. Requiring to have an IVCI issued by a vet for each consignment of slaughter cattle would not only be costly, but not necessary. These cattle go to slaughter and are inspected by USDA at their destination for harvest. To be an &quot;Approved USDA Livestock Facility&quot; to accept out of state slaughter cattle and be required to have a Vet at the site on sale days would serve no purpose. Our local vet on call would allow his/her services on the farms and not pin him/her down at our premise for 6 hours each sale day. These out of state consignments are currently and would be continued to be USDA back tagged, penned separate, not co mingled, and sent from our facilities to slaughter. In addition, they are individually identified with RFID or USDA approved metal ear tags. An &quot;Owner-Shipper&quot; statement to accompany the cattle is no problem for the farmers or truckers. These changes are a step forward to allow livestock marketing across state lines, and will enhance disease traceability.<br/><br/>Randy Heselschwerdt, Napoleon Livestock Commission Co.  Napoleon, Michigan   ",gpt-5-nano
+APHIS-2014-0018-0066,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+The Virginia Livestock Marketing Association supports the comment of the LMA on this proposed rule. Please see these comments attached as reference. <br/><br/>Thank you. ",gpt-5-nano
+APHIS-2014-0018-0067,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+The West Virginia LMA is the trade association of local livestock markets located across West Virginia. <br/><br/>We would like to thank USDA for the work put into this proposal and the opportunity for industry feedback. <br/><br/>There are many positive pieces of the proposal. These include the ability to have veterinarians on call, the use of existing documents as owner shipper statements, and consolidating terminology to the single, more descriptive, term of &quot;approved livestock marketing facilities.&quot; <br/><br/>At the same time, there are some pieces that could be improved through adjustments. In particular, the appeals process should be strengthened not weakened. Also, markets should not lose the ability to make formal comments on changes to the requirements listed in the agreement. This right would be lost if the agreement language was taken out of the regulation. <br/><br/>We hope adjustments can be made in these areas. <br/><br/>Sincerely, <br/>West Virginia LMA ",gpt-5-nano
+APHIS-2014-0018-0013,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+See attached file(s)",gpt-5-nano
+APHIS-2014-0018-0010,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+See attached file(s)",gpt-5-nano
+APHIS-2014-0018-0004,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+I think backtags should be applied in front of the hip.  Livestock should be tagged as soon as they arrive at the marketing facility from farm of origin whether interstate or intrastate.  Veterinarians have not been at the local sale barns all day around here in years and the rules should reflect this. Having a veterinarian &#39;on call&#39; is fine.",gpt-5-nano
+APHIS-2014-0018-0062,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+April 15, 2015 <br/><br/>To Whom It May Concern:<br/><br/>The following are the comments of the Pennsylvania Livestock Marketing Association on the proposed rule regarding Approved Livestock Marketing Facilities (Docket No. APHIS-2014-0018). <br/><br/>We thank you for the chance to provide feedback on the proposed rule. While we appreciate the time and effort taken to update the regulatory scheme surrounding Approved Livestock Marketing Facilities, we feel that USDA missed the mark in components of this proposed rule that reduces ADT rule flexibilities for cattle moving to an Approved Livestock Marketing Facility. The proposal limits the flexibility to only cattle coming to the facility from a Farm of Origin. Additionally, defining Farm of Origin to the farm where livestock are produced or maintained for at least four months prior to movement is unnecessarily broad  restricting movement even more. <br/><br/>In Pennsylvania, most of our livestock markets do business with out-of-state customers on a regular basis. This is both a function of being a smaller state and of cattle movement patterns. Additionally, many of our customers selling at market are small producers who bring just one or a few head of cattle to market at a time. For these small producers, it would be extremely expensive to have to have a veterinarian visit the farm to write a health certificate, especially when you consider the fact the cost of this health certificate could only be spread out over a few animals at the most. <br/><br/>This added expense could drive producers to sell at a different market just to avoid crossing state lines. They also may consider selling out of the market environment where it is less likely animal health and livestock movement requirements. <br/><br/>This would lead to less traceability rather than more traceability. <br/><br/>Sincerely, <br/><br/>Pennsylvania Livestock Marketing Association <br/>",gpt-5-nano
+APHIS-2014-0018-0014,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+Please see the attached comments from the National Pork Producers Council.  Thank you.",gpt-5-nano
+APHIS-2014-0018-0050,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+See attached",gpt-5-nano
+APHIS-2014-0018-0033,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+To Whom It May Concern:<br/> <br/>I am writing to provide comments on USDAs proposed changes to the Approved Livestock Marketing Facilities and Animal Disease Traceability regulations (Docket No. APHIS-2014-0018).<br/> <br/>As the President and CEO of Clovis Livestock Auction, Im concerned about a couple pieces of this proposal. One major concern I have is with the market duties in the proposed Approved Livestock Marketing Facility agreement. To me, it seems USDA would like markets to serve as the police of animal movement requirements. This is a government role that should not be passed on to private businesses. While we work with our buyers and sellers to help them meet requirements by having a veterinarian at our market, enforcing regulations is not a role markets should have to take on. The markets duties in the Approved Livestock Marketing Facility agreement should be adjusted to reflect this.<br/> <br/>I also am concerned about the portion of the proposed rule making changes to what is required to bring adult beef cattle and dairy cattle of any age across state lines to an Approved Livestock Marketing Facility. Our auction market is located in eastern New Mexico, close to the Texas border. Due to this, we have many customers crossing state lines to sell or buy cattle.<br/> <br/>Under the proposal, out-of-state producers selling cattle 18 months of age or older would have to get a health certificate before bringing these cattle to sell at our market, unless the cattle are coming from the farm where they are born or have been for four months.  Getting a veterinarian to visit a farm and write a health certificate can be expensive. In this rule, USDA has recognized that access to large animal veterinarians is a very real problem.  My concern is that USDA could be driving customers away from selling out our market by requiring health certificates prior to arrival. This is unnecessary as we have a veterinarian at our market and also record needed traceability inform",gpt-5-nano
+DHS-2014-0065-0002,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+we need a stronger enforcement action at the borders to catch these people before they set foot on our lands. we also need no more anchor babies. we need them kept out of the usa. the costs involved in providing for their health care are enormous and they dont deserve to have health care on the wallets of american taxpayers, who are being sent into bankruptcy these illegal sneak lawbreakers from mexico and central america and asia. i am totallyh aainst spending these huge sums for medical care for illegal sneak lawbreakers. we need to redirect where our tax dollars goes. it is going to the lowest scum around. not to decent americans. ",gpt-5-nano
+USCG-2014-0996-0003,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+what was allowed with th eshell company proposing to drill in alaska is informative as to what should NOT be allowed by the coast guard. its clear that our govt is not adequate in monitoring what big rich corporations are doing and how harmful they can be to the environment when they fail. i want much more control over what these corporations do and to fine them for violating all laws that they violate. http://www.nytimes.com/2015/01/04/magazine/the-wreck-of-the-kulluk.html?ref=magazine<br/><br/>this story is illustravie of what needs to be done to stop rich corporations from getting away with murder. why doesnt the coast guard read the entire story and see the lies and complete ignoring of laws and reglaions that this company did. as well as the complete ignoring of the vagaries of weather in alaska and the massive forces of nature. its clear that noting has been learned from the deepwater gulf of mexico blow out. evidently our govt agencies just intend to keep letting these rich oil companies just keep destroying and destroying and destroying. <br/><br/>",gpt-5-nano
+BIA-2014-0004-0006,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+Comments from the Sisseton-Wahpeton Oyate of the Lake Traverse Reservation, Sisseton SD attached.",gpt-5-nano
+BIA-2014-0004-0013,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+See attached file.",gpt-5-nano
+BIA-2014-0004-0017,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+too many undocumented workes in this country! the people born in the usa can not get help~!! there is too many people from other country&#39;s here~! help the citzens first! <br/><br/> im homeless and can not get help~~~~~~!! because im a citzen in the usa~~~~!!!!!!! ",gpt-5-nano
+BIA-2014-0004-0014,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+See attached file.",gpt-5-nano
+BIA-2014-0004-0018,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+March 6, 2015<br/><br/>Elizabeth K. Appel<br/>Director, Office of Regulatory Affairs &amp; Collaborative Action, Indian Affairs<br/>U.S. Department of the Interior<br/>1849 C Street, NW<br/>Mail Stop 3642-MIB<br/>Washington, DC  20240<br/>Re:  Comment Letter on Proposed Housing Improvement Program Regulation Amendments<br/><br/>Dear Ms. Appel:<br/>As Executive Director of the Cheyenne River Housing Authority I am hereby submitting comments on the proposed Housing Improvement Program Regulation Amendments.  <br/><br/><span style='padding-left: 30px'></span>Addition of Category D Adding this new category of housing will help Tribes promote the benefits of homeownership to families of all ages.  The down payment assistance funds will help Native American families qualify for homeownership financing.  Since this is a new category and expands the allowable HIP Programs housing assistance funds and services there should be clarification that these funds may be used for: down payment assistance, closing costs, education in financial literacy and homebuyer education and counseling. <br/>o<span style='padding-left: 30px'></span>Income Eligibility for Category D In order to insure that the HIP down payment assistance is available to families who can afford mortgage financing, we recommend that income eligibility be defined for Category D by using the definition provided by the Native American Housing Assistance and Self-Determination Act (NAHASDA) regulations.  This would allow eligibility by participants with annual income that is 80 percent of the area median income or United States median income, whichever is higher.  (12 CFR 1000.10)  <br/><br/>o<span style='padding-left: 30px'></span>Previous Assistance While we recognize the need to serve clients who have not previously received assistance through the HIP program, we recommend that the restriction from being eligible for the HIP down payment program not apply to recipients of Category B rehabilitation funds if the funds",gpt-5-nano
+BIA-2014-0004-0012,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+See attached file.",gpt-5-nano
+BIA-2014-0004-0007,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+See attached file(s)",gpt-5-nano
+BIA-2014-0004-0019,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+See Attached",gpt-5-nano
+BIA-2014-0004-0015,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+Regarding the ranking factor of Annual Household Income, and the change of 125% to 150%, I would recommend increasing further, to 175%. This would allow for the people deepest in poverty to get ahead on the list, so that they can get their housing repaired/improved faster. These people deep in poverty need it especially, so that they have a reliable place to stay as they start to climb out of poverty.",gpt-5-nano
+BIA-2014-0004-0020,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+See Attached",gpt-5-nano
+BIA-2014-0004-0016,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+See attached file(s)",gpt-5-nano
+BIA-2014-0004-0010,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+The United South and Eastern Tribes, Inc. (USET) is pleased to provide the Bureau of Indian Affairs (BIA or the Bureau) with the attached comments on the Proposed Rule that would revise current regulations at 25 CFR Part 256, Housing Improvement Program (HIP).<br/><br/>USET is a non-profit, inter-Tribal organization representing 26 federally recognized Indian Tribes from Texas across to Florida and up to Maine.   USET is dedicated to enhancing the development of Tribal nations, to improving the capabilities of Tribal governments, and assisting USET Member Tribes in dealing effectively with public policy issues and in serving the broad needs of Indian people.<br/><br/>Given the important role that the HIP plays in addressing the unmet housing needs of low-income American Indians, USET is pleased that the Bureau recognizes the need for updates and improvements to the program. However, we have concerns related to a number of the proposed changes, especially in light of the HIPs limited appropriation. In addition, we note that the Proposed Rule does not address the HIPs funding formula methodology, which does not currently function well for USET Tribes.<br/><br/>USET appreciates the opportunity to provide comments on the Proposed Rule and looks forward to the opportunity to provide additional input as rulemaking proceeds. Should you have questions or require additional information please do not hesitate to contact Ms. Liz Malerba, USET Director of Policy and Legislative Affairs, at (202)-624-3550 or by e-mail at Lmalerba@usetinc.org.<br/><br/>",gpt-5-nano
+BIA-2014-0004-0003,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+The Housing Improvement Program from the Cheyenne River Sioux Tribe would like to submit a comment to the proposed rule change of the Housing Improvement Program regulations, regarding the increase in the age requirement from 55 years of age to 62 years of age. For the record we oppose any change to this rule. The rationale for the proposed rule change, stated thusly, &quot;To provide Tribes with flexibility to better address lengthy waiting lists of Tribal members awaiting housing assistance,&quot; does not serve the interests of the membership of the CRST. Lengthy waiting lists are a result of, and demonstrate the needs of our constituent population. In short, more funding for the BIA Housing Improvement plan would constitute a more rational solution to the issue of lengthy waiting lists currently maintained by Tribes.<br/><br/>We oppose the proposed rule change regarding points awarded to households with disabled members. This rule change does not take into account the fact that households with two disabled members. This rule change does not take into account the fact that households with two disabled members often experience high mortality rates. Situations where one disabled member deceases before the household is served may put the household at a distinct disadvantage in future funding cycles. We would like to keep this rule unchanged.",gpt-5-nano
+BIA-2014-0004-0011,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+March 6, 2015 <br/><br/>VIA ELECTRONIC SUBMISSION<br/>Bureau of Indian Affairs <br/>Attn:<span style='padding-left: 30px'></span>Elizabeth Appel, Director, Office of Regulatory Affairs &amp; Collaborative Action<br/><br/><span style='padding-left: 30px'></span><span style='padding-left: 30px'></span>Subject:<span style='padding-left: 30px'></span><span style='padding-left: 30px'></span>Comments on Proposed Amendments to Housing Improvement Program, Docket Nos. BIA-2014-0004<br/><br/>My name is Christina Sturdevant and I am a first year law student in California.  <br/><br/>First, the proposed amendment to the Housing Improvement Program that will increase the income guidelines fits squarely within the Bureau of Indian Affairs mission.  The Bureau of Indian Affairs mission is to enhance the quality of life, promote economic opportunity, and to carry out the responsibility to protect and improve the trust assets of American Indians, Indian tribes, and Alaska Natives. If the income guidelines are increased from 125 percent to 150 percent of the federal poverty level, more American Indian and Alaska Native families will be eligible for the housing improvement grants.  Individuals living at 150 percent of the federal poverty level, while slightly more advantaged than those living at 125 percent of the poverty level, still require adequate housing conditions.  The increase of 25 percent will allow families who do not have financial resources to repair or renovate their existing homes.<br/><br/>Second, the Act should be amended to increase the monetary limit of funding granted to Category A and Category B recipients.  Category A and Category B recipients currently receive a maximum of $2,500 to repair or renovate their homes.  As stated in the proposal, this amount is inadequate to create material changes to the existing homes of impoverished families.  Of course, any funding creates a dent, but $2,500 is unlikely to make any lasting improvements.  For example, re-carpetin",gpt-5-nano
+BIA-2014-0004-0008,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+See attached file(s)",gpt-5-nano
+BIA-2014-0004-0004,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+March 7, 2015<br/><br/>VIA ELECTRONIC SUBMISSION<br/>Bureau of Indian Affairs<br/>Attn:<span style='padding-left: 30px'></span>Elizabeth K. Appel, Director, Office of Regulatory Affairs &amp; Collaborative Action, Indian Affairs, U.S. Department of Interior, <br/><br/>Subject:<span style='padding-left: 30px'></span>Comments on Proposed Amendments to Regulations Governing the Housing Improvement Program. Fed. Reg. 2014-30692, Docket Nos. BIA-2014-0004-0001<br/><br/><span style='padding-left: 30px'></span>I am Navajo and Apache. I have a Master in Public Affairs (MPA) from the Woodrow Wilson School of International &amp; Public Affairs at Princeton University, where I studied domestic policy.  Currently, I am studying Law at UC Hastings in San Francisco.  I strongly support the proposed rule changes. <br/><br/><span style='padding-left: 30px'></span>The addition of ranking factors for homelessness, overcrowding, and dilapidated housing will serve as positive steps towards the goal of better prioritizing the allocation of these limited resources.  In addition, allowing applications to remain active for four years as opposed to the current one year, will enable the BIA to have a better sense of the current housing needs without the concern that less sophisticated applicants would fall off the waiting list while their housing needs remain unmet.  The growing waitlists remains a serious concern and until additional resources are made available to meet these needs, these steps are necessary to best meet the needs of those most at risk. <br/><br/><span style='padding-left: 30px'></span>Rural tribal communities have some of the highest poverty rates, unemployment rates and adolescent suicide rates of any communities in the United States.  Providing quality long-term housing is a prerequisite for familial stability as well as wealth creation. As such, I fully support the proposed changes identified above. <br/>Respectfully submitted, <br/><br/>Angelo Isaac Sandoval,<br/>M.P.A",gpt-5-nano
+FDA-2014-N-2294-0004,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+Please see attached comments from the Campaign for Tobacco-Free Kids.",gpt-5-nano
+BOEM-2014-0077-0036,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+i SUPPORT THE PLACING OF 2 WIND TURBINES OFF THE COAST OF VIRGINIA BEACH AS LONG AS THERE ARE NO SIGNIFICANT IMPACTS TO THE ENVIRONMENT.",gpt-5-nano
+BOEM-2014-0077-0030,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+This is the time to venture into harnessing wind energy for Virginia and the entire Atlantic Coast.  The energy is always there, miles off the East Coast and it is right to form a plan and begin construction to convert that wind into usable energy in the form of electricity.  The ocean is a vast environment and has plenty of room for such a project.  I look forward to the development and employment of wind turbines off our coast and the flow of pollution free electricity to the citizens of Virginia and other coastal states.",gpt-5-nano
+BOEM-2014-0077-0040,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+YES!  It is time to develop renewable, non petroleum energy sources",gpt-5-nano
+BOEM-2014-0077-0025,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+As a Norfolk resident living near the beach, I am glad to hear of the potential wind technology project. We should be using the wind and waves to generate energy rather than depending on any foreign oil. Wind, wave, and sun technologies might lead to peace in the world and a much cleaner, healthier planet.",gpt-5-nano
+BOEM-2014-0077-0022,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+I think exploring wind energy is a great idea. 24 miles offshore is far enough not to negatively impact views/tourism. Wind doesn&#39;t cause pollution and is obviously renewable. Yes!",gpt-5-nano
+BOEM-2014-0077-0021,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+What a wonderful proposal!  As a resident of the Hampton Roads area of Virginia, I have long awaited the movement of alternative energy sources, especially at the coastal areas of our country.  While studying Environmental Science 20 years ago, energy alternatives were in the spot-light, yet so little has been done in this time frame to take advantage of the wind, solar, and hydrological resources available to us.  Growing up in Southern New Jersey, Atlantic Electric took a giant leap by installing 5 wind turbines on Atlantic City&#39;s skyline and they&#39;ve been going strong for many years.  When my husband was stationed over-seas in England eight years ago, wind farms were vast spread across the country-side and shore lines....not to mention throughout other areas of Europe.  I commend these efforts to get our country out of the &quot;stone-ages&quot; of producing energy.  I say &quot;kudos&quot; to Virginia for stepping up and look forward to the Hampton Roads area being a leader in the wind energy market.  ",gpt-5-nano
+BOEM-2014-0077-0018,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+Virginia Beach&#39;s economy is linked exactly to the environment and its health - from offshore fishing that feeds both locals and visitors to the beaches that make our homes worth so much money, provide a tax base through assessment of property value to the sunbathers who flock our stores and restaurants, parks and bike trails - the environment is the draw.  Virginia Beach because of its location and dependence on the environment should be leading the way on sustainability and alternative energy sources.  Oil may be plentiful and cheap but the downside and the potential to cripple our billion dollar tourist trade is too valuable to jeopardize.  That might be okay for the gulf coast but no one goes to a beach with tar balls and dead dolphins.  One accident from profit first companies located outside of the Commonwealth and we will lose decades in economic recovery.<br/><br/>Wind turbines are the sensible solution and we wouldn&#39;t even be discussing their merits it if it weren&#39;t for the money in politics from the well established oil conglomerates still pushing last century technologies.  There may be money in it for them to gain and politicians willing to do their bidding for their campaign coffers, but there is more money in it for Virginia Beach to lose, a lot and it affects us all not just the questionable politician or some CFO&#39;s salary.  For our children, our food, our livelihoods, and our health wind turbines and solar energy are not only beneficial, they are real solutions to the consistent and persistent byproduct of our old dirty energy sources.",gpt-5-nano
+BOEM-2014-0077-0034,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+I believe that the EA was done very thoroughly and it covered many aspects that needed to be covered. The EA mentioned that the construction, maintenance, a decommission of the wind mills will have no significant impact on air quality standards especially with comparison to the air quality that already exists in the area. It is important to point out that if successful, this project could lead to the cutting down of NOx, CO2, and PM 2.5 emissions in the area due to coal powered electricity. However, I do not know the standards and data that was used to determine that the air quality in the project areas would not be affected by the projects emissions. My concern is based on what data was used to determine that the air quality in the project areas would not be affected by the project. If the data was based on a yearly basis there average would be skewed due to the fact the summer months, especially at Virginia Beach, there is an increased amount of Tourism that leads to an increase of CO2 emissions as well as other harmful substances into the air. So why does this matter? The locals are already used to their air quality decreasing during the summer months because of the tourists but how would this project affect the other 8-9 months out of the year? Will it get better or will get worse? Other than this concern, I support this project and believe that it should continue so that wind technology will advance and create a more sustainable way of living.",gpt-5-nano
+BOEM-2014-0077-0032,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+Dear BOEM Officials:<br/><br/>Thank you for this opportunity to comment on the Environmental Assessment (EA) for the Virginia Offshore Wind Technology Project (VOWTAP). While I support Dominion&#39;s two test turbine project, such development must be done in a way that ensures robust protections for marine mammals and sea turtles, in particular for the North American right whale (NARW). <br/><br/>In order to support a Finding of No Significant Issues (FONSI), BOEM must amend the final EA to include the following measures:<br/><span style='padding-left: 30px'></span>prohibit pile-driving during the NARWs peak migratory season from Nov. 1 to April 30<br/><span style='padding-left: 30px'></span>during that time, place a uniform 10-knot speed limit restriction on all vessels of any length affiliated with the VOWTAP project<br/><span style='padding-left: 30px'></span>provide for a minimum of four qualified observers located at the pile driving site<br/><span style='padding-left: 30px'></span>require the developer to use the best commercially available technology to reduce noise associated with construction of the VOWTAP project<br/><br/>I applaud BOEM&#39;s efforts to bring clean renewable offshore wind power online as soon as possible. The crisis we face with climate change demands it. We in Virginia are especially vulnerable to its impacts with our Hampton Roads area being second only to New Orleans in its vulnerability to sea level rise.<br/><br/>From the VOWTAP project, critical information and &quot;lessons learned&quot; can be gleaned that can facilitate Dominion&#39;s timely build-out of its adjacent commercial lease area. We urge BOEM to work closely with Dominion and other project developers to facilitate build-out of the commercial lease area as soon as practicable, getting a substantial amount of wind power in operation no later than 2020. <br/><br/>Finally, offshore wind development can provide a valuable compliance tool in meeting Virginia&#39;s obligations ",gpt-5-nano
+BOEM-2014-0077-0038,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+I strongly support the pilot project to install two turbines to gather information about wind offshore Virginia.  Dominion Virginia Power should move expeditiously to develop a large wind farm.  There are no major environmental impacts.  Virginia is far behind other states in making use of wind power.",gpt-5-nano
+BOEM-2014-0077-0024,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+Please do not let Dominion Power bully you into a negative report. We need to explore alternative energy, although they have purchased the rights to wind power off the VA shore, they are dragging their feet in every way they can.  Please allow these two wind turbines to be places so that real research can be conducted.  Please require that Dominion make the results directly available to the public.",gpt-5-nano
+BOEM-2014-0077-0031,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+January 16, 2015<br/><br/>Comments on the Environmental Assessment for Virginia Offshore Wind Technology Advancement Project on the Atlantic Outer Continental Shelf Offshore Virginia<br/>AGENCY: Bureau of Oceans Management<br/><br/>Comments:<br/>I do not oppose this project but want to be sure that it is done well, from an environmental standpoint.  This EA describes reasonably good details on many issues that need to be covered.  However there appear to be some gaps that I wish to bring to your attention that should be addressed:<br/><br/>1.<span style='padding-left: 30px'></span>The EA report says on page 82 the applicant has proposed that pile driving will occur in May.  Then on page 109 the EA says pile driving will occur May through July.  Which is correct?  <br/><br/>2.<span style='padding-left: 30px'></span>Please be more specific about the aviation safety lights (page 67) that will be used.  These need to be the most bird-friendly aviation safety lights known, which should be based on studies that have been supported by US Fish and Wildlife Service.  My understanding is that white strobe lights are the least likely to attract birds during inclement weather (which is when this issue is most critical).  This should be explicitly stated in the EA, and required in the turbine procurement specifications.<br/><br/>3.<span style='padding-left: 30px'></span>It is important that Dominion Virginia Power carry out post-construction monitoring during operation of the project to evaluate actual impacts from the wind turbines on birds, as stated on page 67. Post-construction monitoring is important to verify whether a problem really exists, to improve impact predictions from future scaling-up of wind power development in the area, and to guide any adaptive management that might be warranted. The EA should specify how the findings from post-construction monitoring would be used to improve operation of the wind turbine facility, as needed.  BOEM should require Dominion Virg",gpt-5-nano
+BOEM-2014-0077-0033,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+There appears to be total disregard for many studies that conclude that OffShore Wind Projects require more costs in maintenance than any savings that are realized. But yet you crusade on with a determination that befits the renown Crusaders from 700 years ago who finally determined after all of the anguish that peace was less expensive. So, why cannot you first of all tell the truth about total maintenance and who will be expected to pick up the costs of it all. Second, tell about the ignored studies that point to a positive return on the monies spent with the installation of smaller &quot;fans&quot; that can be installed on top of buildings, television and telecommunication towers, even existing TVA towers.<br/>Your total disregard is obvious and so noted.<br/>",gpt-5-nano
+BOEM-2014-0077-0041,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+It is about time we explore renewable resources.  This is a much needed program and I hope it will proceed with out any more delays.",gpt-5-nano
+BOEM-2014-0077-0027,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+See attached file(s)",gpt-5-nano
+BOEM-2014-0077-0019,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+First of all wind turbines may be outdated very early due to advances in solar power and fusion energy.  Wind turbines are very expensive and have a short life expectancy.  They cause trouble for the navy and ocean going ships.  They also kill far too many birds.  There are less expensive and more serviceable ways to generate power.  We do not need wind turbises.",gpt-5-nano
+BOEM-2014-0077-0020,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+Request approval of the Offshore Wind Technology Advancement Project on the Atlantic Outer Continental Shelf, Virginia as soon as possible with a finding of No Significant Impact.",gpt-5-nano
+BOEM-2014-0077-0029,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+Dear Program Manager:<br/><br/>As a coastal resident, I am pleased that clean energy exploration is being considered off the Virginia shore.  As a result of offshore farms, countries like England and Denmark are setting generation records.  In Denmark last year wind produced 39% of energy consumed.  Meanwhile, with the exception of a small, scaled floating turbine in Maine, the US, has no significant offshore wind capacity.  <br/><br/>The twin turbine demonstration project is essential to investigate the potential costs and consequences of developing large-scale farms.  The environmental assessment is sufficient for this small -scale project and should be approved so that we can begin to transition away from polluting and water intensive conventional energy forms. <br/><br/>In addition to reducing our carbon footprint and protecting water resources, wind has proven to be a resilient energy resource.  During extreme events like drought, heat waves, storms and even tsunamis, when conventional power has shut down, wind continues to supply energy. <br/><br/>Theres no question that we need this energy source.  And in general the public supports it.  A Harvard scientist found that nearly 90% of Americans want to see more solar and wind energy added to the U.S. landscape.<br/><br/>Lastly, offshore wind development brings industry and high paying jobs.   With the potential upside provided by offshore wind development, we cannot fail to investigate. <br/><br/>Please see that the environmental review process is expedited.<br/>",gpt-5-nano
+BOEM-2014-0077-0028,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+I think the VA offshore research for wind turbines is a great idea!  I&#39;ve seen the wind farms in the Midwest and have actually stood underneath and they are amazingly quiet and beautiful, set in surroundings between farms.  Are there any complaints from the surrounding property owners?  You can never satisfy everyone. Small steps will bring big success to keeping our future and earth for the generations to come. Two thumbs up!!",gpt-5-nano
+BOEM-2014-0077-0039,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+I support Offshore Wind Technology.  ",gpt-5-nano
+BOEM-2014-0077-0037,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+Wind technology makes no economic sense. Don&#39;t do it.",gpt-5-nano
+BOEM-2014-0077-0023,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+I live in Virginia Beach and sail in the bay and the ocean. I fish on the Atlantic shoreline and visit the beach at least 12 times a year.  I fully endorse this project in the location proposed for the preferred alternative. My daughter further recommends a protected fish area around the turbines.  I suspect the area immediately around the turbine might be a security area. This effort is needed to further use available wind resources.  I look forward to underwater turbines harvesting energy from the Gulf Stream.  ",gpt-5-nano
+BOEM-2014-0077-0042,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+See Attached",gpt-5-nano
+NRC-2014-0276-0004,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+See Attached",gpt-5-nano
+NRC-2014-0276-0003,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+See Attached",gpt-5-nano
+NRC-2014-0276-0007,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+Comments on DG-5027 (RG 5.12 Rev. 1)<br/>Regulatory Position C.1 covers the selection and use of locks to protect National Security Information, Restricted Data, and Formally Restricted Data and references 10 CFR 95.25(a).  <br/>10 CFR 95.25(a) states:<br/>(a) Secret matter, while unattended or not in actual use, must be stored in--<br/>(1) A safe, steel file cabinet, or safe-type steel file container that has an automatic unit locking mechanism. All such receptacles will be accorded supplemental protection during non-working hours; or<br/>(2) Any steel file cabinet that has four sides and a top and bottom (all permanently attached by welding, rivets, or peened bolts so the contents cannot be removed without leaving visible evidence of entry) and is secured by a rigid metal lock bar and an approved key operated or combination padlock. The keepers of the rigid metal lock bar must be secured to the cabinet by welding, rivets, or bolts, so they cannot be removed and replaced without leaving evidence of the entry. The drawers of the container must be held securely so their contents cannot be removed without forcing open the drawer. This type of cabinet will be accorded supplemental protection during non-working hours.<br/>The current regulation and the Draft Regulatory Guide contradicts what is written in the National Industrial Security Program Operators Manual (NISPOM), DoD 52200.22-M, dated February 28, 2006 Incorporating Change 1, March 28, 2013.  The NISPOM only allowed the use of non-GSA security storage containers prior to October 1, 2012.  After the effective date, only GSA approved security storage containers may be used to protect this type of information.<br/>NISPOM  Section 5-303 states: <br/><br/>SECRET Storage. SECRET material shall be stored in a GSA-approved security container, an approved vault, or closed area. Supplemental controls are required for storage in closed areas. The following additional storage methods may be used until October 1, 2012: <br/",gpt-5-nano
+NRC-2014-0276-0008,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+Docket ID NRC-2014-0276: FirstEnergy Nuclear Operating Company (FENOC) Comments on Draft Regulatory Guide DG-5027, General Use of Locks in Protection and Control of Facilities and Special Nuclear Materials, Classified Matter, and Safeguards Information<br/><br/>1. In response to 80 FR 53, FirstEnergy Nuclear Operating Company (FENOC) has reviewed the draft regulatory guide (RG), and appreciates the opportunity to provide the following comments.<br/> <br/>The draft RG indicates that only the Federal Specification FF-L-2740 model X-09 lock is currently being produced.  Industry information indicates a subsequent Model X-10 is now in production that should be evaluated for inclusion in this regulatory guide.<br/><br/>Starting on page 5 of the RG, with the reference number for Federal Specification FF-L-2740, reference numbers are incorrect.  For example, Federal Specification FF-L-2740 is identified as reference 11, but Federal Specification FF-L-2740A is actually reference 12. Reference 11 is Lock Industry Standards and Training Council,  The Professional Locksmith Dictionary, 2006.<br/> <br/>2. Should you have any questions or comments, please contact:<br/><br/>H. Philip Rowe<br/>FENOC Fleet Security Specialist<br/>Office (330) 315-6901<br/><br/>or<br/><br/>Darin M. Benyak<br/>FENOC Director, Fleet Security<br/>Office (330) 315-6909 <br/>",gpt-5-nano
+NRC-2014-0276-0006,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+See Attached",gpt-5-nano
+NRC-2014-0276-0005,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+See Attached",gpt-5-nano
+NRC-2013-0178-0014,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+See Attached",gpt-5-nano
+NRC-2013-0178-0013,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+See Attached",gpt-5-nano
+NRC-2013-0178-0009,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+See Attached",gpt-5-nano
+NRC-2013-0178-0006,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+Thank you for providing notice of the referenced project. The Peoria Tribe of Indians of Oklahoma is unaware of any documentation directly linking Indian Religious Sites to the proposed project location. There appear to be no objects of cultural significance or artifacts linked to our tribe located on or near the project location.<br/><br/>The Peoria Tribe of Indians of Oklahoma is unaware of items covered under NAGPRA (Native American Graves Protection and Repatriation Act) to be associated with the proposed project site. These items include: funerary or sacred objects; objects of cultural patrimony; or ancestral human remains.  <br/><br/>The Peoria Tribe has no objection at this time to the proposed license renewal. If, however, at any time items are discovered which fall under the protection of NAGPRA, the Peoria Tribe requests immediate notification and consultation. In addition state, local and tribal authorities should be advised as to the findings and construction halted until consultation with all concerned parties has occurred. <br/><br/>Thank you,<br/>Cynthia Stacy<br/>Special Projects Manager/NAGPRA <br/>Peoria Tribe of Indians of Oklahoma<br/>118 S. Eight Tribes Trail<br/>PO Box 1527<br/>Miami, OK  74355-1527<br/>P (918)540-2535 | F (918)540-2538<br/>",gpt-5-nano
+NRC-2013-0178-0012,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+See Attached",gpt-5-nano
+NRC-2013-0178-0010,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+We are just very suspicious of the use of nuclear energy facilities.  It seems that we only become concerned after a disaster occurs.  There have been several nuclear accidents and numerous radiation health problems to workers and civilians.  It certainly is not a renewable source of energy, nor green!   We really need to invest in solar and wind energy.   We don&#39;t really trust Excelon.  Profit over serving the public.",gpt-5-nano
+NRC-2013-0178-0008,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+See Attached",gpt-5-nano
+NRC-2013-0178-0011,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+DOCKET NUMBER NRC-2013-0178 Byron Nuclear Power Plant Relicensing<br/><br/>I oppose the license renewal for the Byron Plant because it is a not environmentally sound and is a serious threat to human health and safety. <br/><br/>I am a 72 year old male retiree, residing ca. 20 miles south-southwest of the facility. I have family members--including children--living 5-10 miles from the plant and I fear for their health and safety. Research reveals increased cancer risk for those living within 10 miles of nuclear power plants and other studies show that nuclear workers have a greater risk of cancer than the survivors of Hiroshima/Nagasaki bombings in WWII. Nuclear power plants emit radiation daily and more serious releases occur during refueling.<br/><br/>There is no safe level of radiation. The health consequences of exposure to continued low levels are  worse than one high level exposure. <br/><br/>Exelon&#39;s competence in operating Byron is questionable, as indicated in &quot;Toxic Management Erodes Safety at &#39;World&#39;s Safest&#39; Nuclear Plant&quot; by Dreux Richard (The Japan Times, March 11, 2013). The allegations in this article have not been adequately or publicly addressed by Exelon or the NRC in my estimation, and the suggestion by the NRC Public Relations staff  that I dig through reams of documents to see if the situation was adequately dealt with leaves me cold. An associate of mine was a career employee at Byron who took early retirement out of frustration and disgust, stating, &quot;Nuclear power is fine--if its done right.&quot;  (And also indicates that most of the above mentioned ariticle is true). <br/><br/>I recommend tthat the NRC institute policies and procedures to assure that Exelon and other plant operators maintain management practices that do not intimidate employees who are trying to ensure safe operation of nuclear power plants, and to inform the public of violations of said policies and remediation of said violations.  Toxic manage",gpt-5-nano
+NRC-2013-0178-0015,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+See Attached",gpt-5-nano
+NRC-2013-0178-0007,Undecided/Anonymous,"Classify the author of this public comment as exactly one of these categories:
+
+**org** - Large corporations, industry associations, trade groups, or organizational entities
+**citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
+**expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
+**lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
+**undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
+
+Decision guidance:
+- Use ALL available context clues (tone, language, content, structure)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
+- Large company or trade association → org
+- Generic ""concerned citizen"" with personal story/opinion → citizen (NOT undecided)
+- Individual small business owners → expert (not org)
+- Professional advocates or political operatives → lobbyist
+- AVOID undecided unless genuinely impossible to determine - make your best inference from the text
+
+Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use ""undecided"" as a last resort.
+
+Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
+
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
+
+Comment:
+On behalf of UCS, I submitted FOIA/PA-2015-0082 seeking Final Safety Analysis Report records received after October 1, 2001, by the NRC from all nuclear plant owners, including the Byron licensee. By letter dated January 7, 2015, the NRC administratively closed my request. By email dated December 30, 2014, the NRC staff notified me that the estimated page count for the requested records was 448,000 just from Region IV. That email estimated approximately 4,000 pages per FSAR per reactor with multiple updates per reactor since October 1, 2001 -- accounting for the hundreds of thousands of pages per region. <br/><br/>By withholding this vast quantity of FSAR material from the public, the NRC is significantly impairing our ability to review and comment on licensing request such as this one for Byron. The FSARs describe the safety-related structures, systems, and components at the plant and further describe their role in preventing or mitigating design basis transients and accidents. <br/><br/>NRC regulation 10 CFR 50.59 requires licensees to screen proposed modifications and changes to plant operating procedures to see whether the proposed changes might reduce safety margins approved by the NRC in a significant way. If so, the changes cannot be made until after the NRC reviews and formally approves them. The 10 CFR 50.59 screenings and evaluations rely heavily on information in the FSARs. The FSARs are also extensively used by NRC&#39;s reviewers when evaluating licensee requests for licensing actions.<br/><br/>As stated above, by withholding hundreds of thousands of pages of FSARs from the public, the NRC is significantly impairing our ability to participating in licensing proceedings in a meaningful away. The licensees and the NRC staff rely heavily on the FSAR information while preparing and reviewing requests for licensing actions, but the NRC&#39;s withholding prevents the public from reviewing this information. <br/><br/>The hundreds of thousands of pages of vital",gpt-5-nano

@@ -153,8 +153,17 @@ class RegsClient:
 
     def __init__(self, api_keys, per_key_rpm: int = 16, per_key_hourly: int = 1000) -> None:
         # Parse comma-separated string into list if needed
+        # Format can be: "KEY1:RPH1,KEY2:RPH2" or "KEY1,KEY2" or just "KEY"
         if isinstance(api_keys, str):
-            api_keys = [k.strip() for k in api_keys.split(",") if k.strip()]
+            raw_keys = [k.strip() for k in api_keys.split(",") if k.strip()]
+            # Strip :RPH suffix if present (we use per_key_rpm/per_key_hourly instead)
+            api_keys = []
+            for k in raw_keys:
+                if ":" in k:
+                    # Remove :RPH suffix
+                    api_keys.append(k.split(":")[0].strip())
+                else:
+                    api_keys.append(k)
         elif api_keys is None:
             api_keys = []
         
@@ -532,6 +541,13 @@ def main() -> None:
     df = pd.DataFrame(rows)
     csv_path = os.path.join(args.output_dir, f"federal_register_{args.year}_comments.csv")
     df.to_csv(csv_path, index=False)
+    
+    print(f"\n{'='*60}")
+    print(f"SAVED FEDERAL REGISTER DOCUMENTS")
+    print(f"{'='*60}")
+    print(f"Output file: {os.path.abspath(csv_path)}")
+    print(f"Documents saved: {len(df)}")
+    print(f"{'='*60}")
 
     # Analysis summary
     if len(df) == 0:
@@ -581,6 +597,12 @@ def main() -> None:
             print(f"  {ch}: {count}")
 
     # Plotting removed per request; only CSV output is generated
+    
+    print(f"\n{'='*60}")
+    print(f"NEXT STEP: Mine comments")
+    print(f"{'='*60}")
+    print(f"Run: python stratification_scripts/makeup/mine_comments.py --year {args.year}")
+    print(f"{'='*60}")
 
 
 if __name__ == "__main__":
