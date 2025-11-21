@@ -109,110 +109,126 @@ def tokenize(text: str) -> List[str]:
     return [t for t in tokens if t not in stopwords]
 
 
-def vectorize_comments(comments: List[str]) -> Tuple[np.ndarray, Word2Vec]:
+def vectorize_comments(comments: List[str]) -> Tuple[np.ndarray, Optional[Word2Vec]]:
     """Train Word2Vec and return normalized comment vectors."""
-    # Tokenize all comments
-    tokenized = [tokenize(c) for c in comments]
-    tokenized = [t for t in tokenized if len(t) > 0]  # Filter empty
-    
-    if len(tokenized) < 10:
-        # Not enough data
+    tokenized_all = [tokenize(c) for c in comments]
+    corpus = [tokens for tokens in tokenized_all if tokens]
+
+    if len(corpus) < 10:
         return np.zeros((len(comments), 300)), None
-    
-    # Train Word2Vec
+
     model = Word2Vec(
-        sentences=tokenized,
+        sentences=corpus,
         vector_size=300,
         window=5,
         min_count=2,
         workers=4,
         seed=42,
     )
-    
-    # Vectorize each comment
+
     vectors = []
-    for tokens in tokenized:
-        if len(tokens) == 0:
+    for tokens in tokenized_all:
+        if not tokens:
             vectors.append(np.zeros(300))
             continue
-        # Mean pooling
+
         vecs = [model.wv[t] for t in tokens if t in model.wv]
-        if len(vecs) == 0:
+        if not vecs:
             vectors.append(np.zeros(300))
-        else:
-            vec = np.mean(vecs, axis=0)
-            # L2 normalize
-            norm = np.linalg.norm(vec)
-            if norm > 0:
-                vec = vec / norm
-            vectors.append(vec)
-    
+            continue
+
+        vec = np.mean(vecs, axis=0)
+        norm = np.linalg.norm(vec)
+        if norm > 0:
+            vec = vec / norm
+        vectors.append(vec)
+
     return np.array(vectors), model
 
 
-def compute_sample_size(vectors: np.ndarray, pilot_size: int = 500, Z: float = 3.291, E: float = 0.05) -> int:
+def compute_sample_size(
+    vectors: np.ndarray,
+    pilot_size: int = 500,
+    Z: float = 3.291,
+    E: float = 0.05,
+    random_state: Optional[int] = None,
+) -> int:
     """Calculate required sample size for 99.9% CI."""
     N = len(vectors)
-    
-    # Pilot sample
-    pilot_indices = np.random.choice(N, min(pilot_size, N), replace=False)
+    if N == 0:
+        return 0
+
+    pilot_count = min(pilot_size, N)
+    rng = np.random.default_rng(random_state)
+    pilot_indices = rng.choice(N, pilot_count, replace=False)
     pilot_vecs = vectors[pilot_indices]
-    
-    # Estimate sigma (std of vector norms)
+
     norms = np.linalg.norm(pilot_vecs, axis=1)
-    sigma = np.std(norms)
-    
-    # Sample size formula
-    n = (Z ** 2 * sigma ** 2) / (E ** 2)
-    
-    # Finite population correction
+    sigma = np.std(norms) if norms.size else 0.0
+
+    if sigma == 0:
+        return min(1, N)
+
+    n = (Z**2 * sigma**2) / (E**2)
     n_corrected = n / (1 + (n - 1) / N)
-    
-    return int(np.ceil(n_corrected))
+
+    return max(1, min(N, int(np.ceil(n_corrected))))
 
 
 def density_aware_sampling(
     vectors: np.ndarray,
     n_samples: int,
     k_neighbors: int = 50,
+    random_state: Optional[int] = None,
 ) -> np.ndarray:
     """Sample inversely proportional to density with cluster coverage."""
     N = len(vectors)
-    n_samples = min(n_samples, N)
-    
-    # Clustering
-    k_clusters = int(math.sqrt(N / 2))
-    k_clusters = max(10, min(k_clusters, N // 2))
-    
+    if N == 0:
+        return np.array([], dtype=int)
+
+    n_samples = min(max(1, n_samples), N)
+    if N == 1 or n_samples == N:
+        return np.arange(n_samples)
+
+    rng = np.random.default_rng(random_state)
+
+    k_clusters = int(math.sqrt(max(N / 2, 1)))
+    k_clusters = max(1, min(max(10, k_clusters), N))
+
     kmeans = MiniBatchKMeans(n_clusters=k_clusters, random_state=42, batch_size=1000)
     clusters = kmeans.fit_predict(vectors)
-    
-    # Compute density via kNN
+
     k_neighbors = min(k_neighbors, N - 1)
-    nn = NearestNeighbors(n_neighbors=k_neighbors + 1, metric='cosine')
+    if k_neighbors <= 0:
+        return rng.choice(N, size=n_samples, replace=False)
+
+    nn = NearestNeighbors(n_neighbors=k_neighbors + 1, metric="cosine")
     nn.fit(vectors)
     distances, _ = nn.kneighbors(vectors)
-    
-    # Density = 1 / mean distance to k neighbors
-    mean_dist = distances[:, 1:].mean(axis=1)  # Skip self
+
+    mean_dist = distances[:, 1:].mean(axis=1)
     density = 1.0 / (mean_dist + 1e-6)
-    
-    # Inverse density weights
+
     weights = 1.0 / (density + 1e-6)
     weights = weights / weights.sum()
-    
-    # Sample with replacement proportional to inverse density
-    sampled_indices = np.random.choice(N, size=n_samples, replace=False, p=weights)
-    
-    # Ensure at least 1 per cluster
+
+    sampled_indices = rng.choice(N, size=n_samples, replace=False, p=weights)
+
+    missing_clusters = []
     for cluster_id in range(k_clusters):
         cluster_mask = clusters == cluster_id
-        if cluster_mask.sum() > 0 and not np.any(clusters[sampled_indices] == cluster_id):
-            # Replace one sample with a random point from this cluster
-            cluster_indices = np.where(cluster_mask)[0]
-            random_idx = np.random.choice(cluster_indices)
-            sampled_indices[0] = random_idx
-    
+        if cluster_mask.any() and not np.any(clusters[sampled_indices] == cluster_id):
+            missing_clusters.append(cluster_id)
+
+    if missing_clusters:
+        replace_order = list(np.argsort(weights[sampled_indices])[::-1])
+        for idx, cluster_id in enumerate(missing_clusters):
+            cluster_indices = np.where(clusters == cluster_id)[0]
+            if cluster_indices.size == 0:
+                continue
+            target_idx = replace_order[idx] if idx < len(replace_order) else replace_order[-1]
+            sampled_indices[target_idx] = rng.choice(cluster_indices)
+
     return sampled_indices
 
 
@@ -252,19 +268,47 @@ async def classify_batch(
     max_concurrency: int,
 ) -> List[Tuple[str, Optional[str], str]]:
     """Classify a batch of comments. Returns [(comment_id, category, prompt)]."""
+    if not comments:
+        return []
+
     semaphore = asyncio.Semaphore(max_concurrency)
-    
-    tasks = []
-    for comment_id, text in comments:
-        task = classify_comment(client, text, semaphore, model)
-        tasks.append((comment_id, task))
-    
-    results = []
-    for comment_id, task in tqdm(tasks, desc="Classifying"):
-        category, prompt = await task
-        results.append((comment_id, category, prompt))
-    
+
+    async def run_single(comment_id: str, text: str) -> Tuple[str, Optional[str], str]:
+        category, prompt = await classify_comment(client, text, semaphore, model)
+        return comment_id, category, prompt
+
+    tasks = [asyncio.create_task(run_single(comment_id, text)) for comment_id, text in comments]
+
+    results: List[Tuple[str, Optional[str], str]] = []
+    for task in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc="Classifying"):
+        results.append(await task)
+
     return results
+
+
+async def run_classification_batches(
+    client: AsyncOpenAI,
+    batches: List[Tuple[str, List[Tuple[str, str]]]],
+    model: str,
+    max_concurrency: int,
+    results_csv: Path,
+    chunk_size: int = 100,
+) -> None:
+    """Run classify_batch sequentially for each document using one event loop."""
+    pending: List[Tuple[str, Optional[str], str]] = []
+
+    for doc_number, comments in batches:
+        if not comments:
+            continue
+        doc_results = await classify_batch(client, comments, model, max_concurrency)
+        pending.extend(doc_results)
+
+        if len(pending) >= chunk_size:
+            save_results(results_csv, pending, model)
+            pending = []
+
+    if pending:
+        save_results(results_csv, pending, model)
 
 
 def classify_comments(
@@ -276,6 +320,7 @@ def classify_comments(
     model: str,
     max_concurrency: int,
     sample_threshold: int,
+    sampling_seed: Optional[int],
 ) -> None:
     """Main classification pipeline with metadata-first classification."""
     
@@ -349,37 +394,32 @@ def classify_comments(
     
     print(f"\nPhase 2: LLM classification for {len(needs_llm)} remaining comments...")
     
-    # Group comments by document for batch processing
-    by_doc: Dict[str, List[Tuple[str, str]]] = {}  # doc_number -> [(comment_id, text)]
+    by_doc: Dict[str, List[Tuple[str, str]]] = {}
     for row in needs_llm:
         doc_num = row.get("document_number")
         comment_id = row.get("comment_id")
         comment_text = row.get("comment_text", "")
         attachment_text = row.get("attachment_text", "")
-        
-        # Use comment_text if available, otherwise fallback to attachment_text
         text = comment_text if comment_text and comment_text.strip() else attachment_text
-        
         if not doc_num or not comment_id or not text:
             continue
-        if doc_num not in by_doc:
-            by_doc[doc_num] = []
-        by_doc[doc_num].append((comment_id, text))
+        by_doc.setdefault(doc_num, []).append((comment_id, text))
     
-    # Setup OpenAI client
+    if not by_doc:
+        print("No documents with usable text after filtering.")
+        join_and_write_output(comments_csv, results_csv, fr_csv, output_csv)
+        return
+    
     client = AsyncOpenAI(api_key=api_key)
-    
-    all_results = []
+    doc_batches: List[Tuple[str, List[Tuple[str, str]]]] = []
     
     for doc_number, comments in by_doc.items():
         n_comments = len(comments)
         print(f"\nDocument {doc_number}: {n_comments} comments")
         
         if n_comments <= sample_threshold:
-            # Classify all
             to_classify = comments
         else:
-            # Word2Vec sampling
             print(f"  Vectorizing {n_comments} comments...")
             texts = [c[1] for c in comments]
             vectors, w2v_model = vectorize_comments(texts)
@@ -389,29 +429,39 @@ def classify_comments(
                 continue
             
             print("  Computing sample size...")
-            n_samples = compute_sample_size(vectors)
+            n_samples = compute_sample_size(vectors, random_state=sampling_seed)
+            if n_samples <= 0:
+                n_samples = min(1, len(comments))
             print(f"  Required sample size: {n_samples} (from {n_comments} total)")
             
             print("  Density-aware sampling...")
-            sampled_indices = density_aware_sampling(vectors, n_samples)
+            sampled_indices = density_aware_sampling(
+                vectors,
+                n_samples,
+                random_state=sampling_seed,
+            )
             
             to_classify = [comments[i] for i in sampled_indices]
             print(f"  Selected {len(to_classify)} comments to classify")
         
-        # Classify
-        results = asyncio.run(classify_batch(client, to_classify, model, max_concurrency))
-        all_results.extend(results)
-        
-        # Save incrementally
-        if len(all_results) >= 100:
-            save_results(results_csv, all_results, model)
-            all_results = []
+        if to_classify:
+            doc_batches.append((doc_number, to_classify))
     
-    # Save remaining
-    if all_results:
-        save_results(results_csv, all_results, model)
+    if not doc_batches:
+        print("No documents ready for LLM classification after sampling.")
+        join_and_write_output(comments_csv, results_csv, fr_csv, output_csv)
+        return
     
-    # Join and write final output
+    asyncio.run(
+        run_classification_batches(
+            client,
+            doc_batches,
+            model,
+            max_concurrency,
+            results_csv,
+        )
+    )
+    
     join_and_write_output(comments_csv, results_csv, fr_csv, output_csv)
 
 
@@ -485,6 +535,7 @@ def main() -> None:
     parser.add_argument("--max-concurrency", type=int, default=20)
     parser.add_argument("--model", type=str, default="gpt-5-nano")
     parser.add_argument("--sample-threshold", type=int, default=1000, help="Use sampling for documents with more than this many comments")
+    parser.add_argument("--sampling-seed", type=int, default=None, help="Optional RNG seed for sampling reproducibility")
     args = parser.parse_args()
     
     # Setup paths
@@ -509,6 +560,7 @@ def main() -> None:
         args.model,
         args.max_concurrency,
         args.sample_threshold,
+        args.sampling_seed,
     )
 
 
