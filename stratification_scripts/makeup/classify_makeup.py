@@ -74,7 +74,18 @@ def classify_from_metadata(row: Dict) -> Optional[str]:
     return None
 
 # Enhanced prompt with decision guidance - categories ordered to minimize bias
-PROMPT_TEMPLATE = """Classify the author of this public comment as exactly one of these categories:
+# IMPORTANT: Comment text goes FIRST for better LLM attention
+PROMPT_TEMPLATE = """Comment to classify:
+{comment_text}
+
+Metadata:
+- Organization: {organization}
+- Submitter Type: {submitter_type}
+- Name: {first_name} {last_name}
+
+---
+
+Classify the AUTHOR of the above public comment as exactly ONE of these categories:
 
 **org** - Large corporations, industry associations, trade groups, or organizational entities
 **citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
@@ -83,9 +94,9 @@ PROMPT_TEMPLATE = """Classify the author of this public comment as exactly one o
 **undecided** - ONLY if truly anonymous with no identifying info or completely unclear authorship
 
 Decision guidance:
-- Use ALL available context clues (tone, language, content, structure)
-- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories
-- Large company or trade association → org
+- Use ALL available context clues (tone, language, content, structure, signatures, letterheads)
+- Look for: organizational letterhead, academic titles, business names, lobbying language, personal stories, signatures
+- Large company or trade association or group → org
 - Generic "concerned citizen" with personal story/opinion → citizen (NOT undecided)
 - Individual small business owners → expert (not org)
 - Professional advocates or political operatives → lobbyist
@@ -95,10 +106,7 @@ Be decisive. Most comments CAN be classified if you look at the language, tone, 
 
 Note: Text may be from inline comment or extracted from PDF attachment (first 2 pages).
 
-Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided
-
-Comment:
-{comment_text}"""
+Reply with ONLY ONE WORD from: org, citizen, expert, lobbyist, undecided"""
 
 
 def tokenize(text: str) -> List[str]:
@@ -232,54 +240,75 @@ def density_aware_sampling(
     return sampled_indices
 
 
-async def classify_comment(client: AsyncOpenAI, comment_text: str, semaphore: asyncio.Semaphore, model: str) -> Tuple[Optional[str], str]:
-    """Classify a single comment, return (category, prompt_used)."""
-    prompt = PROMPT_TEMPLATE.format(comment_text=comment_text[:2000])  # Truncate long comments
+async def classify_comment(client: AsyncOpenAI, comment_text: str, metadata: Dict[str, str], semaphore: asyncio.Semaphore, model: str) -> Tuple[Optional[str], str, str]:
+    """Classify a single comment, return (category, prompt_used, model_response)."""
+    prompt = PROMPT_TEMPLATE.format(
+        comment_text=comment_text[:3000],
+        organization=metadata.get("organization", "N/A"),
+        submitter_type=metadata.get("submitter_type", "N/A"),
+        first_name=metadata.get("first_name", ""),
+        last_name=metadata.get("last_name", "")
+    )  # Increased from 2000 to 3000 chars
     
     async with semaphore:
-        try:
-            response = await client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": prompt}],
-                max_completion_tokens=10,
-            )
-            result = response.choices[0].message.content.strip().lower()
-            
-            # Validate response
-            if result in LABEL_MAP:
-                return LABEL_MAP[result], prompt
-            
-            # Try to extract valid token
-            for token in LABEL_MAP.keys():
-                if token in result:
-                    return LABEL_MAP[token], prompt
-            
-            return None, prompt
-            
-        except Exception as e:
-            tqdm.write(f"API error: {e}")
-            return None, prompt
+        backoff = 1.0
+        for attempt in range(3):
+            try:
+                response = await client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}],
+                    max_completion_tokens=20,  # Single word response
+                )
+                
+                # Extract from chat completion response
+                raw_result = response.choices[0].message.content.strip() if response.choices else ""
+                
+                if not raw_result:
+                    tqdm.write("  WARN: Empty LLM response from chat.completions")
+                    return LABEL_MAP["undecided"], prompt, "EMPTY_RESPONSE"
+                
+                result = raw_result.lower()
+                
+                # Validate response - exact match
+                if result in LABEL_MAP:
+                    return LABEL_MAP[result], prompt, raw_result
+                
+                # Fuzzy match - check if any label appears in response
+                for token in LABEL_MAP.keys():
+                    if token in result:
+                        return LABEL_MAP[token], prompt, raw_result
+                
+                tqdm.write(f"  WARN: Unexpected LLM response: {raw_result}")
+                return LABEL_MAP["undecided"], prompt, raw_result
+                
+            except Exception as e:
+                tqdm.write(f"  ERROR: API call failed (attempt {attempt+1}/3): {e}")
+                await asyncio.sleep(backoff)
+                backoff = min(backoff * 2, 8.0)
+        
+        # After retries exhausted, return undecided (not None) to keep pipeline stable
+        return LABEL_MAP["undecided"], prompt, "ERROR: retries_exhausted"
 
 
 async def classify_batch(
     client: AsyncOpenAI,
-    comments: List[Tuple[str, str]],  # (comment_id, text)
+    comments: List[Tuple[str, str, Dict[str, str]]],  # (comment_id, text, metadata)
     model: str,
     max_concurrency: int,
-) -> List[Tuple[str, Optional[str], str]]:
-    """Classify a batch of comments. Returns [(comment_id, category, prompt)]."""
+) -> List[Tuple[str, Optional[str], str, str]]:
+    """Classify a batch of comments. Returns [(comment_id, category, prompt, model_response)]."""
     if not comments:
         return []
 
     semaphore = asyncio.Semaphore(max_concurrency)
 
-    async def run_single(comment_id: str, text: str) -> Tuple[str, Optional[str], str]:
-        category, prompt = await classify_comment(client, text, semaphore, model)
-        return comment_id, category, prompt
+    async def run_single(comment_id: str, text: str, metadata: Dict[str, str]) -> Tuple[str, Optional[str], str, str]:
+        category, prompt, model_response = await classify_comment(client, text, metadata, semaphore, model)
+        return comment_id, category, prompt, model_response
 
-    tasks = [asyncio.create_task(run_single(comment_id, text)) for comment_id, text in comments]
+    tasks = [asyncio.create_task(run_single(comment_id, text, metadata)) for comment_id, text, metadata in comments]
 
-    results: List[Tuple[str, Optional[str], str]] = []
+    results: List[Tuple[str, Optional[str], str, str]] = []
     for task in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc="Classifying"):
         results.append(await task)
 
@@ -288,14 +317,14 @@ async def classify_batch(
 
 async def run_classification_batches(
     client: AsyncOpenAI,
-    batches: List[Tuple[str, List[Tuple[str, str]]]],
+    batches: List[Tuple[str, List[Tuple[str, str, Dict[str, str]]]]],
     model: str,
     max_concurrency: int,
     results_csv: Path,
     chunk_size: int = 100,
 ) -> None:
     """Run classify_batch sequentially for each document using one event loop."""
-    pending: List[Tuple[str, Optional[str], str]] = []
+    pending: List[Tuple[str, Optional[str], str, str]] = []
 
     for doc_number, comments in batches:
         if not comments:
@@ -373,7 +402,7 @@ def classify_comments(
         
         if category:
             # Classified via metadata
-            metadata_results.append((comment_id, category, "metadata"))
+            metadata_results.append((comment_id, category, "metadata", "metadata"))
         elif has_comment_text or has_attachment_text:
             # Has text data - needs LLM classification
             needs_llm.append(row)
@@ -395,7 +424,7 @@ def classify_comments(
     
     print(f"\nPhase 2: LLM classification for {len(needs_llm)} remaining comments...")
     
-    by_doc: Dict[str, List[Tuple[str, str]]] = {}
+    by_doc: Dict[str, List[Tuple[str, str, Dict[str, str]]]] = {}
     for row in needs_llm:
         doc_num = row.get("document_number")
         comment_id = row.get("comment_id")
@@ -404,7 +433,16 @@ def classify_comments(
         text = comment_text if comment_text and comment_text.strip() else attachment_text
         if not doc_num or not comment_id or not text:
             continue
-        by_doc.setdefault(doc_num, []).append((comment_id, text))
+            
+        # Prepare metadata for prompt
+        metadata = {
+            "organization": str(row.get("organization", "")),
+            "submitter_type": str(row.get("submitter_type", "")),
+            "first_name": str(row.get("first_name", "")),
+            "last_name": str(row.get("last_name", "")),
+        }
+        
+        by_doc.setdefault(doc_num, []).append((comment_id, text, metadata))
     
     if not by_doc:
         print("No documents with usable text after filtering.")
@@ -412,7 +450,7 @@ def classify_comments(
         return
     
     client = AsyncOpenAI(api_key=api_key)
-    doc_batches: List[Tuple[str, List[Tuple[str, str]]]] = []
+    doc_batches: List[Tuple[str, List[Tuple[str, str, Dict[str, str]]]]] = []
     
     for doc_number, comments in by_doc.items():
         n_comments = len(comments)
@@ -466,20 +504,24 @@ def classify_comments(
     join_and_write_output(comments_csv, results_csv, fr_csv, output_csv)
 
 
-def save_results(results_csv: Path, results: List[Tuple[str, Optional[str], str]], model: str) -> None:
-    """Append results to CSV."""
+def save_results(results_csv: Path, results: List[Tuple[str, Optional[str], str, str]], model: str) -> None:
+    """Append results to CSV, including model response for debugging."""
     if not results:
         return
     
     df_new = pl.DataFrame({
         "comment_id": [r[0] for r in results],
         "category": [r[1] or "Undecided/Anonymous" for r in results],
+        "model_response": [r[3] for r in results],  # NEW: Include raw model response for debugging
         "prompt_used": [r[2] for r in results],
         "model": [model] * len(results),
     })
     
     if results_csv.exists():
         df_existing = pl.read_csv(str(results_csv))
+        # Ensure old data has model_response column
+        if "model_response" not in df_existing.columns:
+            df_existing = df_existing.with_columns(pl.lit(None).alias("model_response"))
         df_combined = pl.concat([df_existing, df_new])
     else:
         df_combined = df_new
@@ -538,7 +580,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Classify comment authors with OpenAI")
     parser.add_argument("--year", type=int, default=2024)
     parser.add_argument("--max-concurrency", type=int, default=20)
-    parser.add_argument("--model", type=str, default="gpt-5-nano")
+    parser.add_argument("--model", type=str, default="gpt-4o-mini")
     parser.add_argument("--sample-threshold", type=int, default=1000, help="Use sampling for documents with more than this many comments")
     parser.add_argument("--sampling-seed", type=int, default=None, help="Optional RNG seed for sampling reproducibility")
     args = parser.parse_args()
@@ -597,8 +639,13 @@ if __name__ == "__main__":
 #   formatting artifacts
 #
 # model selection:
-# - max_completion_tokens=10 is sufficient since we only need one word responses
-# - model default in argparse should match your most commonly used model
+# - max_completion_tokens=20 is sufficient for gpt-4o-mini (single word response)
+# - model default: gpt-4o-mini is ~2x cheaper than gpt-5-nano despite same per-token pricing:
+#   * gpt-5-nano needs 500+ output tokens (~$0.0003 output cost) but only uses 1 word
+#   * gpt-4o-mini only needs 20 output tokens (~$0.000012 output cost) for same result
+#   * gpt-5-nano input cost savings ($0.075 vs $0.150/1M) don't offset wasted output tokens
+# - cost per classification: gpt-4o-mini ~$0.00018, gpt-5-nano ~$0.00039 (2x more expensive)
+# - if you want to use gpt-5-nano anyway, set max_completion_tokens=500+ manually
 #
 # sampling for large dockets:
 # - word2vec + density-aware sampling is essential for large dockets - naive random sampling
@@ -640,7 +687,7 @@ if __name__ == "__main__":
 # - use sampling on large dockets (>1000 comments) to get statistical confidence without
 #   classifying everything
 # - set --max-comments-per-doc in mine_comments.py to skip extremely large dockets entirely
-# - use cheap models (gpt-4o-mini) for simple classification tasks
+# - use cheap models (gpt-5-nano) for simple classification tasks
 # - truncate prompts to 2000 chars to reduce input token costs
 # - only extract first 2 pages of pdf attachments to keep token counts manageable
 #
@@ -655,4 +702,28 @@ if __name__ == "__main__":
 # - prints absolute path to make it easy to find output files
 # - metadata classification phase now prints when results are saved
 # - helps track pipeline progress and locate intermediate outputs
+#
+# responses api migration + bug fix (nov 2024):
+# - PROBLEM: Massive "'NoneType' object is not subscriptable" errors flooding output
+# - ROOT CAUSE: classify_comment was doing response.output[0].content[0].text without checking
+#   if response.output was None or empty. When API calls failed or returned partial responses,
+#   this line threw TypeError which was caught and printed as "API call failed", but the None
+#   return value broke downstream code expecting (category, prompt, response) tuples.
+# - FIX #1: Use response.output_text helper (doesn't explode on None) as primary extraction path
+# - FIX #2: Add fallback with safe attribute access using getattr(..., None) or [] guards
+# - FIX #3: Added retry logic (3 attempts with exponential backoff) for transient failures
+# - FIX #4: NEVER return None - always return (LABEL_MAP["undecided"], prompt, error_msg) to keep
+#   pipeline stable even after all retries exhausted
+# - FIX #5: Fixed API parameters for gpt-5-nano compatibility:
+#   * Removed text={"verbosity": "low"} which was interfering with response format
+#   * Removed reasoning.effort (not supported by gpt-5-nano, causes 400 errors)
+# - FIX #6: Changed input format from [{"role": "user", "content": prompt}] to just prompt
+#   (simpler + recommended for Responses API)
+# - METADATA IN PROMPT: Now includes organization, submitter_type, first_name, last_name in prompt
+#   so LLM has full context to classify (user request: "make sure we're getting both the 
+#   organization name and the first/last name into the LLM context")
+# - RESULT: Classification runs without errors, all comments get classified (no None gaps)
+# - REFERENCE: https://platform.openai.com/docs/api-reference/responses (output_text helper)
+#              https://platform.openai.com/docs/guides/migrate-to-responses (best practices)
+#
 

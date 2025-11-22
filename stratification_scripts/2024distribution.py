@@ -170,6 +170,7 @@ class RegsClient:
         self.limiter = MultiKeyLimiter(api_keys, per_key_rpm, per_key_hourly) if api_keys else None
         self.doc_detail_by_document_id: Dict[str, dict] = {}
         self.total_by_object_id: Dict[str, int] = {}
+        self._cache_lock = threading.Lock()  # Thread-safe cache access
 
     def _get(self, url: str, params=None, timeout: int = 20, max_retries: int = 3) -> Optional[requests.Response]:
         """Unified GET request handler with multi-key rotation and retry logic."""
@@ -222,27 +223,37 @@ class RegsClient:
         return None
 
     def get_document_detail(self, document_id: str, max_retries: int = 3) -> Optional[dict]:
-        """Fetch document detail from Regulations.gov."""
+        """Fetch document detail from Regulations.gov (thread-safe cached)."""
         if not document_id:
             return None
-        if document_id in self.doc_detail_by_document_id:
-            return self.doc_detail_by_document_id[document_id]
         
+        # Check cache with lock
+        with self._cache_lock:
+            if document_id in self.doc_detail_by_document_id:
+                return self.doc_detail_by_document_id[document_id]
+        
+        # Fetch outside lock (network I/O)
         r = self._get(REGS_DOC_URL.format(documentId=document_id), max_retries=max_retries)
         if r and r.status_code == 200:
             data = r.json()
-            self.doc_detail_by_document_id[document_id] = data
+            # Update cache with lock
+            with self._cache_lock:
+                self.doc_detail_by_document_id[document_id] = data
             return data
         
         return None
 
     def get_comment_total_by_object_id(self, object_id: str, max_retries: int = 3) -> Optional[int]:
-        """Fetch comment total from Regulations.gov by object ID."""
+        """Fetch comment total from Regulations.gov by object ID (thread-safe cached)."""
         if not object_id:
             return None
-        if object_id in self.total_by_object_id:
-            return self.total_by_object_id[object_id]
         
+        # Check cache with lock
+        with self._cache_lock:
+            if object_id in self.total_by_object_id:
+                return self.total_by_object_id[object_id]
+        
+        # Fetch outside lock (network I/O)
         r = self._get(
             REGS_COMMENTS_URL,
             params={"filter[commentOnId]": object_id, "page[size]": 1},
@@ -256,7 +267,9 @@ class RegsClient:
         total = (data.get("meta") or {}).get("totalElements")
         try:
             val = int(total)
-            self.total_by_object_id[object_id] = val
+            # Update cache with lock
+            with self._cache_lock:
+                self.total_by_object_id[object_id] = val
             return val
         except Exception:
             return None
@@ -346,8 +359,13 @@ def iter_fr_documents_by_day(year: int, fr_sleep: float, limit: Optional[int], r
             daybar.update(1)
 
 
-def enrich_record(rec: dict, regs: RegsClient, retries: int) -> Optional[dict]:
-    """Enrich a single FR record with detail, counts, and classification."""
+def enrich_fr_detail(rec: dict, retries: int) -> Optional[dict]:
+    """Stage 1: Enrich with FR detail only (fast, no rate limits).
+    
+    Fetches FR detail and extracts all metadata except accurate comment counts.
+    For non-regs.gov docs, this is the final enrichment.
+    For regs.gov docs, comment_count will be updated in Stage 2.
+    """
     doc_number = rec.get("document_number")
     comment_url = None
     comments_close_on = None
@@ -363,33 +381,14 @@ def enrich_record(rec: dict, regs: RegsClient, retries: int) -> Optional[dict]:
             fr_info = details.get("regulations_dot_gov_info", {})
             if isinstance(fr_info, dict):
                 regs_document_id = fr_info.get("document_id")
-
-            # Prefer Regs.gov
-            if regs_document_id:
-                regs_detail = regs.get_document_detail(regs_document_id, max_retries=retries)
-                if regs_detail:
-                    attrs = (regs_detail.get("data") or {}).get("attributes") or {}
-                    cc = attrs.get("commentCount")
-                    if isinstance(cc, int) and cc >= 0:
-                        comment_count = cc
-                        count_source = "regulations.gov"
-                    else:
-                        obj_id = attrs.get("objectId")
-                        if obj_id:
-                            mt = regs.get_comment_total_by_object_id(obj_id, max_retries=retries)
-                            if isinstance(mt, int):
-                                comment_count = mt
-                                count_source = "regulations.gov-meta"
-
-            # Last resort: FR embedded count
-            if comment_count is None and isinstance(fr_info, dict):
-                cc_fr = fr_info.get("comments_count")
-                if isinstance(cc_fr, int) and cc_fr >= 0:
-                    comment_count = cc_fr
-                    count_source = "federalregister"
-        
-    if not isinstance(comment_count, int) or comment_count < 0:
-        comment_count = 0
+                
+                # For regs.gov docs, use FR embedded count as temporary value
+                # For non-regs.gov docs, leave as None (unknown)
+                if regs_document_id:
+                    cc_fr = fr_info.get("comments_count")
+                    if isinstance(cc_fr, int) and cc_fr >= 0:
+                        comment_count = cc_fr
+                        count_source = "federalregister"
 
     agencies = rec.get("agencies") or []
     agency_names = ", ".join([a.get("name") for a in agencies if isinstance(a, dict) and a.get("name")])
@@ -408,18 +407,57 @@ def enrich_record(rec: dict, regs: RegsClient, retries: int) -> Optional[dict]:
         return None
 
     return {
-                    "document_number": rec.get("document_number"),
-                    "title": rec.get("title"),
-                    "agency": agency_names,
-                    "publication_date": rec.get("publication_date"),
-                    "comment_url": comment_url,
-                    "comments_close_on": comments_close_on,
-                    "regs_document_id": regs_document_id,
-                    "comment_count": comment_count,
+        "document_number": rec.get("document_number"),
+        "title": rec.get("title"),
+        "agency": agency_names,
+        "publication_date": rec.get("publication_date"),
+        "comment_url": comment_url,
+        "comments_close_on": comments_close_on,
+        "regs_document_id": regs_document_id,
+        "comment_count": comment_count,  # None for non-regs.gov, FR count for regs.gov (updated in Stage 2)
         "count_source": count_source,
         "eligibility_reason": eligibility_reason,
         "submission_channel": submission_channel,
     }
+
+
+def enrich_regs_count(base_rec: dict, regs: RegsClient, retries: int) -> dict:
+    """Stage 2: Enrich regs.gov docs with accurate comment counts (slow, rate-limited).
+    
+    Only called for docs with regs_document_id. Fetches accurate counts from Regs.gov API
+    and overwrites the FR embedded count from Stage 1.
+    """
+    regs_document_id = base_rec.get("regs_document_id")
+    if not regs_document_id:
+        return base_rec
+    
+    comment_count = base_rec.get("comment_count")
+    count_source = base_rec.get("count_source", "unknown")
+    
+    # Fetch accurate count from Regs.gov
+    regs_detail = regs.get_document_detail(regs_document_id, max_retries=retries)
+    if regs_detail:
+        attrs = (regs_detail.get("data") or {}).get("attributes") or {}
+        cc = attrs.get("commentCount")
+        if isinstance(cc, int) and cc >= 0:
+            comment_count = cc
+            count_source = "regulations.gov"
+        else:
+            obj_id = attrs.get("objectId")
+            if obj_id:
+                mt = regs.get_comment_total_by_object_id(obj_id, max_retries=retries)
+                if isinstance(mt, int):
+                    comment_count = mt
+                    count_source = "regulations.gov-meta"
+    
+    # Ensure we have a valid count (0 if still None after regs.gov lookup)
+    if not isinstance(comment_count, int) or comment_count < 0:
+        comment_count = 0
+    
+    # Update and return
+    base_rec["comment_count"] = comment_count
+    base_rec["count_source"] = count_source
+    return base_rec
 
 
 def main() -> None:
@@ -464,6 +502,8 @@ def main() -> None:
     # Parse keys and determine worker count
     if isinstance(api_keys, str):
         keys_list = [k.strip() for k in api_keys.split(",") if k.strip()]
+        # Strip :RPH suffix if present
+        keys_list = [k.split(":")[0] if ":" in k else k for k in keys_list]
     else:
         keys_list = []
     
@@ -471,12 +511,20 @@ def main() -> None:
     if args.concurrent_workers is not None:
         workers = args.concurrent_workers
     elif num_keys > 1:
+        # Multi-key: parallelize for speed
         workers = min(8, num_keys * 2)
+    elif num_keys == 1:
+        # Single key: limit concurrency to avoid rate limits
+        workers = 4
     else:
-        workers = 1
+        # No keys: still parallelize FR detail fetching (no rate limits)
+        workers = 8
     
-    if not args.quiet and num_keys > 0:
-        print(f"Using {num_keys} API key(s) with {workers} concurrent worker(s)")
+    if not args.quiet:
+        if num_keys > 0:
+            print(f"Using {num_keys} Regs.gov API key(s) with {workers} concurrent worker(s)")
+        else:
+            print(f"No Regs.gov API keys (FR detail only) with {workers} concurrent worker(s)")
 
     # Fetch FR documents day-by-day
     all_results: List[dict] = list(iter_fr_documents_by_day(args.year, args.fr_sleep, args.limit, args.retries))
@@ -487,32 +535,64 @@ def main() -> None:
     if not args.quiet:
         print(f"Total {args.year} docs fetched (PRORULE + NOTICE): {len(all_results)}")
 
-    # Enrich
+    # Two-stage enrichment with multi-threading
     rows: List[dict] = []
     regs = RegsClient(api_keys=api_keys, per_key_rpm=args.per_key_rpm, per_key_hourly=args.per_key_hourly)
     
-    if workers == 1:
-        # Single-threaded path for backward compatibility
-        for rec in tqdm(comment_eligible, desc="Enriching", unit="doc"):
-            enriched = enrich_record(rec, regs, args.retries)
-            if enriched:
-                rows.append(enriched)
-    else:
-        # Multi-threaded path with ThreadPoolExecutor
+    # Stage 1: FR detail enrichment (parallelized, no rate limits)
+    print(f"\n{'='*60}")
+    print("STAGE 1: FR DETAIL ENRICHMENT")
+    print(f"{'='*60}")
+    
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = {
+            executor.submit(enrich_fr_detail, rec, args.retries): rec
+            for rec in comment_eligible
+        }
+        
+        stage1_results = []
+        for future in tqdm(as_completed(futures), total=len(comment_eligible), 
+                          desc="Stage 1: FR details", unit="doc"):
+            try:
+                partial = future.result()
+                if partial:
+                    stage1_results.append(partial)
+            except Exception as e:
+                if not args.quiet:
+                    print(f"Error in Stage 1: {e}")
+    
+    # Split by whether they need Regs.gov enrichment
+    regs_docs = [p for p in stage1_results if p.get("regs_document_id")]
+    non_regs_docs = [p for p in stage1_results if not p.get("regs_document_id")]
+    
+    print(f"\nStage 1 complete: {len(stage1_results)} comment-eligible docs")
+    print(f"  {len(regs_docs)} with regs_document_id (need Stage 2)")
+    print(f"  {len(non_regs_docs)} without regs_document_id (FCC/email/SEC/unknown)")
+    
+    # Stage 2: Regs.gov count enrichment (parallelized with rate limiting)
+    if regs_docs:
+        print(f"\n{'='*60}")
+        print("STAGE 2: REGS.GOV COUNT ENRICHMENT")
+        print(f"{'='*60}")
+        
         with ThreadPoolExecutor(max_workers=workers) as executor:
-            # Submit all enrichment tasks
             futures = {
-                executor.submit(enrich_record, rec, regs, args.retries): rec
-                for rec in comment_eligible
+                executor.submit(enrich_regs_count, rec, regs, args.retries): rec
+                for rec in regs_docs
             }
             
-            # Collect results as they complete
-            with tqdm(total=len(comment_eligible), desc="Enriching", unit="doc") as pbar:
-                for future in as_completed(futures):
+            for future in tqdm(as_completed(futures), total=len(regs_docs), 
+                              desc="Stage 2: Regs.gov counts", unit="doc"):
+                try:
                     enriched = future.result()
                     if enriched:
                         rows.append(enriched)
-                    pbar.update(1)
+                except Exception as e:
+                    if not args.quiet:
+                        print(f"Error in Stage 2: {e}")
+    
+    # Add non-regs.gov docs directly (already complete from Stage 1)
+    rows.extend(non_regs_docs)
 
     if not args.quiet:
         print(f"\nFiltered to {len(rows)} comment-eligible documents (from {len(all_results)} total)")
@@ -670,6 +750,40 @@ data quality issues:
 - comment counts may be missing or stale
 - some docs have multiple regs.gov documents in dockets (can overcount)
 - broken date filter returns current year data regardless of requested year - validate dates in results!
+
+two-stage enrichment with multi-threading (nov 2024):
+- PROBLEM: single-threaded enrichment took ~4 hours for 26k docs despite having 3 API keys
+- ROOT CAUSE: default workers=1 meant serial processing even though FR API has no rate limits
+  and multiple regs.gov keys could handle concurrent requests
+- SOLUTION: split enrichment into two explicit stages for clarity and enable multi-threading:
+  * Stage 1: enrich_fr_detail() fetches FR detail for ALL docs (fast, no rate limits, parallelized)
+  * Stage 2: enrich_regs_count() fetches regs.gov counts ONLY for docs with regs_document_id
+- Stage 1 completes all docs and identifies which ones need Stage 2 (~70% have regs_document_id)
+- Stage 2 only processes ~70% of docs, skipping FCC/email/SEC/unknown submission channels
+- Multi-threading configuration:
+  * Multi-key (3+ keys): workers = min(8, num_keys * 2) = up to 8 workers
+  * Single key: workers = 4 (limited to avoid rate limits)
+  * No keys: workers = 8 (FR detail only, no rate limits)
+  * Override with --concurrent-workers flag
+- Thread-safety: added _cache_lock to RegsClient for safe concurrent cache access
+  * get_document_detail() and get_comment_total_by_object_id() use locks around cache dict
+  * network I/O happens outside locks for parallelism
+  * MultiKeyLimiter already has internal locking for key rotation
+- Expected speedup: 5-10x faster (from ~4 hours to ~30-45 minutes for 26k docs)
+- Progress visibility: two progress bars showing Stage 1 (all docs) and Stage 2 (regs.gov only)
+- null comment counts: non-regs.gov docs now have comment_count=None instead of 0 to indicate
+  "unknown" vs "confirmed zero" - downstream mine_comments.py already filters correctly on
+  regs_document_id presence, so null counts are properly excluded from mining
+- Statistics output updated to handle null counts (fillna(0) for stats calculation)
+- enrich_fr_detail() returns complete 11-column records for both regs.gov and non-regs.gov docs
+- enrich_regs_count() only overwrites comment_count and count_source fields with accurate
+  regs.gov data, leaving other fields unchanged from Stage 1
+- Benefits:
+  * 5-10x faster wall-clock time with multi-threading
+  * clearer code structure with explicit two-stage logic
+  * proper handling of unknown counts (None) vs zero counts (0)
+  * efficient use of multiple API keys
+  * no changes needed to downstream pipeline (mine_comments.py, classify_makeup.py)
 
 
 """

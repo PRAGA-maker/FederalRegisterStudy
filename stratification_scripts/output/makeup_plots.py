@@ -3,6 +3,8 @@ Federal Register Comment Makeup Visualization Suite
 
 Generates policy-brief visualizations showing who participates in federal rulemaking.
 Produces both simple 3-chart sets and complex continuum pages with ribbon analysis.
+
+Optional dependency: adjustText (pip install adjusttext) for better label positioning
 """
 
 import argparse
@@ -301,46 +303,83 @@ def plot_agency_compass(df: pd.DataFrame, year: int, outdir: Path, top_n: int = 
     
     fig, ax = plt.subplots(figsize=(12, 10))
     
-    # Scatter all agencies
+    # Scatter all agencies (bubble size = comment volume)
     ax.scatter(
         df_metrics["X"],
         df_metrics["Y"],
-        s=df_metrics["total"] / df_metrics["total"].max() * 200 + 20,
+        s=df_metrics["total"] / df_metrics["total"].max() * 400 + 30,
         alpha=0.4,
         color="#5C6670",
         edgecolors="white",
         linewidths=0.5
     )
     
-    # Label top agencies
-    for _, row in df_metrics[df_metrics["agency"].isin(top_agencies)].iterrows():
-        label = str(row["agency"])[:40]
-        ax.annotate(
-            label,
-            (row["X"], row["Y"]),
-            fontsize=9,
-            alpha=0.85,
-            ha="center",
-            path_effects=[withStroke(linewidth=3, foreground="white")]
+    # Prepare labels for top agencies (using adjustText if available)
+    try:
+        from adjustText import adjust_text
+        texts = []
+        for _, row in df_metrics[df_metrics["agency"].isin(top_agencies)].iterrows():
+            label = str(row["agency"])[:40]
+            text = ax.text(
+                row["X"], 
+                row["Y"], 
+                label,
+                fontsize=9,
+                alpha=0.85,
+                ha="center",
+                path_effects=[withStroke(linewidth=3, foreground="white")]
+            )
+            texts.append(text)
+        
+        # Adjust text positions to avoid overlap
+        adjust_text(
+            texts, 
+            ax=ax,
+            arrowprops=dict(arrowstyle='-', color='gray', lw=0.5, alpha=0.5),
+            expand_points=(1.2, 1.3),
+            force_text=(0.5, 0.75)
         )
+    except ImportError:
+        # Fallback to basic annotation if adjustText not available
+        for _, row in df_metrics[df_metrics["agency"].isin(top_agencies)].iterrows():
+            label = str(row["agency"])[:40]
+            ax.annotate(
+                label,
+                (row["X"], row["Y"]),
+                fontsize=9,
+                alpha=0.85,
+                ha="center",
+                path_effects=[withStroke(linewidth=3, foreground="white")]
+            )
     
     # Quadrant grid
     ax.axhline(0.5, color=GRID_COLOR, linewidth=1.5, alpha=0.6, zorder=0)
     ax.axvline(0, color=GRID_COLOR, linewidth=1.5, alpha=0.6, zorder=0)
     
-    # Quadrant labels
+    # Quadrant labels (consistent format)
     label_props = dict(fontsize=11, alpha=0.6, style="italic", weight="bold")
-    ax.text(0.5, 0.75, "Grassroots +\nProfessional", ha="center", va="center", **label_props)
-    ax.text(-0.5, 0.75, "Corporate +\nProfessional", ha="center", va="center", **label_props)
-    ax.text(0.5, 0.25, "Grassroots-\nDominant", ha="center", va="center", **label_props)
-    ax.text(-0.5, 0.25, "Corporate-\nDominant", ha="center", va="center", **label_props)
+    ax.text(0.5, 0.75, "High Citizen\nHigh Professional", ha="center", va="center", **label_props)
+    ax.text(-0.5, 0.75, "High Corporate\nHigh Professional", ha="center", va="center", **label_props)
+    ax.text(0.5, 0.25, "High Citizen\nLow Professional", ha="center", va="center", **label_props)
+    ax.text(-0.5, 0.25, "High Corporate\nLow Professional", ha="center", va="center", **label_props)
     
     # Styling
     ax.set_xlim(-1.05, 1.05)
     ax.set_ylim(-0.05, 1.05)
-    ax.set_xlabel("Citizen ← → Corporate", fontsize=FONT_LABEL, fontweight="bold")
-    ax.set_ylabel("Professional Input (Expert + Lobbyist)", fontsize=FONT_LABEL, fontweight="bold")
+    ax.set_xlabel("Corporate ← → Citizen", fontsize=FONT_LABEL, fontweight="bold")
+    ax.set_ylabel("Low ← → High Professional Input", fontsize=FONT_LABEL, fontweight="bold")
     ax.set_title(f"Agency Positioning ({year})", fontsize=FONT_TITLE, fontweight="bold", pad=20)
+    
+    # Add note about bubble size
+    ax.text(
+        0.02, 0.98, 
+        "Bubble size = comment volume",
+        transform=ax.transAxes,
+        fontsize=9,
+        alpha=0.6,
+        va="top",
+        style="italic"
+    )
     
     apply_clean_style(ax)
     
@@ -511,10 +550,10 @@ def plot_compass_with_ribbon(df: pd.DataFrame, year: int, outdir: Path, top_n: i
     
     # Quadrant labels
     label_props = dict(fontsize=12, alpha=0.5, style="italic", weight="bold")
-    ax.text(0.5, 0.85, "Grassroots + Professional", ha="center", va="center", **label_props)
-    ax.text(-0.5, 0.85, "Corporate + Professional", ha="center", va="center", **label_props)
-    ax.text(0.5, 0.15, "Grassroots-Dominant", ha="center", va="center", **label_props)
-    ax.text(-0.5, 0.15, "Corporate-Dominant", ha="center", va="center", **label_props)
+    ax.text(0.5, 0.85, "High Citizen\nHigh Professional", ha="center", va="center", **label_props)
+    ax.text(-0.5, 0.85, "High Corporate\nHigh Professional", ha="center", va="center", **label_props)
+    ax.text(0.5, 0.15, "High Citizen\nLow Professional", ha="center", va="center", **label_props)
+    ax.text(-0.5, 0.15, "High Corporate\nLow Professional", ha="center", va="center", **label_props)
     
     # Arrow annotation
     ax.annotate(
@@ -523,13 +562,13 @@ def plot_compass_with_ribbon(df: pd.DataFrame, year: int, outdir: Path, top_n: i
         xytext=(-0.8, -0.02),
         arrowprops=dict(arrowstyle="->", lw=2, color="#5C6670", alpha=0.4)
     )
-    ax.text(0, -0.02, "Corporate → Grassroots", ha="center", va="top", fontsize=10, alpha=0.5)
+    ax.text(0, -0.02, "Corporate → Citizen", ha="center", va="top", fontsize=10, alpha=0.5)
     
     # Styling
     ax.set_xlim(-1.05, 1.05)
     ax.set_ylim(-0.05, 1.05)
-    ax.set_xlabel("OC − ORG share", fontsize=FONT_LABEL, fontweight="bold")
-    ax.set_ylabel("EXP + LOB share", fontsize=FONT_LABEL, fontweight="bold")
+    ax.set_xlabel("Corporate ← → Citizen", fontsize=FONT_LABEL, fontweight="bold")
+    ax.set_ylabel("Low ← → High Professional Input", fontsize=FONT_LABEL, fontweight="bold")
     ax.set_title(
         f"Agency Continuum with Weighted Ribbon ({year})",
         fontsize=FONT_TITLE,
@@ -619,13 +658,24 @@ def plot_ranked_stream(df: pd.DataFrame, year: int, outdir: Path) -> None:
     # Styling
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
-    ax.set_xlabel("Cumulative Workload (Corporate → Grassroots)", fontsize=FONT_LABEL, fontweight="bold")
-    ax.set_ylabel("Composition Share", fontsize=FONT_LABEL, fontweight="bold")
+    ax.set_xlabel("Cumulative % of Total Comments (Corporate → Citizen agencies)", fontsize=FONT_LABEL, fontweight="bold")
+    ax.set_ylabel("Comment Composition", fontsize=FONT_LABEL, fontweight="bold")
     ax.set_title(
-        f"Comment Composition Across Agency Continuum ({year})",
+        f"How Comment Makeup Changes Across Agencies ({year})",
         fontsize=FONT_TITLE,
         fontweight="bold",
         pad=20
+    )
+    
+    # Add subtitle explanation
+    ax.text(
+        0.5, 1.08,
+        "Agencies sorted from most corporate-dominated (left) to most citizen-dominated (right)",
+        transform=ax.transAxes,
+        ha="center",
+        fontsize=10,
+        alpha=0.6,
+        style="italic"
     )
     
     ax.legend(fontsize=FONT_LEGEND - 1, frameon=True, loc="upper left", bbox_to_anchor=(1, 1), framealpha=0.9)
@@ -731,8 +781,8 @@ def plot_continuum_page(df: pd.DataFrame, year: int, outdir: Path) -> None:
     ax1.axvline(0, color=GRID_COLOR, linewidth=1.5, alpha=0.5)
     ax1.set_xlim(-1.05, 1.05)
     ax1.set_ylim(-0.05, 1.05)
-    ax1.set_xlabel("OC − ORG", fontsize=FONT_LABEL, fontweight="bold")
-    ax1.set_ylabel("EXP + LOB", fontsize=FONT_LABEL, fontweight="bold")
+    ax1.set_xlabel("Corporate ← → Citizen", fontsize=FONT_LABEL, fontweight="bold")
+    ax1.set_ylabel("Low ← → High Professional", fontsize=FONT_LABEL, fontweight="bold")
     ax1.set_title("Agency Compass", fontsize=FONT_TITLE, fontweight="bold")
     apply_clean_style(ax1)
     
@@ -768,8 +818,8 @@ def plot_continuum_page(df: pd.DataFrame, year: int, outdir: Path) -> None:
     
     ax2.set_xlim(0, 1)
     ax2.set_ylim(0, 1)
-    ax2.set_xlabel("Cumulative Volume (Corporate → Grassroots)", fontsize=FONT_LABEL, fontweight="bold")
-    ax2.set_ylabel("Share", fontsize=FONT_LABEL, fontweight="bold")
+    ax2.set_xlabel("Cumulative % of Comments (Corporate → Citizen)", fontsize=FONT_LABEL, fontweight="bold")
+    ax2.set_ylabel("Comment Composition", fontsize=FONT_LABEL, fontweight="bold")
     ax2.set_title("Ranked Stream", fontsize=FONT_TITLE, fontweight="bold")
     apply_clean_style(ax2)
     
