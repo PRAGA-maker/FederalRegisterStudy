@@ -462,7 +462,8 @@ def build_two_stage_sample_plan(
             continue
         
         # Decide sampling approach
-        if total_stratum_ids <= target_comments:
+        # If target_comments is None/null or we have fewer IDs than target, take all
+        if target_comments is None or total_stratum_ids <= target_comments:
             # Take all IDs
             for doc_num, ids in stratum_ids_by_doc.items():
                 sampled_doc_to_ids[doc_num] = ids

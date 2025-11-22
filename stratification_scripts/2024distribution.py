@@ -22,25 +22,49 @@ SESSION = requests.Session()
 
 
 
-def fetch_document_details(document_number: str, max_retries: int = 3) -> Optional[dict]:
-    """Fetch detailed information for a Federal Register document including comment data."""
+def fetch_document_details(document_number: str, max_retries: int = 3, sleep_between: float = 0.5) -> Optional[dict]:
+    """Fetch detailed information for a Federal Register document including comment data.
+    
+    Args:
+        document_number: The FR document number
+        max_retries: Max retry attempts on failure
+        sleep_between: Sleep duration between requests to avoid rate limiting (default 0.5s)
+    """
     if not document_number:
         return None
+    
+    # Rate limit: sleep before making request
+    if sleep_between > 0:
+        time.sleep(sleep_between)
+    
     backoff = 1.0
-    for _ in range(max_retries):
+    for attempt in range(max_retries):
         try:
             r = SESSION.get(FR_DOC_DETAIL_URL.format(document_number=document_number), timeout=30)
-        except requests.RequestException:
+        except requests.RequestException as e:
+            if attempt == max_retries - 1:
+                # Log on final failure
+                print(f"FR API error for {document_number}: {type(e).__name__}")
             time.sleep(backoff)
             backoff = min(backoff * 2, 16)
             continue
+        
         if r.status_code == 200:
             return r.json()
-        if r.status_code in (429, 500, 502, 503, 504):
+        
+        # Handle rate limiting and server errors
+        if r.status_code in (403, 429, 500, 502, 503, 504):
+            if attempt == max_retries - 1:
+                print(f"FR API HTTP {r.status_code} for {document_number} after {max_retries} retries")
             time.sleep(backoff)
             backoff = min(backoff * 2, 16)
             continue
+        
+        # Non-retriable error
+        if attempt == max_retries - 1:
+            print(f"FR API HTTP {r.status_code} for {document_number}")
         return None
+    
     return None
 
 
@@ -359,12 +383,17 @@ def iter_fr_documents_by_day(year: int, fr_sleep: float, limit: Optional[int], r
             daybar.update(1)
 
 
-def enrich_fr_detail(rec: dict, retries: int) -> Optional[dict]:
-    """Stage 1: Enrich with FR detail only (fast, no rate limits).
+def enrich_fr_detail(rec: dict, retries: int, fr_sleep: float = 0.5) -> Optional[dict]:
+    """Stage 1: Enrich with FR detail only (rate-limited).
     
     Fetches FR detail and extracts all metadata except accurate comment counts.
     For non-regs.gov docs, this is the final enrichment.
     For regs.gov docs, comment_count will be updated in Stage 2.
+    
+    Args:
+        rec: FR document record
+        retries: Max retry attempts
+        fr_sleep: Sleep duration between FR API calls (default 0.5s)
     """
     doc_number = rec.get("document_number")
     comment_url = None
@@ -374,7 +403,7 @@ def enrich_fr_detail(rec: dict, retries: int) -> Optional[dict]:
     comment_count: Optional[int] = None
     
     if doc_number:
-        details = fetch_document_details(doc_number, max_retries=retries)
+        details = fetch_document_details(doc_number, max_retries=retries, sleep_between=fr_sleep)
         if details:
             comment_url = details.get("comment_url")
             comments_close_on = details.get("comments_close_on")
@@ -478,6 +507,8 @@ def main() -> None:
     parser.add_argument("--concurrent-workers", type=int, default=None,
                         help="Number of concurrent enrichment workers (default: min(8, num_keys*2), or 1 if single key)")
     parser.add_argument("--fr-sleep", type=float, default=0.2, help="Sleep seconds between FR page fetches")
+    parser.add_argument("--fr-detail-sleep", type=float, default=0.5, 
+                        help="Sleep seconds between FR detail API calls (default 0.5s to avoid rate limiting)")
     parser.add_argument("--retries", type=int, default=10, help="Max retries for 429/5xx responses")
     parser.add_argument("--min-age-hours", type=int, default=0, help="Exclude docs newer than this many hours from stats only")
     parser.add_argument("--quiet", action="store_true", help="Reduce log verbosity")
@@ -508,23 +539,32 @@ def main() -> None:
         keys_list = []
     
     num_keys = len(keys_list)
+    
+    # Determine worker counts for each stage
+    # Stage 1 (FR API): Conservative due to rate limiting issues
+    # Stage 2 (Regs.gov API): Can be more aggressive with multiple keys
     if args.concurrent_workers is not None:
-        workers = args.concurrent_workers
-    elif num_keys > 1:
-        # Multi-key: parallelize for speed
-        workers = min(8, num_keys * 2)
-    elif num_keys == 1:
-        # Single key: limit concurrency to avoid rate limits
-        workers = 4
+        workers_stage1 = args.concurrent_workers
+        workers_stage2 = args.concurrent_workers
     else:
-        # No keys: still parallelize FR detail fetching (no rate limits)
-        workers = 8
+        # Stage 1: FR API is sensitive, use fewer workers
+        workers_stage1 = 3  # Conservative default for FR API
+        
+        # Stage 2: Regs.gov can handle more with multiple keys
+        if num_keys > 1:
+            workers_stage2 = min(8, num_keys * 2)
+        elif num_keys == 1:
+            workers_stage2 = 4
+        else:
+            workers_stage2 = 1  # No keys, can't do Stage 2
     
     if not args.quiet:
         if num_keys > 0:
-            print(f"Using {num_keys} Regs.gov API key(s) with {workers} concurrent worker(s)")
+            print(f"Using {num_keys} Regs.gov API key(s)")
+            print(f"Stage 1 workers (FR API): {workers_stage1}")
+            print(f"Stage 2 workers (Regs.gov API): {workers_stage2}")
         else:
-            print(f"No Regs.gov API keys (FR detail only) with {workers} concurrent worker(s)")
+            print(f"No Regs.gov API keys (FR detail only) with {workers_stage1} worker(s)")
 
     # Fetch FR documents day-by-day
     all_results: List[dict] = list(iter_fr_documents_by_day(args.year, args.fr_sleep, args.limit, args.retries))
@@ -539,33 +579,40 @@ def main() -> None:
     rows: List[dict] = []
     regs = RegsClient(api_keys=api_keys, per_key_rpm=args.per_key_rpm, per_key_hourly=args.per_key_hourly)
     
-    # Stage 1: FR detail enrichment (parallelized, no rate limits)
+    # Stage 1: FR detail enrichment (rate-limited, conservative workers)
     print(f"\n{'='*60}")
     print("STAGE 1: FR DETAIL ENRICHMENT")
     print(f"{'='*60}")
+    print(f"Using {workers_stage1} workers with {args.fr_detail_sleep}s rate limit per request")
     
-    with ThreadPoolExecutor(max_workers=workers) as executor:
+    with ThreadPoolExecutor(max_workers=workers_stage1) as executor:
         futures = {
-            executor.submit(enrich_fr_detail, rec, args.retries): rec
+            executor.submit(enrich_fr_detail, rec, args.retries, args.fr_detail_sleep): rec
             for rec in comment_eligible
         }
         
         stage1_results = []
+        failed_count = 0
         for future in tqdm(as_completed(futures), total=len(comment_eligible), 
                           desc="Stage 1: FR details", unit="doc"):
             try:
                 partial = future.result()
                 if partial:
                     stage1_results.append(partial)
+                else:
+                    failed_count += 1
             except Exception as e:
+                failed_count += 1
                 if not args.quiet:
-                    print(f"Error in Stage 1: {e}")
+                    print(f"\nError in Stage 1: {e}")
     
     # Split by whether they need Regs.gov enrichment
     regs_docs = [p for p in stage1_results if p.get("regs_document_id")]
     non_regs_docs = [p for p in stage1_results if not p.get("regs_document_id")]
     
     print(f"\nStage 1 complete: {len(stage1_results)} comment-eligible docs")
+    if failed_count > 0:
+        print(f"  WARNING: {failed_count} docs failed FR detail fetch (may be due to rate limiting)")
     print(f"  {len(regs_docs)} with regs_document_id (need Stage 2)")
     print(f"  {len(non_regs_docs)} without regs_document_id (FCC/email/SEC/unknown)")
     
@@ -574,8 +621,9 @@ def main() -> None:
         print(f"\n{'='*60}")
         print("STAGE 2: REGS.GOV COUNT ENRICHMENT")
         print(f"{'='*60}")
+        print(f"Using {workers_stage2} workers")
         
-        with ThreadPoolExecutor(max_workers=workers) as executor:
+        with ThreadPoolExecutor(max_workers=workers_stage2) as executor:
             futures = {
                 executor.submit(enrich_regs_count, rec, regs, args.retries): rec
                 for rec in regs_docs
@@ -589,7 +637,7 @@ def main() -> None:
                         rows.append(enriched)
                 except Exception as e:
                     if not args.quiet:
-                        print(f"Error in Stage 2: {e}")
+                        print(f"\nError in Stage 2: {e}")
     
     # Add non-regs.gov docs directly (already complete from Stage 1)
     rows.extend(non_regs_docs)
@@ -784,6 +832,24 @@ two-stage enrichment with multi-threading (nov 2024):
   * proper handling of unknown counts (None) vs zero counts (0)
   * efficient use of multiple API keys
   * no changes needed to downstream pipeline (mine_comments.py, classify_makeup.py)
+
+fr api rate limiting fix (nov 2024):
+- PROBLEM: after ~70 docs in Stage 1, FR API started returning 403 Forbidden errors
+- ROOT CAUSE: FR API has no authentication but DOES have aggressive IP-based rate limiting
+  * User was blocked even in browser (google searches for federalregister.gov returned 403)
+  * Multi-threading (3-6 workers) was hammering FR API too fast (~10-20 req/sec)
+- SOLUTION: added rate limiting and exponential backoff to FR detail fetches:
+  * Added sleep_between parameter to fetch_document_details() (default 0.5s per request)
+  * New --fr-detail-sleep flag to control rate limiting (default 0.5s)
+  * Exponential backoff on 403/429/5xx errors (starts at 1s, doubles to max 16s)
+  * Better error logging to identify rate limiting issues in real-time
+  * Separate worker counts for Stage 1 vs Stage 2:
+    - Stage 1 (FR API): default 3 workers (conservative to avoid 403 blocks)
+    - Stage 2 (Regs.gov): default min(8, num_keys*2) workers (can be more aggressive)
+  * --concurrent-workers flag now overrides BOTH stages if specified
+- Trade-off: Stage 1 is slower but more reliable (0.5s/req * 3 workers = ~6 req/sec vs 72 req/sec before)
+- Expected timing: ~2.2 hours for Stage 1 (26k docs * 0.5s / 3 workers = 4333s), Stage 2 still fast
+- Better to be slow and reliable than fast and blocked by IP rate limiting
 
 
 """
