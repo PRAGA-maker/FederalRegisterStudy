@@ -15,7 +15,7 @@ fi
 
 echo "=========================================="
 echo "Starting Federal Register Study Pipeline"
-echo "Years: 2015-2024"
+echo "Years: 2015-2025"
 echo "=========================================="
 echo ""
 
