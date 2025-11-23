@@ -19,3 +19,7 @@ openai>=1.0.0
 # Visualization
 matplotlib>=3.7.0
 
+# PDF extraction
+pypdf>=3.0.0
+PyMuPDF>=1.23.0
+
