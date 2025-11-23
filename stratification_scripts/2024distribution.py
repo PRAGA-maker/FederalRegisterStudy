@@ -101,14 +101,15 @@ class MultiKeyLimiter:
     - on_auth_fail(key) permanently disables the key for the run.
     """
     
-    def __init__(self, keys: List[str], per_key_rpm: int = 16, per_key_hourly: int = 1000):
-        if not keys:
+    def __init__(self, keys_with_limits: List[tuple]):
+        """Initialize with list of (key, rph) tuples."""
+        if not keys_with_limits:
             raise ValueError("No API keys provided")
         self._lock = threading.Lock()
-        self._keys: List[_KeyState] = [
-            _KeyState(k.strip(), per_key_rpm, per_key_hourly) 
-            for k in keys if k.strip()
-        ]
+        self._keys: List[_KeyState] = []
+        for key, rph in keys_with_limits:
+            rpm = int(rph / 60.0)  # Convert requests per hour to requests per minute
+            self._keys.append(_KeyState(key.strip(), rpm, rph))
 
     def acquire(self) -> str:
         """Block until a key is available and return it."""
@@ -175,23 +176,25 @@ class MultiKeyLimiter:
 class RegsClient:
     """Regulations.gov v4 client with multi-key rotation and caching."""
 
-    def __init__(self, api_keys, per_key_rpm: int = 16, per_key_hourly: int = 1000) -> None:
-        # Parse comma-separated string into list if needed
-        # Format can be: "KEY1:RPH1,KEY2:RPH2" or "KEY1,KEY2" or just "KEY"
+    def __init__(self, api_keys, default_rph: int = 1000) -> None:
+        # Parse comma-separated string into list of (key, rph) tuples
+        # Format: "KEY1:RPH1,KEY2:RPH2" or "KEY1,KEY2" (defaults to default_rph) or just "KEY"
+        keys_with_limits = []
+        
         if isinstance(api_keys, str):
             raw_keys = [k.strip() for k in api_keys.split(",") if k.strip()]
-            # Strip :RPH suffix if present (we use per_key_rpm/per_key_hourly instead)
-            api_keys = []
             for k in raw_keys:
                 if ":" in k:
-                    # Remove :RPH suffix
-                    api_keys.append(k.split(":")[0].strip())
+                    # Parse KEY:RPH format
+                    key, rph = k.split(":", 1)
+                    keys_with_limits.append((key.strip(), int(rph.strip())))
                 else:
-                    api_keys.append(k)
+                    # No RPH specified, use default
+                    keys_with_limits.append((k.strip(), default_rph))
         elif api_keys is None:
-            api_keys = []
+            keys_with_limits = []
         
-        self.limiter = MultiKeyLimiter(api_keys, per_key_rpm, per_key_hourly) if api_keys else None
+        self.limiter = MultiKeyLimiter(keys_with_limits) if keys_with_limits else None
         self.doc_detail_by_document_id: Dict[str, dict] = {}
         self.total_by_object_id: Dict[str, int] = {}
         self._cache_lock = threading.Lock()  # Thread-safe cache access
@@ -253,8 +256,8 @@ class RegsClient:
         
         # Check cache with lock
         with self._cache_lock:
-            if document_id in self.doc_detail_by_document_id:
-                return self.doc_detail_by_document_id[document_id]
+        if document_id in self.doc_detail_by_document_id:
+            return self.doc_detail_by_document_id[document_id]
         
         # Fetch outside lock (network I/O)
         r = self._get(REGS_DOC_URL.format(documentId=document_id), max_retries=max_retries)
@@ -262,7 +265,7 @@ class RegsClient:
             data = r.json()
             # Update cache with lock
             with self._cache_lock:
-                self.doc_detail_by_document_id[document_id] = data
+            self.doc_detail_by_document_id[document_id] = data
             return data
         
         return None
@@ -274,8 +277,8 @@ class RegsClient:
         
         # Check cache with lock
         with self._cache_lock:
-            if object_id in self.total_by_object_id:
-                return self.total_by_object_id[object_id]
+        if object_id in self.total_by_object_id:
+            return self.total_by_object_id[object_id]
         
         # Fetch outside lock (network I/O)
         r = self._get(
@@ -293,7 +296,7 @@ class RegsClient:
             val = int(total)
             # Update cache with lock
             with self._cache_lock:
-                self.total_by_object_id[object_id] = val
+            self.total_by_object_id[object_id] = val
             return val
         except Exception:
             return None
@@ -418,15 +421,15 @@ def enrich_fr_detail(rec: dict, retries: int, fr_sleep: float = 0.5) -> Optional
 
                 # For regs.gov docs, use FR embedded count as temporary value
                 # For non-regs.gov docs, leave as None (unknown)
-                if regs_document_id:
-                    cc_fr = fr_info.get("comments_count")
-                    if isinstance(cc_fr, int) and cc_fr >= 0:
-                        comment_count = cc_fr
-                        count_source = "federalregister"
+            if regs_document_id:
+                cc_fr = fr_info.get("comments_count")
+                if isinstance(cc_fr, int) and cc_fr >= 0:
+                    comment_count = cc_fr
+                    count_source = "federalregister"
         else:
             # FR API fetch failed - raise exception to distinguish from ineligible docs
             fr_fetch_failed = True
-
+        
     # If FR fetch failed, print error and continue (don't crash entire script)
     if fr_fetch_failed:
         print(f"\n❌ FR API failed for {doc_number} after {retries} retries (rate limit 429)")
@@ -510,12 +513,12 @@ def main() -> None:
     parser.add_argument("--regs-api-key", type=str, default=os.environ.get("REGS_API_KEY"), 
                         help="Single Regulations.gov API key (deprecated, use --regs-api-keys)")
     parser.add_argument("--regs-api-keys", type=str, default=os.environ.get("REGS_API_KEYS"),
-                        help="Comma-separated list of Regulations.gov API keys for rotation")
-    parser.add_argument("--regs-rpm", type=int, default=30, help="[Deprecated] Use --per-key-rpm instead")
+                        help="Comma-separated API keys with rates: KEY1:RPH1,KEY2:RPH2 (e.g. key1:5000,key2:1000)")
+    parser.add_argument("--regs-rpm", type=int, default=30, help="[Deprecated] No longer used")
     parser.add_argument("--per-key-rpm", type=int, default=16, 
-                        help="Requests per minute per API key (default 16 = ~960/hr, stays under 1000/hr limit)")
+                        help="[Deprecated] Per-key rates now parsed from KEY:RPH format in --regs-api-keys")
     parser.add_argument("--per-key-hourly", type=int, default=1000,
-                        help="Hourly request limit per API key (default 1000)")
+                        help="Default hourly limit for keys without :RPH suffix (default 1000)")
     parser.add_argument("--concurrent-workers", type=int, default=None,
                         help="Number of concurrent enrichment workers (default: min(8, num_keys*2), or 1 if single key)")
     parser.add_argument("--fr-sleep", type=float, default=0.2, help="Sleep seconds between FR page fetches")
@@ -542,15 +545,18 @@ def main() -> None:
     if not api_keys and args.regs_api_key:
         api_keys = args.regs_api_key
     
-    # Parse keys and determine worker count
+    # Parse keys with their RPH limits (format: KEY1:RPH1,KEY2:RPH2)
+    keys_with_limits = []
     if isinstance(api_keys, str):
-        keys_list = [k.strip() for k in api_keys.split(",") if k.strip()]
-        # Strip :RPH suffix if present
-        keys_list = [k.split(":")[0] if ":" in k else k for k in keys_list]
-    else:
-        keys_list = []
+        raw_keys = [k.strip() for k in api_keys.split(",") if k.strip()]
+        for k in raw_keys:
+            if ":" in k:
+                key, rph = k.split(":", 1)
+                keys_with_limits.append((key.strip()[:8] + "...", int(rph.strip())))
+            else:
+                keys_with_limits.append((k.strip()[:8] + "...", args.per_key_hourly))
     
-    num_keys = len(keys_list)
+    num_keys = len(keys_with_limits)
     
     # Determine worker counts for each stage
     # Stage 1 (FR API): Conservative due to rate limiting issues
@@ -572,7 +578,12 @@ def main() -> None:
     
     if not args.quiet:
         if num_keys > 0:
-            print(f"Using {num_keys} Regs.gov API key(s)")
+            print(f"Using {num_keys} Regs.gov API key(s):")
+            for key_preview, rph in keys_with_limits:
+                rpm = int(rph / 60.0)
+                print(f"  - {key_preview}: {rph} RPH ({rpm} RPM)")
+            total_rpm = sum(int(rph / 60.0) for _, rph in keys_with_limits)
+            print(f"  Total capacity: {total_rpm} RPM")
             print(f"Stage 1 workers (FR API): {workers_stage1}")
             print(f"Stage 2 workers (Regs.gov API): {workers_stage2}")
         else:
@@ -589,7 +600,7 @@ def main() -> None:
 
     # Two-stage enrichment with multi-threading
     rows: List[dict] = []
-    regs = RegsClient(api_keys=api_keys, per_key_rpm=args.per_key_rpm, per_key_hourly=args.per_key_hourly)
+    regs = RegsClient(api_keys=api_keys, default_rph=args.per_key_hourly)
     
     # Stage 1: FR detail enrichment (rate-limited, conservative workers)
     print(f"\n{'='*60}")
@@ -611,7 +622,7 @@ def main() -> None:
                 partial = future.result()
                 if partial:
                     stage1_results.append(partial)
-                else:
+    else:
                     # Returned None = either FR API failed OR doc not eligible
                     failed_count += 1
             except Exception as e:
@@ -863,6 +874,20 @@ fr api rate limiting fix (nov 2024):
 - Trade-off: Stage 1 is slower but more reliable (0.5s/req * 3 workers = ~6 req/sec vs 72 req/sec before)
 - Expected timing: ~2.2 hours for Stage 1 (26k docs * 0.5s / 3 workers = 4333s), Stage 2 still fast
 - Better to be slow and reliable than fast and blocked by IP rate limiting
+
+per-key rate limiting fix (nov 2024):
+- PROBLEM: Stage 2 was only using ~4% of API capacity despite having 5k+1k+1k RPH keys
+  * Script was applying blanket 16 RPM to ALL keys, wasting high-capacity keys
+  * Example: 5000 RPH key (83 RPM) was throttled down to 16 RPM (only 19% capacity!)
+- ROOT CAUSE: RegsClient was stripping :RPH suffix and applying default per_key_rpm to all keys
+- SOLUTION: parse and respect per-key rates from KEY:RPH format (like mine_comments.py does)
+  * MultiKeyLimiter now accepts list of (key, rph) tuples instead of blanket rate
+  * Each key uses its own RPM limit: 5000 RPH = 83 RPM, 1000 RPH = 17 RPM
+  * Format: REGS_API_KEYS="key1:5000,key2:1000,key3:1000"
+  * Startup prints per-key rates and total capacity for visibility
+- Expected speedup: Stage 2 should be ~5x faster (83+17+17=117 RPM vs 16+16+16=48 RPM before)
+- Total capacity example: 117 RPM = ~1.95 req/sec, with 2 API calls per doc = ~0.98 doc/sec
+  * With caching of objectId lookups, actual throughput can be 2-3x higher
 
 
 """
