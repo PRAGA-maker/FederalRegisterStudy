@@ -256,8 +256,8 @@ class RegsClient:
         
         # Check cache with lock
         with self._cache_lock:
-        if document_id in self.doc_detail_by_document_id:
-            return self.doc_detail_by_document_id[document_id]
+            if document_id in self.doc_detail_by_document_id:
+                return self.doc_detail_by_document_id[document_id]
         
         # Fetch outside lock (network I/O)
         r = self._get(REGS_DOC_URL.format(documentId=document_id), max_retries=max_retries)
@@ -265,7 +265,7 @@ class RegsClient:
             data = r.json()
             # Update cache with lock
             with self._cache_lock:
-            self.doc_detail_by_document_id[document_id] = data
+                self.doc_detail_by_document_id[document_id] = data
             return data
         
         return None
@@ -277,8 +277,8 @@ class RegsClient:
         
         # Check cache with lock
         with self._cache_lock:
-        if object_id in self.total_by_object_id:
-            return self.total_by_object_id[object_id]
+            if object_id in self.total_by_object_id:
+                return self.total_by_object_id[object_id]
         
         # Fetch outside lock (network I/O)
         r = self._get(
@@ -296,7 +296,7 @@ class RegsClient:
             val = int(total)
             # Update cache with lock
             with self._cache_lock:
-            self.total_by_object_id[object_id] = val
+                self.total_by_object_id[object_id] = val
             return val
         except Exception:
             return None
@@ -622,7 +622,7 @@ def main() -> None:
                 partial = future.result()
                 if partial:
                     stage1_results.append(partial)
-    else:
+                else:
                     # Returned None = either FR API failed OR doc not eligible
                     failed_count += 1
             except Exception as e:
