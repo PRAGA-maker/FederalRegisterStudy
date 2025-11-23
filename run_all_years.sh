@@ -31,7 +31,7 @@ for YEAR in "${YEARS[@]}"; do
     echo ""
     
     echo "Step 1/4: Fetching and enriching documents..."
-    python stratification_scripts/2024distribution.py --year $YEAR --concurrent-workers 2 --fr-detail-sleep 1.0 --retries 15
+    python stratification_scripts/2024distribution.py --year $YEAR
     if [ $? -ne 0 ]; then
         echo "ERROR: 2024distribution.py failed for year $YEAR"
         exit 1
