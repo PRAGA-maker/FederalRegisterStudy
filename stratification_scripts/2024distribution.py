@@ -394,6 +394,10 @@ def enrich_fr_detail(rec: dict, retries: int, fr_sleep: float = 0.5) -> Optional
         rec: FR document record
         retries: Max retry attempts
         fr_sleep: Sleep duration between FR API calls (default 0.5s)
+    
+    Returns:
+        Enriched record dict, or None if FR fetch failed or doc is ineligible
+        Prints error message when FR API fails to distinguish from ineligible docs
     """
     doc_number = rec.get("document_number")
     comment_url = None
@@ -401,6 +405,7 @@ def enrich_fr_detail(rec: dict, retries: int, fr_sleep: float = 0.5) -> Optional
     regs_document_id = None
     count_source = "unknown"
     comment_count: Optional[int] = None
+    fr_fetch_failed = False
     
     if doc_number:
         details = fetch_document_details(doc_number, max_retries=retries, sleep_between=fr_sleep)
@@ -410,7 +415,7 @@ def enrich_fr_detail(rec: dict, retries: int, fr_sleep: float = 0.5) -> Optional
             fr_info = details.get("regulations_dot_gov_info", {})
             if isinstance(fr_info, dict):
                 regs_document_id = fr_info.get("document_id")
-                
+
                 # For regs.gov docs, use FR embedded count as temporary value
                 # For non-regs.gov docs, leave as None (unknown)
                 if regs_document_id:
@@ -418,6 +423,13 @@ def enrich_fr_detail(rec: dict, retries: int, fr_sleep: float = 0.5) -> Optional
                     if isinstance(cc_fr, int) and cc_fr >= 0:
                         comment_count = cc_fr
                         count_source = "federalregister"
+        else:
+            # FR API fetch failed - raise exception to distinguish from ineligible docs
+            fr_fetch_failed = True
+
+    # If FR fetch failed, print error and continue (don't crash entire script)
+    if fr_fetch_failed:
+        print(f"\n❌ FR API failed for {doc_number} after {retries} retries (rate limit 429)")
 
     agencies = rec.get("agencies") or []
     agency_names = ", ".join([a.get("name") for a in agencies if isinstance(a, dict) and a.get("name")])
@@ -436,13 +448,13 @@ def enrich_fr_detail(rec: dict, retries: int, fr_sleep: float = 0.5) -> Optional
         return None
 
     return {
-        "document_number": rec.get("document_number"),
-        "title": rec.get("title"),
-        "agency": agency_names,
-        "publication_date": rec.get("publication_date"),
-        "comment_url": comment_url,
-        "comments_close_on": comments_close_on,
-        "regs_document_id": regs_document_id,
+                    "document_number": rec.get("document_number"),
+                    "title": rec.get("title"),
+                    "agency": agency_names,
+                    "publication_date": rec.get("publication_date"),
+                    "comment_url": comment_url,
+                    "comments_close_on": comments_close_on,
+                    "regs_document_id": regs_document_id,
         "comment_count": comment_count,  # None for non-regs.gov, FR count for regs.gov (updated in Stage 2)
         "count_source": count_source,
         "eligibility_reason": eligibility_reason,
@@ -600,11 +612,12 @@ def main() -> None:
                 if partial:
                     stage1_results.append(partial)
                 else:
+                    # Returned None = either FR API failed OR doc not eligible
                     failed_count += 1
             except Exception as e:
+                # Unexpected exception
                 failed_count += 1
-                if not args.quiet:
-                    print(f"\nError in Stage 1: {e}")
+                print(f"\n⚠️ Unexpected error: {e}")
     
     # Split by whether they need Regs.gov enrichment
     regs_docs = [p for p in stage1_results if p.get("regs_document_id")]

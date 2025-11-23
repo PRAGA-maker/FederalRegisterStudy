@@ -28,7 +28,7 @@ echo "=========================================="
 echo ""
 
 echo "Step 1/4: Fetching and enriching documents..."
-python stratification_scripts/2024distribution.py --year $YEAR
+python stratification_scripts/2024distribution.py --year $YEAR --concurrent-workers 2 --fr-detail-sleep 1.0 --retries 15
 
 echo ""
 echo "Step 2/4: Mining comments..."
