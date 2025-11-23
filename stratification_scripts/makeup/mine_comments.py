@@ -277,13 +277,16 @@ def calculate_sample_size(population_size: int, confidence: float = 0.95, margin
     """Calculate statistical sample size for proportion estimation with finite population correction.
     
     Args:
-        population_size: Total population size
+        population_size: Total population size (will be converted to int if float from Polars)
         confidence: Confidence level (0.95 for 95% CI, 0.99 for 99% CI)
         margin: Margin of error (0.05 for ±5%)
     
     Returns:
         Required sample size (always returns at least population_size for small populations)
     """
+    # Convert to int if float (Polars sum() can return floats)
+    population_size = int(population_size)
+    
     if population_size <= 0:
         return 0  # No population
     
@@ -303,7 +306,8 @@ def calculate_sample_size(population_size: int, confidence: float = 0.95, margin
     n_corrected = n_infinite / (1 + (n_infinite - 1) / population_size)
     
     # Always fetch all if population is smaller than required sample
-    return min(int(n_corrected) + 1, population_size)
+    # Explicitly cast to int to ensure return type is always int
+    return int(min(int(n_corrected) + 1, population_size))
 
 
 def build_two_stage_sample_plan(
