@@ -9,6 +9,7 @@ import asyncio
 import math
 import os
 import re
+import random
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Set, Tuple
@@ -249,36 +250,36 @@ async def classify_comment(client: AsyncOpenAI, comment_text: str, metadata: Dic
         submitter_type=metadata.get("submitter_type", "N/A"),
         first_name=metadata.get("first_name", ""),
         last_name=metadata.get("last_name", "")
-    )  # Increased from 2000 to 3000 chars
+    )
     
     async with semaphore:
-        backoff = 1.0
-        max_attempts = 5
+        backoff = 2.0  # Start at 2 seconds
+        max_attempts = 8  # Increase attempts from 5 to 8
+        
         for attempt in range(max_attempts):
             try:
                 response = await client.chat.completions.create(
                     model=model,
                     messages=[{"role": "user", "content": prompt}],
-                    max_completion_tokens=20,  # Single word response
+                    max_completion_tokens=20,
                 )
                 
-                # Extract from chat completion response
+                # Extract response
                 if response.choices and response.choices[0].message.content:
                     raw_result = response.choices[0].message.content.strip()
                 else:
                     raw_result = ""
                 
                 if not raw_result:
-                    tqdm.write("  WARN: Empty LLM response from chat.completions")
+                    tqdm.write("  WARN: Empty LLM response")
                     return LABEL_MAP["undecided"], prompt, "EMPTY_RESPONSE"
                 
                 result = raw_result.lower()
                 
-                # Validate response - exact match
+                # Validate response
                 if result in LABEL_MAP:
                     return LABEL_MAP[result], prompt, raw_result
                 
-                # Fuzzy match - check if any label appears in response
                 for token in LABEL_MAP.keys():
                     if token in result:
                         return LABEL_MAP[token], prompt, raw_result
@@ -287,14 +288,29 @@ async def classify_comment(client: AsyncOpenAI, comment_text: str, metadata: Dic
                 return LABEL_MAP["undecided"], prompt, raw_result
                 
             except Exception as e:
+                error_str = str(e).lower()
+                is_rate_limit = "429" in error_str or "rate limit" in error_str
+                
                 if attempt < max_attempts - 1:
-                    tqdm.write(f"  ERROR: API call failed (attempt {attempt+1}/{max_attempts}): {e}, retrying in {backoff:.1f}s...")
-                    await asyncio.sleep(backoff)
-                    backoff = min(backoff * 2, 8.0)
+                    # Calculate sleep time with Jitter
+                    # Jitter prevents all threads from hitting the API again at the exact same moment
+                    jitter = random.uniform(0.5, 2.0)
+                    sleep_time = backoff + jitter
+                    
+                    # If it's a 429, impose a stiff penalty immediately
+                    if is_rate_limit:
+                        sleep_time += 20.0  # Force a minimum 20s wait for rate limits
+                        tqdm.write(f"  RATE LIMIT (429): Retrying in {sleep_time:.1f}s...")
+                    else:
+                        tqdm.write(f"  ERROR: API failed (attempt {attempt+1}/{max_attempts}): {e}. Retrying in {sleep_time:.1f}s...")
+                    
+                    await asyncio.sleep(sleep_time)
+                    
+                    # Exponential backoff, but cap at 60 seconds (window reset time)
+                    backoff = min(backoff * 2, 60.0)
                 else:
                     tqdm.write(f"  ERROR: API call failed after {max_attempts} attempts: {e}")
         
-        # After retries exhausted, return undecided (not None) to keep pipeline stable
         return LABEL_MAP["undecided"], prompt, "ERROR: retries_exhausted"
 
 
