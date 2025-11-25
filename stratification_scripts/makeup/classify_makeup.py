@@ -597,7 +597,7 @@ def join_and_write_output(comments_csv: Path, results_csv: Path, fr_csv: Path, o
 def main() -> None:
     parser = argparse.ArgumentParser(description="Classify comment authors with OpenAI")
     parser.add_argument("--year", type=int, default=2024)
-    parser.add_argument("--max-concurrency", type=int, default=10)
+    parser.add_argument("--max-concurrency", type=int, default=8)
     parser.add_argument("--model", type=str, default="gpt-4o-mini")
     parser.add_argument("--sample-threshold", type=int, default=1000, help="Use sampling for documents with more than this many comments")
     parser.add_argument("--sampling-seed", type=int, default=None, help="Optional RNG seed for sampling reproducibility")
