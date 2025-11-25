@@ -339,6 +339,41 @@ async def classify_batch(
     return results
 
 
+async def process_buffered_batch(
+    client: AsyncOpenAI,
+    comments: List[Tuple[str, str, Dict[str, str]]],
+    model: str,
+    max_concurrency: int,
+    results_csv: Path,
+    chunk_size: int = 500,
+) -> None:
+    """Process a large buffered batch of comments with incremental saving."""
+    if not comments:
+        return
+    
+    pending: List[Tuple[str, Optional[str], str, str]] = []
+    semaphore = asyncio.Semaphore(max_concurrency)
+
+    async def run_single(comment_id: str, text: str, metadata: Dict[str, str]) -> Tuple[str, Optional[str], str, str]:
+        category, prompt, model_response = await classify_comment(client, text, metadata, semaphore, model)
+        return comment_id, category, prompt, model_response
+
+    tasks = [asyncio.create_task(run_single(comment_id, text, metadata)) for comment_id, text, metadata in comments]
+
+    # Process with incremental saving
+    for task in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc=f"Classifying {len(comments)} comments"):
+        result = await task
+        pending.append(result)
+
+        if len(pending) >= chunk_size:
+            save_results(results_csv, pending, model)
+            pending = []
+
+    # Save any remaining results
+    if pending:
+        save_results(results_csv, pending, model)
+
+
 async def run_classification_batches(
     client: AsyncOpenAI,
     batches: List[Tuple[str, List[Tuple[str, str, Dict[str, str]]]]],
@@ -482,58 +517,78 @@ def classify_comments(
         print("No documents with usable text after filtering.")
         join_and_write_output(comments_csv, results_csv, fr_csv, output_csv)
         return
-    
-    client = AsyncOpenAI(api_key=api_key)
-    doc_batches: List[Tuple[str, List[Tuple[str, str, Dict[str, str]]]]] = []
-    
-    for doc_number, comments in by_doc.items():
-        n_comments = len(comments)
-        print(f"\nDocument {doc_number}: {n_comments} comments")
+
+    # --- ASYNC WRAPPER: Single event loop for all batches ---
+    async def async_main_loop():
+        """Process all documents in a single async context to avoid event loop issues."""
+        client = AsyncOpenAI(api_key=api_key)
+        execution_queue: List[Tuple[str, str, Dict[str, str]]] = []
+        buffer_size_threshold = 10000
         
-        if n_comments <= sample_threshold:
-            to_classify = comments
-        else:
-            print(f"  Vectorizing {n_comments} comments...")
-            texts = [c[1] for c in comments]
-            vectors, w2v_model = vectorize_comments(texts)
+        # Process documents and buffer comments
+        for doc_number, comments in by_doc.items():
+            n_comments = len(comments)
+            print(f"\nDocument {doc_number}: {n_comments} comments")
             
-            if vectors.shape[0] == 0 or w2v_model is None:
-                print("  Skipping (insufficient data for vectorization)")
-                continue
+            if n_comments <= sample_threshold:
+                to_classify = comments
+            else:
+                print(f"  Vectorizing {n_comments} comments...")
+                texts = [c[1] for c in comments]
+                vectors, w2v_model = vectorize_comments(texts)
+                
+                if vectors.shape[0] == 0 or w2v_model is None:
+                    print("  Skipping (insufficient data for vectorization)")
+                    continue
+                
+                print("  Computing sample size...")
+                n_samples = compute_sample_size(vectors, random_state=sampling_seed)
+                if n_samples <= 0:
+                    n_samples = min(1, len(comments))
+                print(f"  Required sample size: {n_samples} (from {n_comments} total)")
+                
+                print("  Density-aware sampling...")
+                sampled_indices = density_aware_sampling(
+                    vectors,
+                    n_samples,
+                    random_state=sampling_seed,
+                )
+                
+                to_classify = [comments[i] for i in sampled_indices]
+                print(f"  Selected {len(to_classify)} comments to classify")
             
-            print("  Computing sample size...")
-            n_samples = compute_sample_size(vectors, random_state=sampling_seed)
-            if n_samples <= 0:
-                n_samples = min(1, len(comments))
-            print(f"  Required sample size: {n_samples} (from {n_comments} total)")
-            
-            print("  Density-aware sampling...")
-            sampled_indices = density_aware_sampling(
-                vectors,
-                n_samples,
-                random_state=sampling_seed,
+            if to_classify:
+                execution_queue.extend(to_classify)
+                print(f"  Buffered {len(to_classify)} comments (queue size: {len(execution_queue)})")
+                
+                # Process immediately when threshold is reached
+                if len(execution_queue) >= buffer_size_threshold:
+                    batch_to_process = execution_queue[:]
+                    execution_queue.clear()
+                    print(f"\n[BUFFER FULL] Processing batch of {len(batch_to_process)} comments...")
+                    await process_buffered_batch(
+                        client,
+                        batch_to_process,
+                        model,
+                        max_concurrency,
+                        results_csv,
+                        chunk_size=500,  # Save every 500 items for large batches
+                    )
+        
+        # Process any remaining comments in buffer
+        if execution_queue:
+            print(f"\n[FINAL FLUSH] Processing {len(execution_queue)} comments...")
+            await process_buffered_batch(
+                client,
+                execution_queue,
+                model,
+                max_concurrency,
+                results_csv,
+                chunk_size=500,
             )
-            
-            to_classify = [comments[i] for i in sampled_indices]
-            print(f"  Selected {len(to_classify)} comments to classify")
-        
-        if to_classify:
-            doc_batches.append((doc_number, to_classify))
     
-    if not doc_batches:
-        print("No documents ready for LLM classification after sampling.")
-        join_and_write_output(comments_csv, results_csv, fr_csv, output_csv)
-        return
-    
-    asyncio.run(
-        run_classification_batches(
-            client,
-            doc_batches,
-            model,
-            max_concurrency,
-            results_csv,
-        )
-    )
+    # Run the single async loop (creates one event loop for entire process)
+    asyncio.run(async_main_loop())
     
     join_and_write_output(comments_csv, results_csv, fr_csv, output_csv)
 
