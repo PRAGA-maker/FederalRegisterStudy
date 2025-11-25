@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Classify comment authors using OpenAI GPT with Word2Vec sampling for large datasets.
 
 For documents with >1000 comments, uses Word2Vec embeddings + density-aware sampling
@@ -261,7 +262,10 @@ async def classify_comment(client: AsyncOpenAI, comment_text: str, metadata: Dic
                 )
                 
                 # Extract from chat completion response
-                raw_result = response.choices[0].message.content.strip() if response.choices else ""
+                if response.choices and response.choices[0].message.content:
+                    raw_result = response.choices[0].message.content.strip()
+                else:
+                    raw_result = ""
                 
                 if not raw_result:
                     tqdm.write("  WARN: Empty LLM response from chat.completions")

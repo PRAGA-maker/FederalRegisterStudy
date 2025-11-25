@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import argparse
 import os
 import time
@@ -293,6 +295,8 @@ class RegsClient:
         data = r.json() or {}
         total = (data.get("meta") or {}).get("totalElements")
         try:
+            if total is None:
+                return None
             val = int(total)
             # Update cache with lock
             with self._cache_lock:
@@ -435,7 +439,7 @@ def enrich_fr_detail(rec: dict, retries: int, fr_sleep: float = 0.5) -> Optional
         print(f"\n❌ FR API failed for {doc_number} after {retries} retries (rate limit 429)")
 
     agencies = rec.get("agencies") or []
-    agency_names = ", ".join([a.get("name") for a in agencies if isinstance(a, dict) and a.get("name")])
+    agency_names = ", ".join([a.get("name") for a in agencies if isinstance(a, dict) and a.get("name") is not None])
 
     # Eligibility and channel
     is_prorule = rec.get("type") == "Proposed Rule"

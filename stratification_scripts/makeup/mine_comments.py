@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """Mine comments from regulations.gov for Federal Register documents.
 
 Reads federal_register_YYYY_comments.csv and extracts all comments via regs.gov API.
@@ -590,7 +591,7 @@ def download_and_extract_pdf_text(
                 text_parts = []
                 for page_num in range(min(max_pages, len(doc))):
                     page = doc[page_num]
-                    page_text = page.get_text()
+                    page_text = page.get_text()  # type: ignore[attr-defined]
                     if page_text:
                         text_parts.append(page_text)
                 
