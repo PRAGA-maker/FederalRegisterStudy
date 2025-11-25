@@ -253,7 +253,7 @@ async def classify_comment(client: AsyncOpenAI, comment_text: str, metadata: Dic
     
     async with semaphore:
         backoff = 1.0
-        for attempt in range(3):
+        for attempt in range(5): # Increased from 3 to 5 for better stability
             try:
                 response = await client.chat.completions.create(
                     model=model,
@@ -286,7 +286,7 @@ async def classify_comment(client: AsyncOpenAI, comment_text: str, metadata: Dic
                 return LABEL_MAP["undecided"], prompt, raw_result
                 
             except Exception as e:
-                tqdm.write(f"  ERROR: API call failed (attempt {attempt+1}/3): {e}")
+                tqdm.write(f"  ERROR: API call failed (attempt {attempt+1}/5): {e}")
                 await asyncio.sleep(backoff)
                 backoff = min(backoff * 2, 8.0)
         
@@ -434,7 +434,16 @@ def classify_comments(
         comment_id = row.get("comment_id")
         comment_text = row.get("comment_text", "")
         attachment_text = row.get("attachment_text", "")
-        text = comment_text if comment_text and comment_text.strip() else attachment_text
+        
+        # Combine texts so we don't lose the PDF if there is a short inline comment
+        parts = []
+        if comment_text and str(comment_text).strip():
+            parts.append(str(comment_text))
+        if attachment_text and str(attachment_text).strip():
+            parts.append(str(attachment_text))
+            
+        text = "\n\n".join(parts)
+        
         if not doc_num or not comment_id or not text:
             continue
             
@@ -584,7 +593,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Classify comment authors with OpenAI")
     parser.add_argument("--year", type=int, default=2024)
     parser.add_argument("--max-concurrency", type=int, default=20)
-    parser.add_argument("--model", type=str, default="gpt-4o-mini")
+    parser.add_argument("--model", type=str, default="gpt-4.1-nano")
     parser.add_argument("--sample-threshold", type=int, default=1000, help="Use sampling for documents with more than this many comments")
     parser.add_argument("--sampling-seed", type=int, default=None, help="Optional RNG seed for sampling reproducibility")
     args = parser.parse_args()
