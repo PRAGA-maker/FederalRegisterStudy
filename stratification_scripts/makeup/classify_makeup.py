@@ -253,7 +253,8 @@ async def classify_comment(client: AsyncOpenAI, comment_text: str, metadata: Dic
     
     async with semaphore:
         backoff = 1.0
-        for attempt in range(5): # Increased from 3 to 5 for better stability
+        max_attempts = 5
+        for attempt in range(max_attempts):
             try:
                 response = await client.chat.completions.create(
                     model=model,
@@ -286,9 +287,12 @@ async def classify_comment(client: AsyncOpenAI, comment_text: str, metadata: Dic
                 return LABEL_MAP["undecided"], prompt, raw_result
                 
             except Exception as e:
-                tqdm.write(f"  ERROR: API call failed (attempt {attempt+1}/5): {e}")
-                await asyncio.sleep(backoff)
-                backoff = min(backoff * 2, 8.0)
+                if attempt < max_attempts - 1:
+                    tqdm.write(f"  ERROR: API call failed (attempt {attempt+1}/{max_attempts}): {e}, retrying in {backoff:.1f}s...")
+                    await asyncio.sleep(backoff)
+                    backoff = min(backoff * 2, 8.0)
+                else:
+                    tqdm.write(f"  ERROR: API call failed after {max_attempts} attempts: {e}")
         
         # After retries exhausted, return undecided (not None) to keep pipeline stable
         return LABEL_MAP["undecided"], prompt, "ERROR: retries_exhausted"
@@ -432,15 +436,16 @@ def classify_comments(
     for row in needs_llm:
         doc_num = row.get("document_number")
         comment_id = row.get("comment_id")
-        comment_text = row.get("comment_text", "")
-        attachment_text = row.get("attachment_text", "")
+        comment_text = row.get("comment_text")
+        attachment_text = row.get("attachment_text")
         
         # Combine texts so we don't lose the PDF if there is a short inline comment
+        # Handle None values explicitly (Polars can return None for missing values)
         parts = []
-        if comment_text and str(comment_text).strip():
-            parts.append(str(comment_text))
-        if attachment_text and str(attachment_text).strip():
-            parts.append(str(attachment_text))
+        if comment_text is not None and str(comment_text).strip() and str(comment_text).strip().lower() != "none":
+            parts.append(str(comment_text).strip())
+        if attachment_text is not None and str(attachment_text).strip() and str(attachment_text).strip().lower() != "none":
+            parts.append(str(attachment_text).strip())
             
         text = "\n\n".join(parts)
         
@@ -592,8 +597,8 @@ def join_and_write_output(comments_csv: Path, results_csv: Path, fr_csv: Path, o
 def main() -> None:
     parser = argparse.ArgumentParser(description="Classify comment authors with OpenAI")
     parser.add_argument("--year", type=int, default=2024)
-    parser.add_argument("--max-concurrency", type=int, default=20)
-    parser.add_argument("--model", type=str, default="gpt-4.1-nano")
+    parser.add_argument("--max-concurrency", type=int, default=10)
+    parser.add_argument("--model", type=str, default="gpt-4o-mini")
     parser.add_argument("--sample-threshold", type=int, default=1000, help="Use sampling for documents with more than this many comments")
     parser.add_argument("--sampling-seed", type=int, default=None, help="Optional RNG seed for sampling reproducibility")
     args = parser.parse_args()
