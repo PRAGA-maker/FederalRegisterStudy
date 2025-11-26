@@ -89,7 +89,7 @@ Metadata:
 
 Classify the AUTHOR of the above public comment as exactly ONE of these categories:
 
-**org** - Large corporations, industry associations, trade groups, or organizational entities
+**org** - Large corporations, industry associations, trade groups, government agencies, or organizational entities
 **citizen** - Individual ordinary citizens, residents, or community members without professional affiliation
 **expert** - Academics, researchers, small/local businesses, industry experts, technical specialists
 **lobbyist** - Political consultants, registered lobbyists, advocacy groups, or professional campaigners
@@ -102,6 +102,7 @@ Decision guidance:
 - Generic "concerned citizen" with personal story/opinion → citizen (NOT undecided)
 - Individual small business owners → expert (not org)
 - Professional advocates or political operatives → lobbyist
+- AVOID over-classifying as citizen. Citizens are ordinary people with no professional affiliation; citizens whom clearly demonstrate or have realized subject-matter competence (ie. via formal training, corporate experience, etc.) from a technical standpoint are considered experts. Those acting in their own personal self interest (or for an issue/area they care about) are citizen, those not acting in a personal capacity (such as writing for a business or organization) and acting in the interests of the greater organization are not citizens. This is the difference between a hunter (citizen) and a farmer (expert) or small business owner (expert).
 - AVOID undecided unless genuinely impossible to determine - make your best inference from the text
 
 Be decisive. Most comments CAN be classified if you look at the language, tone, and context. Only use "undecided" as a last resort.
