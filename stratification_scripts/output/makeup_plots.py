@@ -65,7 +65,7 @@ GRID_ALPHA = 0.3
 
 
 # ============================================================================
-# DATA PREPROCESSING
+# DATA PREPROCESSING & WEIGHTING
 # ============================================================================
 
 def normalize_categories(df: pd.DataFrame) -> pd.DataFrame:
@@ -78,22 +78,49 @@ def normalize_categories(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def parse_agency_hierarchy(agency_str: str) -> Tuple[str, Optional[str]]:
+    """Parse agency string to extract main agency and sub-agency.
+    
+    Examples:
+        "Defense Department, Army Department" -> ("Defense Department", "Army Department")
+        "Nuclear Regulatory Commission" -> ("Nuclear Regulatory Commission", None)
+        "Transportation Department, National Highway Traffic Safety Administration" -> ("Transportation Department", "National Highway Traffic Safety Administration")
+    """
+    if pd.isna(agency_str) or agency_str == "":
+        return ("Unknown", None)
+    
+    agency_str = str(agency_str).strip()
+    parts = [p.strip() for p in agency_str.split(",")]
+    
+    if len(parts) == 1:
+        return (parts[0], None)
+    elif len(parts) >= 2:
+        # First part is main agency, second is sub-agency
+        # If there are more parts, join them as sub-agency
+        main_agency = parts[0]
+        sub_agency = ", ".join(parts[1:])
+        return (main_agency, sub_agency)
+    else:
+        return ("Unknown", None)
+
+
 def explode_agencies(df: pd.DataFrame) -> pd.DataFrame:
-    """Split multi-agency entries into separate rows."""
+    """Split multi-agency entries and parse hierarchy."""
     df = df.copy()
     if "agency" not in df.columns or df["agency"].isna().all():
         df["agency"] = "Unknown"
+        df["main_agency"] = "Unknown"
+        df["sub_agency"] = None
         return df
     
-    # Split on comma and expand
+    # Parse agency hierarchy
     df["agency"] = df["agency"].fillna("Unknown")
-    df["agency_list"] = df["agency"].str.split(",")
-    df = df.explode("agency_list")
-    df["agency"] = df["agency_list"].str.strip()
-    df = df.drop(columns=["agency_list"])
+    parsed = df["agency"].apply(parse_agency_hierarchy)
+    df["main_agency"] = [p[0] for p in parsed]
+    df["sub_agency"] = [p[1] for p in parsed]
     
-    # Filter out empty agencies
-    df = df[df["agency"].notna() & (df["agency"] != "")]
+    # For Sankey/dendrogram, we want to explode so each comment can link to both main and sub-agency
+    # But keep the original agency column for compatibility
     return df
 
 
@@ -104,14 +131,139 @@ def deduplicate_comments(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def calculate_weights(df: pd.DataFrame, fr_csv_path: Optional[Path]) -> pd.DataFrame:
+    """
+    Calculate sampling weights to reconstruct the full population.
+    
+    Implements TWO types of weights:
+    
+    1. `weight` (Stratum Weight): 
+       - Scales sampled comments to represent the FULL POPULATION of the stratum (Agency x Bin).
+       - Includes expansion for UNSAMPLED documents in the same stratum.
+       - Use for: Agency-level metrics, Totals, Donuts, Sankey.
+       - Formula: N_pop_stratum / N_sample_stratum
+       
+    2. `weight_doc` (Document Weight):
+       - Scales sampled comments to represent ONLY THE DOCUMENT they belong to.
+       - Does NOT expand to unsampled documents.
+       - Use for: Document-level scatterplots (Workload vs Citizen).
+       - Formula: N_true_doc / N_sample_doc
+    """
+    df = df.copy()
+    
+    # Default weights = 1.0 if no FR data available
+    if not fr_csv_path or not fr_csv_path.exists():
+        print("Warning: FR metadata not found. Using unweighted data (weight=1.0)")
+        df["weight"] = 1.0
+        df["weight_doc"] = 1.0
+        return df
+    
+    try:
+        # Load FR Population Data
+        fr_df = pd.read_csv(fr_csv_path)
+        
+        # Ensure critical columns exist
+        if "agency" not in fr_df.columns or "comment_count" not in fr_df.columns:
+            print("Warning: FR metadata missing 'agency' or 'comment_count'. Using unweighted data.")
+            df["weight"] = 1.0
+            df["weight_doc"] = 1.0
+            return df
+            
+        # Filter to documents with comments
+        fr_df = fr_df[fr_df["comment_count"] > 0].copy()
+        
+        # Assign Comment Bins (matching mine_comments.py logic)
+        def get_bin(n):
+            if n <= 10: return "0-10"
+            elif n <= 100: return "11-100"
+            elif n <= 1000: return "101-1000"
+            elif n <= 10000: return "1001-10000"
+            else: return "10000+"
+            
+        fr_df["comment_bin"] = fr_df["comment_count"].apply(get_bin)
+        
+        # ---------------------------------------------------------
+        # 1. Calculate Stratum Weight (Population Expansion)
+        # ---------------------------------------------------------
+        
+        # Calculate Population Totals (N_pop) per Stratum (Agency x Bin)
+        pop_strata = fr_df.groupby(["agency", "comment_bin"])["comment_count"].sum().rename("N_pop").reset_index()
+        
+        # Join document metadata to sample data to get comment counts per document for binning
+        if "document_number" in df.columns and "document_number" in fr_df.columns:
+            df = df.merge(fr_df[["document_number", "comment_count"]], on="document_number", how="left")
+            # Fill missing comment counts with 1 (assume singleton) to avoid errors
+            df["comment_count"] = df["comment_count"].fillna(1)
+            df["comment_bin"] = df["comment_count"].apply(get_bin)
+        else:
+            print("Warning: Could not link documents to FR metadata. Using unweighted data.")
+            df["weight"] = 1.0
+            df["weight_doc"] = 1.0
+            return df
+            
+        # Calculate Sample Totals (N_sample) per Stratum
+        sample_strata = df.groupby(["agency", "comment_bin"]).size().rename("N_sample").reset_index()
+        
+        # Merge Population and Sample Stratum Totals
+        strata_weights = pd.merge(pop_strata, sample_strata, on=["agency", "comment_bin"], how="inner")
+        
+        # Calculate Weight
+        strata_weights["weight"] = strata_weights["N_pop"] / strata_weights["N_sample"]
+        
+        # Merge stratum weights back to main dataframe
+        df = df.merge(strata_weights[["agency", "comment_bin", "weight"]], on=["agency", "comment_bin"], how="left")
+        
+        # ---------------------------------------------------------
+        # 2. Calculate Document Weight (Document Reconstruction)
+        # ---------------------------------------------------------
+        
+        # Count sampled comments per document
+        doc_sample_counts = df.groupby("document_number").size().rename("n_sample_doc")
+        
+        # Join back to DF
+        df = df.merge(doc_sample_counts, on="document_number", how="left")
+        
+        # Calculate weight_doc = True Total / Sampled Total
+        # This reconstructs the document exactly, without inflating for missing neighbor documents
+        df["weight_doc"] = df["comment_count"] / df["n_sample_doc"]
+        
+        # Fill missing weights
+        missing_weights = df["weight"].isna().sum()
+        if missing_weights > 0:
+            print(f"Warning: {missing_weights} comments could not be weighted (metadata mismatch). Defaulting to 1.0")
+            df["weight"] = df["weight"].fillna(1.0)
+            df["weight_doc"] = df["weight_doc"].fillna(1.0)
+            
+        print(f"Reweighting complete.")
+        print(f"  Stratum Weight (Population): Mean={df['weight'].mean():.2f}, Max={df['weight'].max():.2f}")
+        print(f"  Document Weight (Specific):  Mean={df['weight_doc'].mean():.2f}, Max={df['weight_doc'].max():.2f}")
+        
+        return df
+        
+    except Exception as e:
+        print(f"Error calculating weights: {e}")
+        import traceback
+        traceback.print_exc()
+        df["weight"] = 1.0
+        df["weight_doc"] = 1.0
+        return df
+
+
 def compute_agency_metrics(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Calculate agency-level metrics for compass positioning.
+    Calculate agency-level metrics for compass positioning using WEIGHTED sums.
     Returns DataFrame with columns: agency, total, X, Y, plus share/count columns.
     """
-    # Group by agency and category
-    grp = df.groupby(["agency", "category"])["comment_id"].count().rename("n").reset_index()
+    # Ensure weight column exists
+    if "weight" not in df.columns:
+        df["weight"] = 1.0
+        
+    # Group by agency and category, summing weights instead of counting rows
+    grp = df.groupby(["agency", "category"])["weight"].sum().rename("n").reset_index()
+    
+    # Calculate totals
     totals = grp.groupby("agency")["n"].sum().rename("total")
+    
     merged = grp.merge(totals, on="agency", how="left")
     merged["share"] = merged["n"] / merged["total"].where(merged["total"] > 0, 1)
     
@@ -242,6 +394,44 @@ def get_category_colors() -> List[str]:
     return [COLOR_PALETTE[cat] for cat in CATEGORY_ORDER]
 
 
+def plot_weight_distribution(df: pd.DataFrame, outdir: Path) -> None:
+    """
+    Plot distribution of weights to verify reweighting logic.
+    """
+    if "weight" not in df.columns:
+        print("Warning: No weights to plot distribution for")
+        return
+        
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+    
+    # Panel 1: Stratum Weights
+    weights = df["weight"].values
+    ax1 = axes[0]
+    ax1.hist(weights, bins=np.logspace(np.log10(max(1, weights.min())), np.log10(weights.max()), 50), 
+            color="#5C6670", alpha=0.7, edgecolor="white")
+    ax1.set_xscale("log")
+    ax1.set_xlabel("Weight (log scale)", fontsize=FONT_LABEL, fontweight="bold")
+    ax1.set_ylabel("Number of Comments", fontsize=FONT_LABEL, fontweight="bold")
+    ax1.set_title("Stratum Weights (Population Expansion)", fontsize=FONT_TITLE-2, fontweight="bold")
+    
+    # Panel 2: Document Weights
+    if "weight_doc" in df.columns:
+        weights_doc = df["weight_doc"].values
+        ax2 = axes[1]
+        ax2.hist(weights_doc, bins=np.logspace(np.log10(max(1, weights_doc.min())), np.log10(weights_doc.max()), 50), 
+                color="#9A8153", alpha=0.7, edgecolor="white")
+        ax2.set_xscale("log")
+        ax2.set_xlabel("Weight (log scale)", fontsize=FONT_LABEL, fontweight="bold")
+        ax2.set_title("Document Weights (Reconstruction)", fontsize=FONT_TITLE-2, fontweight="bold")
+    
+    apply_clean_style(ax1)
+    apply_clean_style(ax2)
+    plt.tight_layout()
+    fig.savefig(outdir / "weight_distribution.png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print("[OK] Saved: weight_distribution.png")
+
+
 # ============================================================================
 # SIMPLE CHART SET
 # ============================================================================
@@ -250,8 +440,14 @@ def plot_composition_donut(df: pd.DataFrame, year: int, outdir: Path, fr_csv_pat
     """
     Chart 1: Clean donut chart of comment composition.
     Now includes side-by-side comparison excluding top 10 documents.
+    Updated to use weighted sums.
     """
-    counts_all = df["category"].value_counts().reindex(CATEGORY_ORDER, fill_value=0)
+    if "weight" not in df.columns:
+        df["weight"] = 1.0
+        
+    # Calculate weighted counts
+    counts_all = df.groupby("category")["weight"].sum().reindex(CATEGORY_ORDER, fill_value=0)
+    
     if counts_all.sum() == 0:
         print(f"Warning: No data for donut chart ({year})")
         return
@@ -266,10 +462,13 @@ def plot_composition_donut(df: pd.DataFrame, year: int, outdir: Path, fr_csv_pat
             # Load FR data to get document comment counts
             fr_df = pd.read_csv(fr_csv_path)
             if "document_number" in fr_df.columns and "comment_count" in fr_df.columns:
-                # Get top 10 documents by comment count
-                top_docs = fr_df.nlargest(10, "comment_count")["document_number"].tolist()
+                # Get top 1% documents by comment count
+                total_docs = len(fr_df)
+                top_n = max(10, int(np.ceil(total_docs * 0.01)))
+                top_docs = fr_df.nlargest(top_n, "comment_count")["document_number"].tolist()
                 # Exclude comments from those documents
                 df_excluded = df[~df["document_number"].isin(top_docs)].copy()
+                print(f"Excluding {top_n} top documents (top 1%) from donut chart")
         except Exception as e:
             print(f"Warning: Could not load FR data for exclusion: {e}")
     
@@ -277,7 +476,7 @@ def plot_composition_donut(df: pd.DataFrame, year: int, outdir: Path, fr_csv_pat
     if df_excluded is not None and len(df_excluded) > 0:
         fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18, 8))
         
-        # Left: All comments
+        # Left: All comments (weighted)
         wedges1, texts1 = ax1.pie(
             counts_all.values,
             colors=colors,
@@ -286,8 +485,8 @@ def plot_composition_donut(df: pd.DataFrame, year: int, outdir: Path, fr_csv_pat
         )
         ax1.set_title(f"All Comments ({year})", fontsize=FONT_TITLE, fontweight="bold", pad=20)
         
-        # Right: Excluding top 10 documents
-        counts_excluded = df_excluded["category"].value_counts().reindex(CATEGORY_ORDER, fill_value=0)
+        # Right: Excluding top 1% of documents (weighted)
+        counts_excluded = df_excluded.groupby("category")["weight"].sum().reindex(CATEGORY_ORDER, fill_value=0)
         percentages_excluded = 100 * counts_excluded / counts_excluded.sum() if counts_excluded.sum() > 0 else percentages_all * 0
         
         wedges2, texts2 = ax2.pie(
@@ -296,7 +495,7 @@ def plot_composition_donut(df: pd.DataFrame, year: int, outdir: Path, fr_csv_pat
             startangle=90,
             wedgeprops=dict(width=0.4, edgecolor="white", linewidth=2)
         )
-        ax2.set_title(f"Excluding Top 10 Documents ({year})", fontsize=FONT_TITLE, fontweight="bold", pad=20)
+        ax2.set_title(f"Excluding Top 1% Documents ({year})", fontsize=FONT_TITLE, fontweight="bold", pad=20)
         
         # Combined legend
         legend_labels = []
@@ -346,11 +545,13 @@ def plot_composition_donut(df: pd.DataFrame, year: int, outdir: Path, fr_csv_pat
     print(f"[OK] Saved: comment_makeup_{year}_donut.png")
 
 
-def plot_agency_compass(df: pd.DataFrame, year: int, outdir: Path, top_n: int = 25) -> None:
+def plot_agency_compass(df: pd.DataFrame, year: int, outdir: Path, top_n: Optional[int] = None) -> None:
     """
     Chart 2: Agency compass with quadrants.
     X = OC - ORG, Y = EXP + LOB
     Improved: Distribute labels across all quadrants
+    Uses weighted metrics.
+    All agencies are plotted; labeling scales with total number of agencies.
     """
     df_metrics = compute_agency_metrics(df)
     
@@ -384,8 +585,14 @@ def plot_agency_compass(df: pd.DataFrame, year: int, outdir: Path, top_n: int = 
     
     df_metrics["quadrant"] = df_metrics.apply(lambda r: get_quadrant(r["X"], r["Y"]), axis=1)
     
-    # Select top agencies per quadrant (at least 2-3 per quadrant)
-    labels_per_quadrant = max(2, top_n // 4)
+    # Select agencies per quadrant for labeling (scale with total number of agencies)
+    # If top_n not specified, use ~20% of agencies per quadrant (minimum 2, maximum 15 per quadrant)
+    total_agencies = len(df_metrics)
+    if top_n is None:
+        labels_per_quadrant = max(2, min(15, int(total_agencies * 0.05)))
+    else:
+        labels_per_quadrant = max(2, top_n // 4)
+    
     agencies_to_label = []
     
     for q in [1, 2, 3, 4]:
@@ -394,8 +601,12 @@ def plot_agency_compass(df: pd.DataFrame, year: int, outdir: Path, top_n: int = 
     
     agencies_to_label = pd.concat(agencies_to_label)
     
-    # Also add overall top agencies if not already included
-    top_overall = df_metrics.nlargest(top_n, "total")
+    # Also add overall top agencies if not already included (scale with total)
+    if top_n is None:
+        top_n_effective = min(30, max(10, int(total_agencies * 0.25)))
+    else:
+        top_n_effective = top_n
+    top_overall = df_metrics.nlargest(top_n_effective, "total")
     agencies_to_label = pd.concat([agencies_to_label, top_overall]).drop_duplicates(subset=["agency"])
     
     # Prepare labels
@@ -473,7 +684,7 @@ def plot_agency_compass(df: pd.DataFrame, year: int, outdir: Path, top_n: int = 
     # Add note about bubble size
     ax.text(
         0.02, 0.98, 
-        "Bubble size = comment volume",
+        "Bubble size = comment volume (weighted)",
         transform=ax.transAxes,
         fontsize=9,
         alpha=0.6,
@@ -493,6 +704,7 @@ def plot_workload_vs_makeup(df: pd.DataFrame, year: int, outdir: Path) -> None:
     """
     Chart 3: Workload vs makeup with multi-series scatter and trend lines.
     Shows total comments vs. counts by category with log-binned median lines.
+    Uses weighted metrics.
     """
     df_metrics = compute_agency_metrics(df)
     
@@ -539,10 +751,10 @@ def plot_workload_vs_makeup(df: pd.DataFrame, year: int, outdir: Path) -> None:
                 ax.plot(trend_x, trend_y, color=color, linewidth=2.5, alpha=0.9, label=cat)
     
     # Styling
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    ax.set_xlabel("Total Comments (log scale)", fontsize=FONT_LABEL, fontweight="bold")
-    ax.set_ylabel("Count by Category (log scale)", fontsize=FONT_LABEL, fontweight="bold")
+    ax.set_xscale("symlog", linthresh=1)
+    ax.set_yscale("symlog", linthresh=1)
+    ax.set_xlabel("Total Comments (log scale, weighted)", fontsize=FONT_LABEL, fontweight="bold")
+    ax.set_ylabel("Count by Category (log scale, weighted)", fontsize=FONT_LABEL, fontweight="bold")
     ax.set_title(f"Workload vs. Who Shows Up ({year})", fontsize=FONT_TITLE, fontweight="bold", pad=20)
     
     ax.legend(fontsize=FONT_LEGEND - 1, frameon=True, loc="upper left", framealpha=0.9)
@@ -558,6 +770,7 @@ def plot_workload_vs_citizen_by_agency(df: pd.DataFrame, year: int, outdir: Path
     """
     Workload vs citizen input by agency (like Gini frontier).
     Shows relationship between total comments and citizen participation.
+    Uses weighted metrics.
     """
     df_metrics = compute_agency_metrics(df)
     
@@ -590,10 +803,10 @@ def plot_workload_vs_citizen_by_agency(df: pd.DataFrame, year: int, outdir: Path
     ax.plot([0, max_val], [0, max_val], '--', color="#5C6670", alpha=0.3, linewidth=1, label="Perfect citizen participation")
     
     # Styling
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    ax.set_xlabel("Total Comments by Agency (log scale)", fontsize=FONT_LABEL, fontweight="bold")
-    ax.set_ylabel("Ordinary Citizen Comments (log scale)", fontsize=FONT_LABEL, fontweight="bold")
+    ax.set_xscale("symlog", linthresh=1)
+    ax.set_yscale("symlog", linthresh=1)
+    ax.set_xlabel("Total Comments by Agency (log scale, weighted)", fontsize=FONT_LABEL, fontweight="bold")
+    ax.set_ylabel("Ordinary Citizen Comments (log scale, weighted)", fontsize=FONT_LABEL, fontweight="bold")
     ax.set_title(f"Workload vs Citizen Input (agency, {year})", fontsize=FONT_TITLE, fontweight="bold", pad=20)
     
     ax.legend(fontsize=FONT_LEGEND - 1, frameon=True, loc="upper left", framealpha=0.9)
@@ -609,16 +822,40 @@ def plot_workload_vs_citizen_by_document(df: pd.DataFrame, year: int, outdir: Pa
     """
     Workload vs citizen input by document_number (like Gini frontier).
     Shows relationship between total comments per document and citizen participation.
+    
+    CRITICAL FIX: Uses `weight_doc` (Document Specific Weight) instead of Stratum Weight.
+    X-axis: True FR Total Volume
+    Y-axis: Sum of `weight_doc` for Citizen comments.
+    
+    This ensures that for any single document, Y <= X.
     """
     if "document_number" not in df.columns:
         print(f"Warning: document_number not available for workload vs citizen by document ({year})")
         return
+        
+    # Check if we have weights
+    if "weight_doc" not in df.columns:
+        print("Warning: weight_doc not available. Using standard weight.")
+        df["weight_doc"] = df.get("weight", 1.0)
+        
+    if "comment_count" not in df.columns:
+        print("Warning: True comment_count not available.")
+        return
     
     # Group by document_number
+    # For Total (X): We can take the first value of 'comment_count' (True Total from FR)
+    # For Citizen (Y): We sum 'weight_doc' for citizens.
+    
     doc_grp = df.groupby("document_number").agg({
-        "comment_id": "count",
-        "category": lambda x: (x == "Ordinary Citizen").sum()
-    }).rename(columns={"comment_id": "total", "category": "citizen_count"})
+        "comment_count": "first"
+    }).rename(columns={"comment_count": "true_total"})
+    
+    # Calculate weighted citizen count using DOCUMENT WEIGHT
+    citizen_df = df[df["category"] == "Ordinary Citizen"]
+    citizen_counts = citizen_df.groupby("document_number")["weight_doc"].sum().rename("estimated_citizen_total")
+    
+    # Join
+    doc_grp = doc_grp.join(citizen_counts, how="left").fillna(0)
     
     if doc_grp.empty:
         print(f"Warning: No document-level data ({year})")
@@ -628,8 +865,8 @@ def plot_workload_vs_citizen_by_document(df: pd.DataFrame, year: int, outdir: Pa
     
     # Scatter plot
     ax.scatter(
-        doc_grp["total"],
-        doc_grp["citizen_count"],
+        doc_grp["true_total"],
+        doc_grp["estimated_citizen_total"],
         s=40,
         alpha=0.4,
         color=COLOR_PALETTE["Ordinary Citizen"],
@@ -638,16 +875,14 @@ def plot_workload_vs_citizen_by_document(df: pd.DataFrame, year: int, outdir: Pa
     )
     
     # Add diagonal reference line
-    max_total = doc_grp["total"].max()
-    max_citizen = doc_grp["citizen_count"].max()
-    max_val = max(max_total, max_citizen)
-    ax.plot([0, max_val], [0, max_val], '--', color="#5C6670", alpha=0.3, linewidth=1, label="Perfect citizen participation")
+    max_total = doc_grp["true_total"].max()
+    ax.plot([0, max_total], [0, max_total], '--', color="#5C6670", alpha=0.3, linewidth=1, label="Perfect citizen participation")
     
     # Styling
-    ax.set_xscale("log")
-    ax.set_yscale("log")
-    ax.set_xlabel("Total Comments by Document (log scale)", fontsize=FONT_LABEL, fontweight="bold")
-    ax.set_ylabel("Ordinary Citizen Comments (log scale)", fontsize=FONT_LABEL, fontweight="bold")
+    ax.set_xscale("symlog", linthresh=1)
+    ax.set_yscale("symlog", linthresh=1)
+    ax.set_xlabel("Total Comments by Document (True FR Volume)", fontsize=FONT_LABEL, fontweight="bold")
+    ax.set_ylabel("Ordinary Citizen Comments (Estimated)", fontsize=FONT_LABEL, fontweight="bold")
     ax.set_title(f"Workload vs Citizen Input (document_number, {year})", fontsize=FONT_TITLE, fontweight="bold", pad=20)
     
     ax.legend(fontsize=FONT_LEGEND - 1, frameon=True, loc="upper left", framealpha=0.9)
@@ -663,85 +898,145 @@ def plot_comment_distribution_roi(df: pd.DataFrame, year: int, outdir: Path, fr_
     """
     High-ROI visualization: Shows that most documents get few/no comments and few citizens participate.
     This is the key story visualization.
-    """
-    # Get document-level stats
-    if "document_number" in df.columns:
-        doc_stats = df.groupby("document_number").agg({
-            "comment_id": "count",
-            "category": lambda x: (x == "Ordinary Citizen").sum()
-        }).rename(columns={"comment_id": "total_comments", "category": "citizen_comments"})
-        doc_stats["has_citizens"] = (doc_stats["citizen_comments"] > 0).astype(int)
-    else:
-        print(f"Warning: document_number not available for ROI chart ({year})")
-        return
     
-    # Load FR data to get documents with 0 comments
-    zero_comment_docs = 0
+    Uses full FR metadata (fr_df) as the primary source for document-level histograms.
+    """
+    # Load FR data to get complete document universe
+    fr_df = None
     if fr_csv_path and fr_csv_path.exists():
         try:
             fr_df = pd.read_csv(fr_csv_path)
-            if "document_number" in fr_df.columns and "comment_count" in fr_df.columns:
-                zero_comment_docs = (fr_df["comment_count"] == 0).sum()
         except Exception as e:
             print(f"Warning: Could not load FR data: {e}")
+            
+    if fr_df is None:
+        print(f"Error: FR metadata required for ROI chart ({year}) to show true distribution.")
+        return
+
+    # Calculate citizen estimates for sampled documents using DOCUMENT WEIGHTS
+    # weight_doc reconstructs the specific document's volume from the sample
+    
+    if "weight_doc" not in df.columns:
+        df["weight_doc"] = 1.0
+        
+    citizen_df = df[df["category"] == "Ordinary Citizen"]
+    citizen_counts = citizen_df.groupby("document_number")["weight_doc"].sum().rename("estimated_citizen_count")
+    
+    # Merge estimates back to FULL FR dataframe
+    if "document_number" in fr_df.columns and "comment_count" in fr_df.columns:
+        # Include count_source if available to filter out unknown-count docs
+        cols_to_load = ["document_number", "comment_count"]
+        if "count_source" in fr_df.columns:
+            cols_to_load.append("count_source")
+        fr_stats = fr_df[cols_to_load].copy()
+        fr_stats = fr_stats.merge(citizen_counts, on="document_number", how="left")
+        
+        # Fill NaNs
+        # If document was NOT in sample (NaN), we assume 0 citizen comments?
+        # Or we can only analyze sampled documents for citizen rate.
+        # Since we stratified sampled, we have representation across bins.
+        # But for specific documents not sampled, we don't know. 
+        # However, for "Documents with 0 comments", we know citizen count is 0.
+        
+        fr_stats.loc[fr_stats["comment_count"] == 0, "estimated_citizen_count"] = 0
+        
+        # Define "has_data" as documents where we either have a sample OR the total count is 0
+        fr_stats["has_data"] = (fr_stats["comment_count"] == 0) | (fr_stats["estimated_citizen_count"].notna())
+        
+        # For documents with data, "has_citizens" is true if estimate > 0.5
+        fr_stats["has_citizens"] = (fr_stats["estimated_citizen_count"] > 0.5).astype(int)
+        
+        # Identify documents with known vs unknown comment counts
+        # Unknown = non-regs.gov docs where we couldn't determine count (count_source == "unknown")
+        if "count_source" in fr_stats.columns:
+            fr_stats["known_count"] = fr_stats["count_source"] != "unknown"
+        else:
+            # If count_source not available, assume all are known (backward compatibility)
+            fr_stats["known_count"] = True
+        
+    else:
+        print("Error: FR metadata missing columns")
+        return
     
     fig, axes = plt.subplots(2, 2, figsize=(16, 12))
     
-    # Panel 1: Distribution of comment counts per document
+    # Panel 1: Distribution of comment counts per document (Use FULL UNIVERSE)
     ax1 = axes[0, 0]
-    comment_counts = doc_stats["total_comments"].values
-    bins = np.logspace(0, np.log10(max(comment_counts.max(), 1)), 30)
-    ax1.hist(comment_counts, bins=bins, color="#5C6670", alpha=0.7, edgecolor="white", linewidth=0.5)
+    comment_counts = fr_stats["comment_count"].values
+    
+    # Define bins
+    max_comments = max(comment_counts.max(), 1)
+    bins = np.logspace(0, np.log10(max_comments), 30)
+    
+    # Plot only docs with >= 1 comment in the log histogram
+    counts_nonzero = comment_counts[comment_counts > 0]
+    
+    ax1.hist(counts_nonzero, bins=bins, color="#5C6670", alpha=0.7, edgecolor="white", linewidth=0.5)
     ax1.set_xscale("log")
     ax1.set_xlabel("Comments per Document (log scale)", fontsize=FONT_LABEL, fontweight="bold")
     ax1.set_ylabel("Number of Documents", fontsize=FONT_LABEL, fontweight="bold")
-    ax1.set_title("Distribution of Comment Volume", fontsize=FONT_TITLE - 2, fontweight="bold")
+    ax1.set_title("Distribution of Comment Volume (Non-Zero)", fontsize=FONT_TITLE - 2, fontweight="bold")
     apply_clean_style(ax1)
     
     # Add statistics
-    median_comments = doc_stats["total_comments"].median()
-    pct_low = (doc_stats["total_comments"] <= 5).sum() / len(doc_stats) * 100
-    ax1.axvline(median_comments, color="#9A8153", linestyle="--", linewidth=2, alpha=0.7, label=f"Median: {median_comments:.0f}")
-    ax1.text(0.7, 0.95, f"{pct_low:.1f}% have ≤5 comments", transform=ax1.transAxes, 
-             fontsize=10, alpha=0.7, va="top", bbox=dict(boxstyle="round", facecolor="white", alpha=0.8))
-    ax1.legend()
+    if len(counts_nonzero) > 0:
+        median_comments = np.median(counts_nonzero)
+        pct_low = (counts_nonzero <= 5).sum() / len(counts_nonzero) * 100
+        ax1.axvline(median_comments, color="#9A8153", linestyle="--", linewidth=2, alpha=0.7, label=f"Median (nonzero): {median_comments:.0f}")
+        ax1.text(0.7, 0.95, f"{pct_low:.1f}% of active docs\nhave ≤5 comments", transform=ax1.transAxes, 
+                 fontsize=10, alpha=0.7, va="top", bbox=dict(boxstyle="round", facecolor="white", alpha=0.8))
+        ax1.legend()
     
-    # Panel 2: Documents with zero comments (if available)
+    # Panel 2: Documents with zero comments (ONLY KNOWN COUNTS)
     ax2 = axes[0, 1]
-    if zero_comment_docs > 0:
-        total_docs = len(fr_df) if fr_csv_path and fr_csv_path.exists() else len(doc_stats)
-        docs_with_comments = total_docs - zero_comment_docs
-        categories = ["Documents\nwith Comments", "Documents\nwith Zero Comments"]
-        counts = [docs_with_comments, zero_comment_docs]
-        colors_bar = [COLOR_PALETTE["Ordinary Citizen"], "#DDE3EA"]
-        
-        bars = ax2.bar(categories, counts, color=colors_bar, alpha=0.8, edgecolor="white", linewidth=2)
-        ax2.set_ylabel("Number of Documents", fontsize=FONT_LABEL, fontweight="bold")
-        ax2.set_title("Comment Participation Rate", fontsize=FONT_TITLE - 2, fontweight="bold")
-        
-        # Add percentages
-        for bar, count in zip(bars, counts):
-            height = bar.get_height()
-            pct = count / total_docs * 100
-            ax2.text(bar.get_x() + bar.get_width()/2., height,
-                    f'{count:,}\n({pct:.1f}%)',
-                    ha='center', va='bottom', fontsize=11, fontweight="bold")
-    else:
-        ax2.text(0.5, 0.5, "Zero-comment data\nnot available", 
-                ha="center", va="center", transform=ax2.transAxes, fontsize=12, alpha=0.5)
-        ax2.set_title("Comment Participation Rate", fontsize=FONT_TITLE - 2, fontweight="bold")
+    # Filter to only documents where we know the comment count (exclude unknown-count docs)
+    fr_stats_known = fr_stats[fr_stats["known_count"]].copy()
+    total_docs_known = len(fr_stats_known)
+    zero_docs = (fr_stats_known["comment_count"] == 0).sum()
+    docs_with_comments = total_docs_known - zero_docs
+    
+    # Count unknown-count docs for annotation
+    unknown_count_docs = (~fr_stats["known_count"]).sum() if "known_count" in fr_stats.columns else 0
+    
+    categories = ["Documents\nwith Comments", "Documents\nwith Zero Comments"]
+    counts = [docs_with_comments, zero_docs]
+    colors_bar = [COLOR_PALETTE["Ordinary Citizen"], "#DDE3EA"]
+    
+    bars = ax2.bar(categories, counts, color=colors_bar, alpha=0.8, edgecolor="white", linewidth=2)
+    ax2.set_ylabel("Number of Documents", fontsize=FONT_LABEL, fontweight="bold")
+    title = "Comment Participation Rate"
+    if unknown_count_docs > 0:
+        title += f"\n({unknown_count_docs:,} docs with unknown counts excluded)"
+    ax2.set_title(title, fontsize=FONT_TITLE - 2, fontweight="bold")
+    
+    # Add percentages (based on known-count docs only)
+    for bar, count in zip(bars, counts):
+        height = bar.get_height()
+        pct = count / total_docs_known * 100 if total_docs_known > 0 else 0
+        ax2.text(bar.get_x() + bar.get_width()/2., height,
+                f'{count:,}\n({pct:.1f}%)',
+                ha='center', va='bottom', fontsize=11, fontweight="bold")
     apply_clean_style(ax2)
     
     # Panel 3: Citizen participation rate by comment volume
+    # Only use documents where we HAVE DATA (sampled or zero comments)
     ax3 = axes[1, 0]
+    
+    valid_stats = fr_stats[fr_stats["has_data"]].copy()
+    
     # Bin documents by comment volume
-    doc_stats["comment_bin"] = pd.cut(doc_stats["total_comments"], 
+    valid_stats["comment_bin"] = pd.cut(valid_stats["comment_count"], 
                                        bins=[0, 1, 5, 10, 50, 100, float('inf')],
-                                       labels=["1", "2-5", "6-10", "11-50", "51-100", "100+"])
-    bin_stats = doc_stats.groupby("comment_bin").agg({
+                                       labels=["1", "2-5", "6-10", "11-50", "51-100", "100+"],
+                                       include_lowest=False) # Exclude 0 from bins (handled in bin 0 if needed, but we start at 1)
+    
+    # Filter out NaN bins (zeros)
+    valid_stats_nonzero = valid_stats[valid_stats["comment_count"] > 0]
+    
+    bin_stats = valid_stats_nonzero.groupby("comment_bin").agg({
         "has_citizens": "mean",
-        "citizen_comments": "mean",
-        "total_comments": "count"
+        "estimated_citizen_count": "mean",
+        "comment_count": "count"
     }).reset_index()
     
     x_pos = np.arange(len(bin_stats))
@@ -762,11 +1057,12 @@ def plot_comment_distribution_roi(df: pd.DataFrame, year: int, outdir: Path, fr_
                 ha='center', va='bottom', fontsize=9, fontweight="bold")
     apply_clean_style(ax3)
     
-    # Panel 4: Cumulative distribution showing concentration
+    # Panel 4: Cumulative distribution showing concentration (Lorenz Curve)
+    # Use FULL UNIVERSE (zeros included, though they don't add volume)
     ax4 = axes[1, 1]
-    sorted_docs = doc_stats.sort_values("total_comments", ascending=False)
+    sorted_docs = fr_stats.sort_values("comment_count", ascending=False)
     sorted_docs["cum_pct_docs"] = np.arange(1, len(sorted_docs) + 1) / len(sorted_docs) * 100
-    sorted_docs["cum_pct_comments"] = sorted_docs["total_comments"].cumsum() / sorted_docs["total_comments"].sum() * 100
+    sorted_docs["cum_pct_comments"] = sorted_docs["comment_count"].cumsum() / sorted_docs["comment_count"].sum() * 100
     
     ax4.plot(sorted_docs["cum_pct_docs"], sorted_docs["cum_pct_comments"], 
             color="#12161A", linewidth=3, alpha=0.8)
@@ -807,10 +1103,12 @@ def plot_comment_distribution_roi(df: pd.DataFrame, year: int, outdir: Path, fr_
 # COMPLEX CONTINUUM PAGE
 # ============================================================================
 
-def plot_compass_with_ribbon(df: pd.DataFrame, year: int, outdir: Path, top_n: int = 12) -> None:
+def plot_compass_with_ribbon(df: pd.DataFrame, year: int, outdir: Path, top_n: Optional[int] = None) -> None:
     """
     Panel A: Compass with weighted median ribbon and IQR band.
     Improved: Add more context about what the ribbon shows, highlight key insights
+    Uses weighted metrics.
+    All agencies are plotted; highlighting scales with total number of agencies.
     """
     df_metrics = compute_agency_metrics(df)
     
@@ -818,7 +1116,7 @@ def plot_compass_with_ribbon(df: pd.DataFrame, year: int, outdir: Path, top_n: i
         print(f"Warning: No agency metrics for ribbon compass ({year})")
         return
     
-    # Compute ribbon
+    # Compute ribbon (uses all agencies)
     ribbon = compute_ribbon_band(df_metrics, n_bins=30)
     
     fig, ax = plt.subplots(figsize=(14, 10))
@@ -864,7 +1162,13 @@ def plot_compass_with_ribbon(df: pd.DataFrame, year: int, outdir: Path, top_n: i
     )
     
     # Highlight top agencies and extremes (distributed across quadrants)
-    top_agencies = df_metrics.nlargest(top_n, "total")
+    # Scale highlighting with total number of agencies
+    total_agencies = len(df_metrics)
+    if top_n is None:
+        top_n_effective = min(20, max(8, int(total_agencies * 0.15)))
+    else:
+        top_n_effective = top_n
+    top_agencies = df_metrics.nlargest(top_n_effective, "total")
     
     # Get representatives from each quadrant
     def get_quadrant(x, y):
@@ -876,10 +1180,12 @@ def plot_compass_with_ribbon(df: pd.DataFrame, year: int, outdir: Path, top_n: i
     df_metrics["quadrant"] = df_metrics.apply(lambda r: get_quadrant(r["X"], r["Y"]), axis=1)
     highlights_list = [top_agencies]
     
+    # Scale per-quadrant highlights with total agencies
+    per_quadrant_n = max(2, min(5, int(total_agencies * 0.04)))
     for q in [1, 2, 3, 4]:
         q_agencies = df_metrics[df_metrics["quadrant"] == q]
         if len(q_agencies) > 0:
-            highlights_list.append(q_agencies.nlargest(2, "total"))
+            highlights_list.append(q_agencies.nlargest(per_quadrant_n, "total"))
     
     highlights = pd.concat(highlights_list).drop_duplicates(subset=["agency"])
     
@@ -969,113 +1275,156 @@ def plot_compass_with_ribbon(df: pd.DataFrame, year: int, outdir: Path, top_n: i
 
 def plot_ranked_stream(df: pd.DataFrame, year: int, outdir: Path) -> None:
     """
-    Panel B: Ranked stream graph showing composition across corporate→grassroots continuum.
-    Improved: Show absolute counts instead of percentages, fix axis overlap
-    """
-    df_metrics = compute_agency_metrics(df)
+    Panel B: Ranked stream graph showing composition across documents sorted by comment volume.
     
-    if df_metrics.empty:
-        print(f"Warning: No agency metrics for stream graph ({year})")
+    X-axis: Number of comments per document (filtering out documents with 0 comments).
+    Shows how comment makeup changes as documents receive more comments.
+    """
+    # Check if document_number is available
+    if "document_number" not in df.columns:
+        print(f"Warning: document_number not available for stream graph ({year})")
         return
     
-    # Sort by X (corporate → grassroots)
-    df_sorted = df_metrics.sort_values("X").reset_index(drop=True)
-    
-    # Compute cumulative volume
-    df_sorted["cum_volume"] = df_sorted["total"].cumsum() / df_sorted["total"].sum()
-    df_sorted["cum_volume_prev"] = df_sorted["cum_volume"].shift(1, fill_value=0)
-    df_sorted["cum_volume_center"] = (df_sorted["cum_volume"] + df_sorted["cum_volume_prev"]) / 2
-    
-    # Prepare absolute counts for each category (more informative than shares)
-    counts_data = []
-    for cat in CATEGORY_ORDER:
-        count_col = f"n_{cat}"
-        if count_col in df_sorted.columns:
-            counts_data.append(df_sorted[count_col].values)
+    # Ensure weight_doc exists for document-level reconstruction
+    if "weight_doc" not in df.columns:
+        if "weight" in df.columns:
+            df["weight_doc"] = df["weight"]
         else:
-            counts_data.append(np.zeros(len(df_sorted)))
+            df["weight_doc"] = 1.0
     
-    counts = np.array(counts_data)
+    # Get true comment count per document
+    if "comment_count" not in df.columns:
+        # Calculate from sampled data using weight_doc
+        doc_counts = df.groupby("document_number")["weight_doc"].sum().rename("comment_count")
+        df = df.merge(doc_counts, on="document_number", how="left")
+    
+    # Filter out documents with 0 comments
+    df = df[df["comment_count"] > 0].copy()
+    
+    if len(df) == 0:
+        print(f"Warning: No documents with comments for stream graph ({year})")
+        return
+    
+    # Calculate document-level metrics
+    # Group by document_number and category, sum weights
+    doc_cat_counts = df.groupby(["document_number", "category"])["weight_doc"].sum().rename("n").reset_index()
+    
+    # Calculate total comments per document
+    doc_totals = doc_cat_counts.groupby("document_number")["n"].sum().rename("total").reset_index()
+    
+    # Merge to get shares
+    doc_metrics = doc_cat_counts.merge(doc_totals, on="document_number", how="left")
+    doc_metrics["share"] = doc_metrics["n"] / doc_metrics["total"].where(doc_metrics["total"] > 0, 1)
+    
+    # Pivot to wide format
+    doc_wide = doc_metrics.pivot(index="document_number", columns="category", values=["share", "n"]).fillna(0.0)
+    doc_wide.columns = ["_".join(col).strip() for col in doc_wide.columns.values]
+    doc_wide = doc_wide.reset_index()
+    
+    # Merge back total and comment_count
+    doc_wide = doc_wide.merge(doc_totals, on="document_number", how="left")
+    doc_wide = doc_wide.merge(df[["document_number", "comment_count"]].drop_duplicates(), on="document_number", how="left")
+    
+    # Ensure all category share columns exist
+    for cat in CATEGORY_ORDER:
+        share_col = f"share_{cat}"
+        if share_col not in doc_wide.columns:
+            doc_wide[share_col] = 0.0
+    
+    # Sort documents by comment count (ascending)
+    doc_sorted = doc_wide.sort_values("comment_count").reset_index(drop=True)
+    
+    # Prepare SHARES (percentages) for each category
+    shares_data = []
+    for cat in CATEGORY_ORDER:
+        share_col = f"share_{cat}"
+        if share_col in doc_sorted.columns:
+            shares_data.append(doc_sorted[share_col].values * 100)  # Convert to %
+        else:
+            shares_data.append(np.zeros(len(doc_sorted)))
+    
+    shares = np.array(shares_data)
     
     # Apply moving average smoothing
-    window_size = max(3, int(len(df_sorted) * 0.07))
+    # Use a window size relative to number of documents
+    window_size = max(3, int(len(doc_sorted) * 0.05))
     if window_size % 2 == 0:
         window_size += 1
     
     from scipy.ndimage import uniform_filter1d
-    counts_smooth = np.array([uniform_filter1d(row, size=window_size, mode="nearest") for row in counts])
+    shares_smooth = np.array([uniform_filter1d(row, size=window_size, mode="nearest") for row in shares])
+    
+    # Normalize again after smoothing to ensure it sums to 100% exactly
+    shares_smooth_sum = shares_smooth.sum(axis=0, keepdims=True)
+    shares_smooth_sum[shares_smooth_sum == 0] = 1
+    shares_norm = shares_smooth / shares_smooth_sum * 100
     
     fig, ax = plt.subplots(figsize=(16, 7))
     
-    # Stacked area plot with absolute counts
+    # Stacked area plot with PERCENTAGES
+    # X-axis is comment_count
     colors = get_category_colors()
     ax.stackplot(
-        df_sorted["cum_volume_center"],
-        *counts_smooth,
+        doc_sorted["comment_count"],
+        *shares_norm,
         labels=CATEGORY_ORDER,
         colors=colors,
         alpha=0.85
     )
     
-    # Mark key transition points (where composition changes significantly)
+    # Mark key transition points
     # Find where citizen share crosses 50%
     citizen_share_col = f"share_Ordinary Citizen"
-    if citizen_share_col in df_sorted.columns:
-        citizen_shares = df_sorted[citizen_share_col]
+    if citizen_share_col in doc_sorted.columns:
+        # Rolling mean to match smooth graph
+        citizen_shares_smooth = pd.Series(doc_sorted[citizen_share_col]).rolling(window_size, center=True).mean()
     else:
-        citizen_shares = pd.Series([0] * len(df_sorted))
+        citizen_shares_smooth = pd.Series([0] * len(doc_sorted))
     
-    if len(citizen_shares) > 0:
-        # Find median point where citizen share becomes dominant
-        median_idx = len(df_sorted) // 2
-        if median_idx < len(df_sorted):
-            x_pos = df_sorted.loc[median_idx, "cum_volume_center"]
-            ax.axvline(x_pos, color="#12161A", linewidth=2, alpha=0.4, linestyle="--", zorder=10)
-            ax.text(
-                x_pos, ax.get_ylim()[1] * 0.95,
-                "Midpoint",
-                rotation=90,
-                fontsize=9,
-                alpha=0.7,
-                ha="right",
-                va="top"
-            )
+    # Find where it crosses 0.5
+    crossings = np.where(np.diff(np.sign(citizen_shares_smooth - 0.5)))[0]
+    if len(crossings) > 0:
+        idx = crossings[0]  # First crossing
+        x_pos = doc_sorted.loc[idx, "comment_count"]
+        ax.axvline(x_pos, color="white", linewidth=2, alpha=0.6, linestyle="--", zorder=10)
+        ax.text(
+            x_pos, 50,
+            "50% Citizen Share",
+            rotation=90,
+            fontsize=9,
+            color="white",
+            fontweight="bold",
+            ha="right",
+            va="center"
+        )
     
-    # Mark top agencies
-    top_3_indices = df_sorted.nlargest(3, "total").index.values
-    for idx in top_3_indices:
-        if idx < len(df_sorted):
-            x_pos = df_sorted.loc[idx, "cum_volume_center"]
-            ax.axvline(x_pos, color="#12161A", linewidth=1, alpha=0.2, linestyle=":")
-            agency_name = str(df_sorted.loc[idx, "agency"])[:18]
-            ax.text(
-                x_pos,
-                ax.get_ylim()[1] * 0.98,
-                agency_name,
-                rotation=45,
-                fontsize=8,
-                alpha=0.6,
-                ha="left",
-                va="bottom"
-            )
+    # Mark key comment count thresholds (e.g., median, quartiles)
+    median_comments = doc_sorted["comment_count"].median()
+    q75_comments = doc_sorted["comment_count"].quantile(0.75)
+    q25_comments = doc_sorted["comment_count"].quantile(0.25)
     
-    # Styling with better spacing
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, None)  # Auto-scale y-axis
-    ax.set_xlabel("Cumulative % of Total Comments (Corporate → Citizen agencies)", 
+    for threshold, label in [(q25_comments, "Q1"), (median_comments, "Median"), (q75_comments, "Q3")]:
+        if threshold > 0:
+            ax.axvline(threshold, color="white", linewidth=1, alpha=0.3, linestyle=":", zorder=9)
+    
+    # Styling
+    ax.set_xscale("symlog", linthresh=1)
+    ax.set_xlim(0, doc_sorted["comment_count"].max() * 1.05)
+    ax.set_ylim(0, 100)
+    ax.set_xlabel("# Comments on a Document (log scale)", 
                    fontsize=FONT_LABEL, fontweight="bold", labelpad=10)
-    ax.set_ylabel("Comment Count", fontsize=FONT_LABEL, fontweight="bold", labelpad=10)
+    ax.set_ylabel("Makeup of Comments (%)", fontsize=FONT_LABEL, fontweight="bold", labelpad=10)
     ax.set_title(
-        f"Comment Volume Across Agency Spectrum ({year})",
+        f"Makeup Evolution by Document Comment Volume ({year})",
         fontsize=FONT_TITLE,
         fontweight="bold",
         pad=25
     )
     
-    # Add subtitle explanation
+    # Add subtitle
     ax.text(
         0.5, 1.02,
-        "Agencies sorted from corporate-dominated (left) to citizen-dominated (right)",
+        "Documents sorted by comment count (excluding documents with 0 comments)",
         transform=ax.transAxes,
         ha="center",
         fontsize=10,
@@ -1095,6 +1444,7 @@ def plot_ranked_stream(df: pd.DataFrame, year: int, outdir: Path) -> None:
 def plot_spotlight_strip(df: pd.DataFrame, year: int, outdir: Path) -> None:
     """
     Panel C: Spotlight strip showing agencies with extreme values.
+    Uses weighted metrics.
     """
     df_metrics = compute_agency_metrics(df)
     
@@ -1148,6 +1498,7 @@ def plot_spotlight_strip(df: pd.DataFrame, year: int, outdir: Path) -> None:
 def plot_continuum_page(df: pd.DataFrame, year: int, outdir: Path) -> None:
     """
     Combined continuum page with all three panels.
+    Uses weighted metrics.
     """
     df_metrics = compute_agency_metrics(df)
     
@@ -1170,10 +1521,13 @@ def plot_continuum_page(df: pd.DataFrame, year: int, outdir: Path) -> None:
     
     ax1.scatter(df_metrics["X"], df_metrics["Y"], s=50, alpha=0.15, color="#5C6670")
     
-    top_12 = df_metrics.nlargest(12, "total")
-    ax1.scatter(top_12["X"], top_12["Y"], s=150, alpha=0.7, color="#9A8153", edgecolors="white", linewidths=2)
+    # Highlight top agencies (scale with total number of agencies)
+    total_agencies = len(df_metrics)
+    top_n_effective = min(20, max(8, int(total_agencies * 0.15)))
+    top_highlighted = df_metrics.nlargest(top_n_effective, "total")
+    ax1.scatter(top_highlighted["X"], top_highlighted["Y"], s=150, alpha=0.7, color="#9A8153", edgecolors="white", linewidths=2)
     
-    for _, row in top_12.iterrows():
+    for _, row in top_highlighted.iterrows():
         ax1.annotate(
             str(row["agency"])[:30],
             (row["X"], row["Y"]),
@@ -1203,7 +1557,7 @@ def plot_continuum_page(df: pd.DataFrame, year: int, outdir: Path) -> None:
     for cat in CATEGORY_ORDER:
         share_col = f"share_{cat}"
         if share_col in df_sorted.columns:
-            shares_data.append(df_sorted[share_col].values)
+            shares_data.append(df_sorted[share_col].values * 100)
         else:
             shares_data.append(np.zeros(len(df_sorted)))
     
@@ -1216,16 +1570,16 @@ def plot_continuum_page(df: pd.DataFrame, year: int, outdir: Path) -> None:
     shares_smooth = np.array([uniform_filter1d(row, size=window_size, mode="nearest") for row in shares])
     shares_smooth_sum = shares_smooth.sum(axis=0, keepdims=True)
     shares_smooth_sum[shares_smooth_sum == 0] = 1
-    shares_norm = shares_smooth / shares_smooth_sum
+    shares_norm = shares_smooth / shares_smooth_sum * 100
     
     colors = get_category_colors()
     ax2.stackplot(df_sorted["cum_volume_center"], *shares_norm, colors=colors, alpha=0.85)
     
     ax2.set_xlim(0, 1)
-    ax2.set_ylim(0, 1)
+    ax2.set_ylim(0, 100)
     ax2.set_xlabel("Cumulative % of Comments (Corporate → Citizen)", fontsize=FONT_LABEL, fontweight="bold")
-    ax2.set_ylabel("Comment Composition", fontsize=FONT_LABEL, fontweight="bold")
-    ax2.set_title("Ranked Stream", fontsize=FONT_TITLE, fontweight="bold")
+    ax2.set_ylabel("Makeup (%)", fontsize=FONT_LABEL, fontweight="bold")
+    ax2.set_title("Ranked Stream (Composition)", fontsize=FONT_TITLE, fontweight="bold")
     apply_clean_style(ax2)
     
     # Panel C: Spotlight (simplified for combined view)
@@ -1248,6 +1602,633 @@ def plot_continuum_page(df: pd.DataFrame, year: int, outdir: Path) -> None:
     plt.savefig(outdir / f"participation_continuum_{year}.pdf", bbox_inches="tight")
     plt.close(fig)
     print(f"[OK] Saved: participation_continuum_{year}.png/.pdf")
+
+
+
+def plot_agency_clustering(df: pd.DataFrame, year: int, outdir: Path, min_comments: int = 50) -> None:
+    """
+    Hierarchical tree showing actual agency structure: Main Agency → Sub-Agency
+    Color-coded by dominant commenter category at each level.
+    Uses weighted metrics.
+    """
+    try:
+        # Use hierarchy metrics (same as Sankey)
+        merged, main_totals, sub_totals = compute_agency_hierarchy_metrics(df)
+        
+        # Filter sub-agencies with enough comments
+        sub_totals_filtered = sub_totals[sub_totals["sub_total"] >= min_comments].copy()
+        if len(sub_totals_filtered) == 0:
+            print(f"Warning: No sub-agencies with >={min_comments} comments for dendrogram ({year})")
+            return
+        
+        # Include all sub-agencies meeting the minimum threshold (no limit)
+        
+        # Merge to get category breakdowns
+        merged_filtered = merged.merge(sub_totals_filtered[["main_agency", "sub_agency"]], on=["main_agency", "sub_agency"], how="inner")
+        
+        # Calculate dominant category for each sub-agency
+        def get_dominant_category(group_data):
+            """Get dominant category and its share."""
+            cat_totals = {}
+            total = group_data["n"].sum()
+            if total == 0:
+                return None, 0.0
+            
+            for cat in CATEGORY_ORDER:
+                cat_total = group_data[group_data["category"] == cat]["n"].sum()
+                cat_totals[cat] = cat_total / total
+            
+            dominant = max(cat_totals.items(), key=lambda x: x[1])
+            return dominant[0], dominant[1]
+        
+        # Sub-agency level colors
+        sub_colors = {}
+        for _, row in sub_totals_filtered.iterrows():
+            main = row["main_agency"]
+            sub_raw = row["sub_agency"]
+            
+            # Handle None/empty sub-agency
+            if pd.notna(sub_raw) and str(sub_raw).strip() != "" and sub_raw != main:
+                sub_data = merged_filtered[
+                    (merged_filtered["main_agency"] == main) & 
+                    (merged_filtered["sub_agency"] == sub_raw)
+                ]
+                sub_key = (main, sub_raw)
+            else:
+                # No sub-agency, use main agency data where sub_agency is None/empty
+                sub_data = merged_filtered[
+                    (merged_filtered["main_agency"] == main) & 
+                    (merged_filtered["sub_agency"].isna() | (merged_filtered["sub_agency"] == "") | (merged_filtered["sub_agency"] == main))
+                ]
+                sub_key = (main, main)
+            
+            dom_cat, dom_share = get_dominant_category(sub_data)
+            sub_colors[sub_key] = (
+                COLOR_PALETTE.get(dom_cat, "#5C6670") if dom_cat else "#5C6670"
+            )
+        
+        # Main agency level colors (aggregate of their sub-agencies)
+        main_colors = {}
+        for main_agency in sub_totals_filtered["main_agency"].unique():
+            main_data = merged_filtered[merged_filtered["main_agency"] == main_agency]
+            dom_cat, dom_share = get_dominant_category(main_data)
+            main_colors[main_agency] = (
+                COLOR_PALETTE.get(dom_cat, "#5C6670") if dom_cat else "#5C6670"
+            )
+        
+        # Build tree structure - store (display_name, original_sub) tuples
+        tree = {}
+        for _, row in sub_totals_filtered.iterrows():
+            main = row["main_agency"]
+            sub_raw = row["sub_agency"]
+            # Use sub_agency if available, otherwise use main_agency as the "sub" (single-level)
+            if pd.notna(sub_raw) and str(sub_raw).strip() != "" and sub_raw != main:
+                sub_display = sub_raw
+                sub_original = sub_raw
+            else:
+                sub_display = main  # No sub-agency, treat main as both
+                sub_original = main
+            if main not in tree:
+                tree[main] = []
+            if (sub_display, sub_original) not in tree[main]:  # Avoid duplicates
+                tree[main].append((sub_display, sub_original))
+        
+        # Sort main agencies by total volume
+        main_volumes = sub_totals_filtered.groupby("main_agency")["sub_total"].sum().sort_values(ascending=False)
+        main_agencies = main_volumes.index.tolist()
+        
+        # Calculate positions
+        fig, ax = plt.subplots(figsize=(20, max(12, len(sub_totals_filtered) * 0.3)))
+        
+        x_root = 0.05
+        x_main = 0.25
+        x_sub = 0.55
+        x_end = 0.95
+        
+        y_positions = {}
+        y_main_positions = {}
+        
+        # First, collect all positions in a list to normalize later
+        raw_y_positions = []
+        raw_main_positions = {}
+        
+        # Position sub-agencies (calculate raw positions first)
+        y = 0.0  # Start at 0 in raw space
+        spacing_between_subs = 1.0  # Base spacing between sub-agencies
+        spacing_between_mains = 2.0  # Extra spacing between main agencies
+        
+        for main_agency in main_agencies:
+            if main_agency not in tree:
+                continue
+            
+            main_y_start = y
+            sub_agencies = tree[main_agency]
+            
+            for sub_display, sub_original in sub_agencies:
+                raw_y_positions.append((main_agency, sub_display, y))
+                y_positions[(main_agency, sub_display)] = y
+                y += spacing_between_subs
+            
+            main_y_end = y - spacing_between_subs
+            raw_main_positions[main_agency] = (main_y_start + main_y_end) / 2
+            y_main_positions[main_agency] = (main_y_start + main_y_end) / 2
+            
+            y += spacing_between_mains  # Extra spacing between main agencies
+        
+        # Normalize all positions to fit within [0.05, 0.95] range
+        if len(raw_y_positions) > 0:
+            min_y = min(pos[2] for pos in raw_y_positions)
+            max_y = max(pos[2] for pos in raw_y_positions)
+            if max_y > min_y:
+                y_range = max_y - min_y
+                y_scale = 0.9 / y_range  # Scale to use 90% of vertical space
+                y_offset = 0.05  # Start at 5% from bottom
+                
+                # Normalize sub-agency positions
+                for main_agency, sub_display, raw_y in raw_y_positions:
+                    y_positions[(main_agency, sub_display)] = y_offset + (raw_y - min_y) * y_scale
+                
+                # Normalize main agency positions
+                for main_agency in y_main_positions:
+                    raw_main_y = raw_main_positions[main_agency]
+                    y_main_positions[main_agency] = y_offset + (raw_main_y - min_y) * y_scale
+            else:
+                # All positions are the same, center them
+                center_y = 0.5
+                for main_agency, sub_display, _ in raw_y_positions:
+                    y_positions[(main_agency, sub_display)] = center_y
+                for main_agency in y_main_positions:
+                    y_main_positions[main_agency] = center_y
+        
+        # Draw connections and nodes
+        # Root node
+        ax.scatter([x_root], [0.5], s=500, color="#12161A", zorder=10, edgecolors="white", linewidths=2)
+        ax.text(x_root, 0.5, "All\nComments", ha="center", va="center", fontsize=10, fontweight="bold", color="white", zorder=11)
+        
+        # Main agency nodes and connections
+        for main_agency in main_agencies:
+            if main_agency not in tree:
+                continue
+            
+            main_y = y_main_positions[main_agency]
+            color = main_colors.get(main_agency, "#5C6670")
+            
+            # Connection from root
+            ax.plot([x_root, x_main], [0.5, main_y], color="#5C6670", linewidth=2, alpha=0.3, zorder=1)
+            
+            # Main agency node
+            ax.scatter([x_main], [main_y], s=300, color=color, zorder=10, edgecolors="white", linewidths=2)
+            ax.text(x_main, main_y, main_agency[:30], ha="center", va="center", fontsize=8, fontweight="bold", 
+                   color="white", zorder=11, bbox=dict(boxstyle="round,pad=0.3", facecolor=color, alpha=0.8))
+            
+            # Sub-agency nodes and connections
+            for sub_display, sub_original in tree[main_agency]:
+                sub_y = y_positions[(main_agency, sub_display)]
+                # Use original sub_agency for color lookup
+                sub_key = (main_agency, sub_original)
+                sub_color = sub_colors.get(sub_key, "#5C6670")
+                
+                # Connection from main to sub
+                ax.plot([x_main, x_sub], [main_y, sub_y], color=sub_color, linewidth=1.5, alpha=0.5, zorder=2)
+                
+                # Sub-agency node
+                sub_label = sub_display if sub_display != main_agency else f"{main_agency} (no sub)"
+                ax.scatter([x_sub], [sub_y], s=200, color=sub_color, zorder=9, edgecolors="white", linewidths=1.5)
+                ax.text(x_sub, sub_y, sub_label[:25], ha="left", va="center", fontsize=7,
+                       bbox=dict(boxstyle="round,pad=0.2", facecolor=sub_color, alpha=0.7, edgecolor="white", linewidth=0.5))
+        
+        # Legend for colors
+        legend_elements = [mpatches.Patch(facecolor=COLOR_PALETTE[cat], label=cat[:30]) for cat in CATEGORY_ORDER]
+        ax.legend(handles=legend_elements, loc="upper right", fontsize=8, framealpha=0.9)
+        
+        ax.set_xlim(0, 1)
+        ax.set_ylim(0, 1)
+        ax.axis("off")
+        ax.set_title(f"Agency Hierarchy: Main → Sub-Agency ({year})\nColor-coded by dominant commenter category", 
+                    fontsize=FONT_TITLE, fontweight="bold", pad=20)
+        
+        plt.tight_layout()
+        fig.savefig(outdir / f"agency_clustering_dendrogram_{year}.png", dpi=300, bbox_inches="tight")
+        plt.close(fig)
+        print(f"[OK] Saved: agency_clustering_dendrogram_{year}.png")
+    except Exception as e:
+        print(f"Error generating dendrogram ({year}): {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def compute_agency_hierarchy_metrics(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Calculate metrics with main_agency and sub_agency hierarchy.
+    Uses weighted sums.
+    """
+    # Ensure hierarchy columns exist
+    if "main_agency" not in df.columns or "sub_agency" not in df.columns:
+        # Parse if not already done
+        parsed = df["agency"].apply(parse_agency_hierarchy)
+        df["main_agency"] = [p[0] for p in parsed]
+        df["sub_agency"] = [p[1] for p in parsed]
+    
+    if "weight" not in df.columns:
+        df["weight"] = 1.0
+        
+    # Group by main_agency, sub_agency, and category
+    grp = df.groupby(["main_agency", "sub_agency", "category"])["weight"].sum().rename("n").reset_index()
+    
+    # Calculate totals at sub-agency level
+    sub_totals = grp.groupby(["main_agency", "sub_agency"])["n"].sum().rename("sub_total").reset_index()
+    merged = grp.merge(sub_totals, on=["main_agency", "sub_agency"], how="left")
+    merged["share"] = merged["n"] / merged["sub_total"].where(merged["sub_total"] > 0, 1)
+    
+    # Calculate main agency totals
+    main_totals = merged.groupby("main_agency")["n"].sum().rename("main_total").reset_index()
+    
+    return merged, main_totals, sub_totals
+
+
+def plot_sankey_agency_category(df: pd.DataFrame, year: int, outdir: Path, min_agency_comments: int = 100) -> None:
+    """
+    Sankey diagram showing flow: Comments -> Main Agency -> Sub-Agency -> Category
+    Width of flows proportional to comment volume.
+    Creates interactive HTML version only.
+    Uses weighted volume.
+    """
+    try:
+        import plotly.graph_objects as go
+    except ImportError:
+        print("Warning: plotly not installed")
+        return
+    
+    # Compute hierarchy metrics
+    merged, main_totals, sub_totals = compute_agency_hierarchy_metrics(df)
+    
+    # Filter by minimum comments at sub-agency level
+    sub_totals_filtered = sub_totals[sub_totals["sub_total"] >= min_agency_comments].copy()
+    if len(sub_totals_filtered) == 0:
+        return
+    
+    # Include all sub-agencies meeting the minimum threshold (no limit)
+    
+    # Merge back to get category breakdowns
+    merged_filtered = merged.merge(sub_totals_filtered[["main_agency", "sub_agency"]], on=["main_agency", "sub_agency"], how="inner")
+    
+    # Build node structure: [All Comments, Main Agencies..., Sub-Agencies..., Categories...]
+    main_agencies = sorted(sub_totals_filtered["main_agency"].unique())
+    sub_agencies_list = []
+    for _, row in sub_totals_filtered.iterrows():
+        # Use sub_agency if available, otherwise use main_agency
+        sub_name = row["sub_agency"] if pd.notna(row["sub_agency"]) and str(row["sub_agency"]).strip() != "" else row["main_agency"]
+        sub_agencies_list.append((row["main_agency"], sub_name))
+    
+    node_labels = ["All Comments"]
+    node_labels.extend(main_agencies)
+    node_labels.extend([sub[1] for sub in sub_agencies_list])
+    node_labels.extend(CATEGORY_ORDER)
+    
+    # Node indices
+    source_idx = 0
+    main_start = 1
+    sub_start = main_start + len(main_agencies)
+    cat_start = sub_start + len(sub_agencies_list)
+    
+    # Build links
+    links_source = []
+    links_target = []
+    links_value = []
+    links_color = []
+    
+    cat_colors = get_category_colors()
+    cat_color_map = {cat: color for cat, color in zip(CATEGORY_ORDER, cat_colors)}
+    
+    def hex_to_rgba(hex_color, alpha=0.6):
+        hex_color = hex_color.lstrip('#')
+        r = int(hex_color[0:2], 16)
+        g = int(hex_color[2:4], 16)
+        b = int(hex_color[4:6], 16)
+        return f"rgba({r},{g},{b},{alpha})"
+    
+    # Flow: All Comments -> Main Agencies
+    main_totals_dict = sub_totals_filtered.groupby("main_agency")["sub_total"].sum().to_dict()
+    for main_agency in main_agencies:
+        main_idx = main_start + main_agencies.index(main_agency)
+        links_source.append(source_idx)
+        links_target.append(main_idx)
+        links_value.append(int(main_totals_dict.get(main_agency, 0)))
+        links_color.append("rgba(92, 102, 112, 0.4)")
+    
+    # Flow: Main Agencies -> Sub-Agencies
+    for idx, (_, row) in enumerate(sub_totals_filtered.iterrows()):
+        main_idx = main_start + main_agencies.index(row["main_agency"])
+        sub_idx = sub_start + idx
+        links_source.append(main_idx)
+        links_target.append(sub_idx)
+        links_value.append(int(row["sub_total"]))
+        links_color.append("rgba(92, 102, 112, 0.5)")
+    
+    # Flow: Sub-Agencies -> Categories
+    for idx, (_, row) in enumerate(sub_totals_filtered.iterrows()):
+        sub_idx = sub_start + idx
+        # Handle None sub_agency properly
+        if pd.notna(row["sub_agency"]) and str(row["sub_agency"]).strip() != "":
+            sub_data = merged_filtered[
+                (merged_filtered["main_agency"] == row["main_agency"]) & 
+                (merged_filtered["sub_agency"] == row["sub_agency"])
+            ]
+        else:
+            # No sub-agency, match by main_agency only where sub_agency is also None/empty
+            sub_data = merged_filtered[
+                (merged_filtered["main_agency"] == row["main_agency"]) & 
+                (merged_filtered["sub_agency"].isna() | (merged_filtered["sub_agency"] == ""))
+            ]
+        for _, cat_row in sub_data.iterrows():
+            cat = cat_row["category"]
+            cat_idx = cat_start + CATEGORY_ORDER.index(cat)
+            links_source.append(sub_idx)
+            links_target.append(cat_idx)
+            links_value.append(int(cat_row["n"]))
+            links_color.append(hex_to_rgba(cat_color_map[cat], alpha=0.7))
+    
+    # Node colors
+    source_color = "#12161A"
+    main_colors = ["#5C6670"] * len(main_agencies)
+    sub_colors = ["#8A9399"] * len(sub_agencies_list)
+    node_colors = [source_color] + main_colors + sub_colors + cat_colors
+    
+    # Create Sankey diagram
+    fig = go.Figure(data=[go.Sankey(
+        arrangement='snap',
+        node=dict(
+            pad=30,
+            thickness=35,
+            line=dict(color="white", width=3),
+            label=node_labels,
+            color=node_colors,
+        ),
+        link=dict(
+            source=links_source,
+            target=links_target,
+            value=links_value,
+            color=links_color,
+            line=dict(color="rgba(0,0,0,0.2)", width=1)
+        )
+    )])
+    
+    fig.update_layout(
+        title=dict(
+            text=f"Comment Flow: Main Agency → Sub-Agency → Categories ({year})",
+            font=dict(size=22, family="Arial, sans-serif", color="#12161A"),
+            x=0.5,
+            xanchor='center',
+            pad=dict(t=25, b=15)
+        ),
+        font=dict(family="Arial, sans-serif", size=12, color="#5C6670"),
+        height=max(1000, len(sub_agencies_list) * 40),
+        paper_bgcolor="#FAFAFA",
+        plot_bgcolor="#FAFAFA",
+        margin=dict(l=30, r=30, t=120, b=30)
+    )
+    
+    # Save as HTML only
+    html_path = outdir / f"sankey_agency_category_{year}.html"
+    fig.write_html(str(html_path))
+    print(f"[OK] Saved: sankey_agency_category_{year}.html")
+
+
+def plot_sankey_agency_category_matplotlib(df: pd.DataFrame, year: int, outdir: Path, min_agency_comments: int = 100) -> None:
+    """
+    Fallback matplotlib-based Sankey using custom drawing.
+    Shows Comments -> Agency -> Category with width proportional to volume.
+    Uses weighted volume.
+    """
+    df_metrics = compute_agency_metrics(df)
+    
+    # Filter agencies with sufficient volume
+    df_filtered = df_metrics[df_metrics["total"] >= min_agency_comments].copy()
+    if len(df_filtered) == 0:
+        print(f"Warning: No agencies with >={min_agency_comments} comments for Sankey")
+        return
+    
+    # Include all agencies meeting the minimum threshold (no limit)
+    df_filtered = df_filtered.sort_values("total", ascending=True).copy()
+    
+    # Calculate positions
+    n_agencies = len(df_filtered)
+    n_categories = len(CATEGORY_ORDER)
+    
+    fig, ax = plt.subplots(figsize=(16, max(10, n_agencies * 0.4)))
+    
+    # Column positions
+    x_left = 0.1   # All Comments
+    x_mid = 0.4    # Agencies
+    x_right = 0.7  # Categories
+    
+    # Calculate cumulative positions for agencies (sorted by volume, bottom to top)
+    agency_y_positions = {}
+    agency_heights = {}
+    total_height = 0
+    for idx, (_, row) in enumerate(df_filtered.iterrows()):
+        height = row["total"] / df_filtered["total"].sum()
+        agency_y_positions[idx] = total_height + height / 2
+        agency_heights[idx] = height
+        total_height += height
+    
+    # Scale to fit plot
+    y_scale = 0.8 / total_height if total_height > 0 else 1
+    for idx in agency_y_positions:
+        agency_y_positions[idx] *= y_scale
+        agency_heights[idx] *= y_scale
+    
+    # Calculate cumulative positions for categories
+    cat_totals = {}
+    for cat in CATEGORY_ORDER:
+        count_col = f"n_{cat}"
+        cat_totals[cat] = df_filtered[count_col].sum() if count_col in df_filtered.columns else 0
+    
+    total_cat_volume = sum(cat_totals.values())
+    cat_y_positions = {}
+    cat_heights = {}
+    y_pos = 0
+    for cat in CATEGORY_ORDER:
+        height = cat_totals[cat] / total_cat_volume if total_cat_volume > 0 else 0
+        cat_y_positions[cat] = y_pos + height / 2
+        cat_heights[cat] = height
+        y_pos += height
+    
+    # Scale categories
+    cat_y_scale = 0.8 / y_pos if y_pos > 0 else 1
+    for cat in cat_y_positions:
+        cat_y_positions[cat] *= cat_y_scale
+        cat_heights[cat] *= cat_y_scale
+    
+    # Draw flows from All Comments to Agencies
+    colors = get_category_colors()
+    for idx, (_, row) in enumerate(df_filtered.iterrows()):
+        y_center = agency_y_positions[idx]
+        height = agency_heights[idx]
+        
+        # Draw rectangle for agency
+        rect = mpatches.FancyBboxPatch(
+            (x_mid - 0.02, y_center - height/2),
+            0.04, height,
+            boxstyle="round,pad=0.001",
+            facecolor="#5C6670",
+            edgecolor="white",
+            linewidth=0.5
+        )
+        ax.add_patch(rect)
+        
+        # Label agency
+        ax.text(x_mid, y_center, str(row["agency"])[:25], 
+               ha="center", va="center", fontsize=7, rotation=0,
+               bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8, edgecolor="none"))
+        
+        # Flow from All Comments to Agency
+        ax.plot([x_left + 0.05, x_mid - 0.02], [y_center, y_center], 
+               color="#5C6670", linewidth=max(1, height * 200), alpha=0.3, zorder=0)
+    
+    # Color mapping for categories
+    cat_color_map = {cat: color for cat, color in zip(CATEGORY_ORDER, colors)}
+    
+    # Draw flows from Agencies to Categories
+    for idx, (_, row) in enumerate(df_filtered.iterrows()):
+        agency_y = agency_y_positions[idx]
+        
+        # Calculate cumulative flow for this agency
+        y_offset = 0
+        for cat in CATEGORY_ORDER:
+            count_col = f"n_{cat}"
+            if count_col in row and row[count_col] > 0:
+                cat_y = cat_y_positions[cat]
+                flow_width = row[count_col] / row["total"] if row["total"] > 0 else 0
+                flow_height = agency_heights[idx] * flow_width
+                
+                # Draw curved flow
+                # Simple bezier-like curve
+                t = np.linspace(0, 1, 50)
+                x_curve = x_mid + 0.02 + (x_right - x_mid - 0.04) * t
+                y_curve = agency_y + (cat_y - agency_y) * (3*t**2 - 2*t**3)
+                
+                ax.plot(x_curve, y_curve, 
+                       color=cat_color_map[cat], 
+                       linewidth=max(0.5, flow_height * 300), 
+                       alpha=0.6, zorder=1)
+    
+    # Draw category rectangles
+    for cat in CATEGORY_ORDER:
+        y_center = cat_y_positions[cat]
+        height = cat_heights[cat]
+        if height > 0:
+            rect = mpatches.FancyBboxPatch(
+                (x_right - 0.02, y_center - height/2),
+                0.04, height,
+                boxstyle="round,pad=0.001",
+                facecolor=cat_color_map[cat],
+                edgecolor="white",
+                linewidth=0.5
+            )
+            ax.add_patch(rect)
+            ax.text(x_right, y_center, cat[:20], 
+                   ha="center", va="center", fontsize=8, rotation=0,
+                   bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.9, edgecolor="none"))
+    
+    # Draw "All Comments" source
+    ax.add_patch(mpatches.FancyBboxPatch(
+        (x_left - 0.02, 0.1),
+        0.04, 0.8,
+        boxstyle="round,pad=0.001",
+        facecolor="#12161A",
+        edgecolor="white",
+        linewidth=1
+    ))
+    ax.text(x_left, 0.5, "All\nComments", ha="center", va="center", 
+           fontsize=12, fontweight="bold", color="white")
+    
+    ax.set_xlim(0, 1)
+    ax.set_ylim(0, 1)
+    ax.axis("off")
+    ax.set_title(f"Comment Flow: Agencies → Categories ({year})\nAgencies with >{min_agency_comments} comments", 
+                fontsize=FONT_TITLE, fontweight="bold", pad=20)
+    
+    plt.tight_layout()
+    fig.savefig(outdir / f"sankey_agency_category_{year}.png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[OK] Saved: sankey_agency_category_{year}.png (matplotlib)")
+
+
+def generate_narrative_summary(df: pd.DataFrame, fr_csv_path: Optional[Path], year: int) -> None:
+    """
+    Print narrative stats for the policy brief.
+    Updated to report weighted statistics.
+    """
+    print("\n" + "="*60)
+    print(f"NARRATIVE SUMMARY ({year})")
+    print("="*60)
+    
+    # 1. Participation gap
+    # Raw counts
+    n_comments_raw = len(df)
+    
+    # Weighted counts
+    if "weight" not in df.columns:
+        df["weight"] = 1.0
+        
+    n_comments_weighted = df["weight"].sum()
+    
+    n_citizens_weighted = df[df["category"] == "Ordinary Citizen"]["weight"].sum()
+    pct_citizen = n_citizens_weighted / n_comments_weighted * 100 if n_comments_weighted > 0 else 0
+    
+    print(f"Total Comments Analyzed (sample size): {n_comments_raw:,}")
+    print(f"Estimated Population Volume (weighted): {n_comments_weighted:,.0f}")
+    print(f"Ordinary Citizen Comments (weighted): {n_citizens_weighted:,.0f} ({pct_citizen:.1f}%)")
+    
+    # 2. Zero comment docs and Concentration
+    if fr_csv_path and fr_csv_path.exists():
+        try:
+            fr_df = pd.read_csv(fr_csv_path)
+            total_docs = len(fr_df)
+            if "comment_count" in fr_df.columns:
+                # Filter to only documents where we know the comment count
+                # (exclude non-regs.gov docs with unknown counts)
+                if "count_source" in fr_df.columns:
+                    fr_df_known = fr_df[fr_df["count_source"] != "unknown"].copy()
+                    unknown_count_docs = (fr_df["count_source"] == "unknown").sum()
+                else:
+                    fr_df_known = fr_df.copy()
+                    unknown_count_docs = 0
+                
+                total_docs_known = len(fr_df_known)
+                zero_docs = (fr_df_known["comment_count"] == 0).sum()
+                pct_zero = zero_docs / total_docs_known * 100 if total_docs_known > 0 else 0
+                
+                print(f"Total Documents (Federal Register): {total_docs:,}")
+                if unknown_count_docs > 0:
+                    print(f"  ({unknown_count_docs:,} docs with unknown counts excluded from stats)")
+                print(f"Documents with 0 comments (known counts only): {zero_docs:,} ({pct_zero:.1f}%)")
+                
+                # Urgency / Attention
+                # Top 1% of documents capture X% of comments
+                top_1_pct_n = max(1, int(np.ceil(total_docs * 0.01)))
+                top_docs = fr_df.nlargest(top_1_pct_n, "comment_count")
+                top_vol = top_docs["comment_count"].sum()
+                total_vol = fr_df["comment_count"].sum()
+                pct_captured = top_vol / total_vol * 100 if total_vol > 0 else 0
+                
+                print(f"\nConcentration of Attention:")
+                print(f"- Top 1% of documents ({top_1_pct_n:,}) capture {pct_captured:.1f}% of all comments.")
+                print(f"- {pct_zero:.1f}% of documents received zero public attention.")
+                
+                # Agency scrutiny
+                if "agency_acronym" in fr_df.columns:
+                    agency_grp = fr_df.groupby("agency_acronym")["comment_count"].sum().sort_values()
+                    zero_comment_agencies = (agency_grp == 0).sum()
+                    print(f"- {zero_comment_agencies} agencies received 0 comments total across all their documents.")
+            
+        except Exception as e:
+            print(f"Error calculating document stats: {e}")
+    else:
+        print("(Federal Register metadata CSV not found; cannot calculate zero-comment stats)")
+        
+    print("="*60 + "\n")
 
 
 # ============================================================================
@@ -1300,7 +2281,7 @@ def main() -> None:
         if args.makeup is None:
             print("ERROR: Could not find makeup CSV. Please specify --makeup")
             return
-
+    
     makeup_path = Path(args.makeup)
     if not makeup_path.exists():
         print(f"ERROR: {makeup_path} not found")
@@ -1364,11 +2345,21 @@ def main() -> None:
     df = deduplicate_comments(df)
     df = explode_agencies(df)
     
+    # NEW: Calculate Weights to reverse sampling bias
+    print("Calculating post-hoc weights...")
+    df = calculate_weights(df, fr_csv_path)
+    
     print(f"After preprocessing: {len(df):,} rows, {df['agency'].nunique()} agencies")
+    
+    # Generate narrative summary
+    generate_narrative_summary(df, fr_csv_path, args.year)
     
     # Generate visualizations
     generate_simple = not args.continuum_only
     generate_continuum = not args.simple_only
+    
+    # Plot weight distribution
+    plot_weight_distribution(df, outdir)
     
     if generate_simple:
         print("\n" + "="*60)
@@ -1389,6 +2380,8 @@ def main() -> None:
         plot_compass_with_ribbon(df, args.year, outdir)
         plot_ranked_stream(df, args.year, outdir)
         plot_spotlight_strip(df, args.year, outdir)
+        plot_agency_clustering(df, args.year, outdir)
+        plot_sankey_agency_category(df, args.year, outdir)
         plot_continuum_page(df, args.year, outdir)
     
     print("\n" + "="*60)
