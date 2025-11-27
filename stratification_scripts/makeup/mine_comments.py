@@ -34,6 +34,58 @@ REGS_COMMENT_DETAIL_URL = "https://api.regulations.gov/v4/comments/{commentId}"
 FR_DOC_DETAIL_URL = "https://www.federalregister.gov/api/v1/documents/{document_number}.json"
 
 
+def sanitize_utf8(text: Any) -> Optional[str]:
+    """Sanitize text to remove invalid UTF-8 characters (surrogates, etc.).
+    
+    Args:
+        text: Input text (str, bytes, or None)
+    
+    Returns:
+        Sanitized UTF-8 string or None if input is None/empty
+    """
+    if text is None:
+        return None
+    
+    if isinstance(text, bytes):
+        try:
+            text = text.decode('utf-8', errors='replace')
+        except Exception:
+            return None
+    
+    if not isinstance(text, str):
+        text = str(text)
+    
+    if not text:
+        return None
+    
+    # Remove surrogate characters that can't be encoded to UTF-8
+    # Surrogates are in the range U+D800 to U+DFFF
+    # We need to check each character's code point
+    sanitized_chars = []
+    for char in text:
+        code_point = ord(char)
+        # Check if it's a surrogate (U+D800 to U+DFFF)
+        if 0xD800 <= code_point <= 0xDFFF:
+            continue  # Skip surrogate characters
+        sanitized_chars.append(char)
+    
+    sanitized = ''.join(sanitized_chars)
+    
+    if not sanitized:
+        return None
+    
+    # Final check: ensure it can be encoded to UTF-8
+    try:
+        sanitized.encode('utf-8')
+        return sanitized
+    except (UnicodeEncodeError, UnicodeError):
+        # Last resort: use error handling
+        try:
+            return sanitized.encode('utf-8', errors='replace').decode('utf-8', errors='replace') or None
+        except Exception:
+            return None
+
+
 @dataclass
 class RegsThrottle:
     """Rate limiter for Regulations.gov API calls."""
@@ -580,7 +632,7 @@ def download_and_extract_pdf_text(
                     text_parts.append(page_text)
             
             text = "\n\n".join(text_parts).strip()
-            return text if text else None
+            return sanitize_utf8(text) if text else None
             
         except Exception as pypdf_error:
             # Fall back to PyMuPDF if pypdf fails
@@ -772,14 +824,14 @@ def extract_comment_fields_from_list(item: dict) -> Dict[str, Any]:
     needs_detail = (text_length == 0) or (has_attachments and text_length < 3000)
     
     return {
-        "comment_id": comment_id,
-        "comment_text": str(comment_text or ""),
-        "first_name": first_name,
-        "last_name": last_name,
-        "organization": organization,
-        "submitter_type": submitter_type,
-        "posted_date": posted_date,
-        "receive_date": receive_date,
+        "comment_id": sanitize_utf8(comment_id),
+        "comment_text": sanitize_utf8(comment_text),
+        "first_name": sanitize_utf8(first_name),
+        "last_name": sanitize_utf8(last_name),
+        "organization": sanitize_utf8(organization),
+        "submitter_type": sanitize_utf8(submitter_type),
+        "posted_date": posted_date,  # Dates are typically safe
+        "receive_date": receive_date,  # Dates are typically safe
         "has_attachments": has_attachments,
         "needs_detail_fetch": needs_detail,
         "_list_payload": item,  # Cache for later use
@@ -894,31 +946,32 @@ def extract_comment_fields_from_detail(
     
     attachment_formats_str = ",".join(set(attachment_formats)) if attachment_formats else None
     attachment_text = "\n\n---\n\n".join(attachment_texts) if attachment_texts else None
+    attachment_text = sanitize_utf8(attachment_text)  # Sanitize combined text
     
     # Other metadata
     duplicate_comments = attrs.get("numItemsRecieved") or attrs.get("duplicateComments")
     page_count = attrs.get("pageCount")
     
     return {
-        "comment_id": comment_id,
-        "comment_text": str(comment_text or ""),
-        "posted_date": posted_date,
-        "receive_date": receive_date,
-        "postmark_date": postmark_date,
-        "first_name": first_name,
-        "last_name": last_name,
-        "organization": organization,
-        "submitter_type": submitter_type,
-        "city": city,
-        "state_province_region": state_province_region,
-        "country": country,
-        "zip": zip_code,
-        "gov_agency": gov_agency,
-        "gov_agency_type": gov_agency_type,
+        "comment_id": sanitize_utf8(comment_id),
+        "comment_text": sanitize_utf8(comment_text),
+        "posted_date": posted_date,  # Dates are typically safe
+        "receive_date": receive_date,  # Dates are typically safe
+        "postmark_date": postmark_date,  # Dates are typically safe
+        "first_name": sanitize_utf8(first_name),
+        "last_name": sanitize_utf8(last_name),
+        "organization": sanitize_utf8(organization),
+        "submitter_type": sanitize_utf8(submitter_type),
+        "city": sanitize_utf8(city),
+        "state_province_region": sanitize_utf8(state_province_region),
+        "country": sanitize_utf8(country),
+        "zip": sanitize_utf8(zip_code),
+        "gov_agency": sanitize_utf8(gov_agency),
+        "gov_agency_type": sanitize_utf8(gov_agency_type),
         "has_attachments": has_attachments,
         "attachment_count": attachment_count,
-        "attachment_formats": attachment_formats_str,
-        "attachment_text": attachment_text,
+        "attachment_formats": sanitize_utf8(attachment_formats_str),
+        "attachment_text": attachment_text,  # Already sanitized above
         "duplicate_comments": duplicate_comments,
         "page_count": page_count,
     }
@@ -1065,7 +1118,7 @@ def fetch_comment_details_for_ids(
         if not fields or not fields.get("comment_id"):
             continue
 
-        fields["document_number"] = doc_number
+        fields["document_number"] = sanitize_utf8(doc_number)
         records.append(fields)
         existing_ids.add(comment_id)
 
@@ -1255,13 +1308,13 @@ def run_stratified_pipeline(
         if list_fields and not list_fields.get("needs_detail_fetch", True):
             # Use list payload only - no detail call needed!
             fields = {
-                "document_number": doc_number,
-                "comment_id": list_fields["comment_id"],
-                "comment_text": list_fields["comment_text"],
-                "first_name": list_fields.get("first_name"),
-                "last_name": list_fields.get("last_name"),
-                "organization": list_fields.get("organization"),
-                "submitter_type": list_fields.get("submitter_type"),
+                "document_number": sanitize_utf8(doc_number),
+                "comment_id": list_fields.get("comment_id"),  # Already sanitized in extract_comment_fields_from_list
+                "comment_text": list_fields.get("comment_text"),  # Already sanitized
+                "first_name": list_fields.get("first_name"),  # Already sanitized
+                "last_name": list_fields.get("last_name"),  # Already sanitized
+                "organization": list_fields.get("organization"),  # Already sanitized
+                "submitter_type": list_fields.get("submitter_type"),  # Already sanitized
                 "posted_date": list_fields.get("posted_date"),
                 "receive_date": list_fields.get("receive_date"),
                 "has_attachments": list_fields.get("has_attachments", False),

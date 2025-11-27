@@ -20,7 +20,7 @@ echo "=========================================="
 echo ""
 
 # Array of years to process
-YEARS=(2016 2017 2018 2019 2020 2021 2022 2023 2024 2025)
+YEARS=(2017 2018 2019 2020 2021 2022 2023 2024 2025)
 
 # Process each year
 for YEAR in "${YEARS[@]}"; do
