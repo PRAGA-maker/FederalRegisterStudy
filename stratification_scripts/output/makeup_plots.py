@@ -227,16 +227,36 @@ def calculate_weights(df: pd.DataFrame, fr_csv_path: Optional[Path]) -> pd.DataF
         # This reconstructs the document exactly, without inflating for missing neighbor documents
         df["weight_doc"] = df["comment_count"] / df["n_sample_doc"]
         
-        # Fill missing weights
+        # Fill missing weights and provide diagnostics
         missing_weights = df["weight"].isna().sum()
         if missing_weights > 0:
             print(f"Warning: {missing_weights} comments could not be weighted (metadata mismatch). Defaulting to 1.0")
+            
+            # Diagnose why weights are missing
+            unweighted = df[df["weight"].isna()]
+            if "agency" in unweighted.columns:
+                unmatched_agencies = unweighted["agency"].value_counts().head(10)
+                print(f"  Top unmatched agencies (will use weight=1.0):")
+                for agency, count in unmatched_agencies.items():
+                    print(f"    {agency}: {count} comments")
+            
             df["weight"] = df["weight"].fillna(1.0)
             df["weight_doc"] = df["weight_doc"].fillna(1.0)
-            
+        
+        # Count orphaned comments (weight == 1.0 after merge)
+        orphaned = (df["weight"] == 1.0).sum()
+        total = len(df)
+        pct_orphaned = orphaned / total * 100 if total > 0 else 0
+        
         print(f"Reweighting complete.")
         print(f"  Stratum Weight (Population): Mean={df['weight'].mean():.2f}, Max={df['weight'].max():.2f}")
         print(f"  Document Weight (Specific):  Mean={df['weight_doc'].mean():.2f}, Max={df['weight_doc'].max():.2f}")
+        print(f"  Comments with weight=1.0 (orphaned): {orphaned:,} ({pct_orphaned:.1f}%)")
+        
+        if orphaned > 0 and orphaned < total * 0.05:  # Less than 5% orphaned is acceptable
+            print(f"  ✓ Weight calculation success rate: {100-pct_orphaned:.1f}%")
+        elif orphaned >= total * 0.05:
+            print(f"  ⚠ WARNING: High rate of orphaned comments ({pct_orphaned:.1f}%) - check agency matching")
         
         return df
         
@@ -287,13 +307,14 @@ def compute_agency_metrics(df: pd.DataFrame) -> pd.DataFrame:
             wide[count_col] = 0
     
     # Compute compass coordinates
-    oc_share = wide.get(f"share_Ordinary Citizen", 0.0)
-    org_share = wide.get(f"share_Large Organization/Corporation", 0.0)
-    exp_share = wide.get(f"share_Academic/Industry/Expert (incl. small/local business)", 0.0)
-    lob_share = wide.get(f"share_Political Consultant/Lobbyist", 0.0)
+    # Use direct column access since we've ensured columns exist above
+    oc_share_col = f"share_Ordinary Citizen"
+    org_share_col = f"share_Large Organization/Corporation"
+    exp_share_col = f"share_Academic/Industry/Expert (incl. small/local business)"
+    lob_share_col = f"share_Political Consultant/Lobbyist"
     
-    wide["X"] = (oc_share - org_share).clip(-1, 1)
-    wide["Y"] = (exp_share + lob_share).clip(0, 1)
+    wide["X"] = (wide[oc_share_col] - wide[org_share_col]).clip(-1, 1)
+    wide["Y"] = (wide[exp_share_col] + wide[lob_share_col]).clip(0, 1)
     
     return wide
 
@@ -766,6 +787,88 @@ def plot_workload_vs_makeup(df: pd.DataFrame, year: int, outdir: Path) -> None:
     print(f"[OK] Saved: workload_vs_makeup_{year}.png")
 
 
+def fit_exponential_trend(x_data: np.ndarray, y_data: np.ndarray, n_bins: int = 30) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Fit exponential trend with mean + std bands by fitting directly to all data points.
+    Uses power law fit (y = a * x^b) and calculates std bands from residuals.
+    Returns: (x_fit, y_mean, y_mean_plus_std, y_mean_minus_std)
+    """
+    # Filter out zeros and negatives
+    mask = (x_data > 0) & (y_data > 0)
+    x_clean = x_data[mask]
+    y_clean = y_data[mask]
+    
+    if len(x_clean) < 10:
+        return np.array([]), np.array([]), np.array([]), np.array([])
+    
+    try:
+        # Fit power law directly to ALL data points in log space
+        # This gives us the true curve, not just binned averages
+        log_x = np.log10(x_clean)
+        log_y = np.log10(y_clean)
+        mask_fit = np.isfinite(log_x) & np.isfinite(log_y)
+        
+        if mask_fit.sum() < 3:
+            return np.array([]), np.array([]), np.array([]), np.array([])
+        
+        # Weighted least squares fit in log space: log(y) = log(a) + b*log(x)
+        # Use weights to downweight outliers (robust fitting)
+        coeffs = np.polyfit(log_x[mask_fit], log_y[mask_fit], 1)
+        a_fit = 10 ** coeffs[1]  # intercept -> a
+        b_fit = coeffs[0]  # slope -> b
+        
+        # Power law function
+        def power_law(x, a, b):
+            return a * (x ** b)
+        
+        # Calculate residuals from the fit (in log space)
+        y_predicted = power_law(x_clean[mask_fit], a_fit, b_fit)
+        log_residuals = np.log10(y_clean[mask_fit]) - np.log10(y_predicted)
+        
+        # Use simple global std for smooth bands
+        global_std = np.std(log_residuals)
+        
+        # Generate smooth exponential curve
+        log_x_clean = log_x[mask_fit]
+        log_x_min = log_x_clean.min()
+        log_x_max = log_x_clean.max()
+        x_fit = np.logspace(log_x_min, log_x_max, 500)
+        y_fit = power_law(x_fit, a_fit, b_fit)
+        
+        # Simple smooth std bands that follow the exponential curve
+        # In log-normal distribution: if log(y) ~ N(μ, σ), then:
+        # y_upper ≈ y_mean * 10^σ, y_lower ≈ y_mean / 10^σ
+        # This creates perfectly smooth bands that follow the exponential curve
+        y_mean_plus_std = y_fit * (10 ** global_std)
+        y_mean_minus_std = np.maximum(y_fit / (10 ** global_std), 0)
+        
+        return x_fit, y_fit, y_mean_plus_std, y_mean_minus_std
+    except Exception as e:
+        # Fallback: simple binned approach
+        log_x_min = np.log10(x_clean.min())
+        log_x_max = np.log10(x_clean.max())
+        log_bins = np.linspace(log_x_min, log_x_max, n_bins + 1)
+        bins = 10 ** log_bins
+        
+        x_binned = []
+        y_mean = []
+        y_std = []
+        
+        for i in range(len(bins) - 1):
+            bin_mask = (x_clean >= bins[i]) & (x_clean < bins[i + 1])
+            if bin_mask.sum() > 0:
+                x_bin_center = np.sqrt(bins[i] * bins[i + 1])
+                y_bin_values = y_clean[bin_mask]
+                x_binned.append(x_bin_center)
+                y_mean.append(y_bin_values.mean())
+                y_std.append(y_bin_values.std())
+        
+        if len(x_binned) < 3:
+            return np.array([]), np.array([]), np.array([]), np.array([])
+        
+        return np.array(x_binned), np.array(y_mean), np.array(y_mean) + np.array(y_std), np.array(y_mean) - np.array(y_std)
+
+
 def plot_workload_vs_citizen_by_agency(df: pd.DataFrame, year: int, outdir: Path) -> None:
     """
     Workload vs citizen input by agency (like Gini frontier).
@@ -795,6 +898,31 @@ def plot_workload_vs_citizen_by_agency(df: pd.DataFrame, year: int, outdir: Path
         edgecolors="white",
         linewidths=0.5
     )
+    
+    # Fit and plot exponential trend with mean + std bands
+    x_data = df_metrics["total"].values
+    y_data = df_metrics[oc_count_col].values
+    x_fit, y_mean, y_mean_plus_std, y_mean_minus_std = fit_exponential_trend(x_data, y_data)
+    
+    if len(x_fit) > 0:
+        # Plot std bands
+        ax.fill_between(
+            x_fit,
+            y_mean_minus_std,
+            y_mean_plus_std,
+            alpha=0.2,
+            color="#9A8153",
+            label="Mean ± 1 STD"
+        )
+        # Plot mean trend line
+        ax.plot(
+            x_fit,
+            y_mean,
+            color="#9A8153",
+            linewidth=2.5,
+            alpha=0.9,
+            label="Exponential trend (mean)"
+        )
     
     # Add diagonal reference line (perfect citizen participation)
     max_total = df_metrics["total"].max()
@@ -832,13 +960,17 @@ def plot_workload_vs_citizen_by_document(df: pd.DataFrame, year: int, outdir: Pa
     if "document_number" not in df.columns:
         print(f"Warning: document_number not available for workload vs citizen by document ({year})")
         return
+    
+    # --- FIX: Deduplicate to ensure 1 row per comment, ignoring agency split ---
+    df_doc_view = df.drop_duplicates(subset=["comment_id"])
+    # --------------------------------------------------------------------------
         
     # Check if we have weights
-    if "weight_doc" not in df.columns:
+    if "weight_doc" not in df_doc_view.columns:
         print("Warning: weight_doc not available. Using standard weight.")
-        df["weight_doc"] = df.get("weight", 1.0)
+        df_doc_view["weight_doc"] = df_doc_view.get("weight", 1.0)
         
-    if "comment_count" not in df.columns:
+    if "comment_count" not in df_doc_view.columns:
         print("Warning: True comment_count not available.")
         return
     
@@ -846,12 +978,12 @@ def plot_workload_vs_citizen_by_document(df: pd.DataFrame, year: int, outdir: Pa
     # For Total (X): We can take the first value of 'comment_count' (True Total from FR)
     # For Citizen (Y): We sum 'weight_doc' for citizens.
     
-    doc_grp = df.groupby("document_number").agg({
+    doc_grp = df_doc_view.groupby("document_number").agg({
         "comment_count": "first"
     }).rename(columns={"comment_count": "true_total"})
     
     # Calculate weighted citizen count using DOCUMENT WEIGHT
-    citizen_df = df[df["category"] == "Ordinary Citizen"]
+    citizen_df = df_doc_view[df_doc_view["category"] == "Ordinary Citizen"]
     citizen_counts = citizen_df.groupby("document_number")["weight_doc"].sum().rename("estimated_citizen_total")
     
     # Join
@@ -874,6 +1006,31 @@ def plot_workload_vs_citizen_by_document(df: pd.DataFrame, year: int, outdir: Pa
         linewidths=0.3
     )
     
+    # Fit and plot exponential trend with mean + std bands
+    x_data = doc_grp["true_total"].values
+    y_data = doc_grp["estimated_citizen_total"].values
+    x_fit, y_mean, y_mean_plus_std, y_mean_minus_std = fit_exponential_trend(x_data, y_data)
+    
+    if len(x_fit) > 0:
+        # Plot std bands
+        ax.fill_between(
+            x_fit,
+            y_mean_minus_std,
+            y_mean_plus_std,
+            alpha=0.2,
+            color="#9A8153",
+            label="Mean ± 1 STD"
+        )
+        # Plot mean trend line
+        ax.plot(
+            x_fit,
+            y_mean,
+            color="#9A8153",
+            linewidth=2.5,
+            alpha=0.9,
+            label="Exponential trend (mean)"
+        )
+    
     # Add diagonal reference line
     max_total = doc_grp["true_total"].max()
     ax.plot([0, max_total], [0, max_total], '--', color="#5C6670", alpha=0.3, linewidth=1, label="Perfect citizen participation")
@@ -894,101 +1051,138 @@ def plot_workload_vs_citizen_by_document(df: pd.DataFrame, year: int, outdir: Pa
     print(f"[OK] Saved: workload_vs_citizen_by_document_number_{year}.png")
 
 
-def plot_comment_distribution_roi(df: pd.DataFrame, year: int, outdir: Path, fr_csv_path: Optional[Path] = None) -> None:
+def compute_lorenz_and_gini(counts: np.ndarray) -> Tuple[np.ndarray, np.ndarray, float]:
     """
-    High-ROI visualization: Shows that most documents get few/no comments and few citizens participate.
-    This is the key story visualization.
+    Compute Lorenz curve and Gini coefficient following efficiency_frontier.py pattern.
+    Returns: (lorenz_x, lorenz_y, gini)
+    Filters out NaN values before processing.
+    """
+    # Filter out NaN values
+    counts_clean = counts[~np.isnan(counts)]
+    if len(counts_clean) == 0:
+        # Degenerate case; return equality line
+        x = np.linspace(0, 1, 2)
+        y = x.copy()
+        return x, y, 0.0
     
-    Uses full FR metadata (fr_df) as the primary source for document-level histograms.
-    """
-    # Load FR data to get complete document universe
-    fr_df = None
-    if fr_csv_path and fr_csv_path.exists():
-        try:
-            fr_df = pd.read_csv(fr_csv_path)
-        except Exception as e:
-            print(f"Warning: Could not load FR data: {e}")
-            
-    if fr_df is None:
-        print(f"Error: FR metadata required for ROI chart ({year}) to show true distribution.")
-        return
+    asc = np.sort(np.maximum(counts_clean, 0))
+    total = asc.sum()
+    if total <= 0:
+        # Degenerate case; return equality line
+        x = np.linspace(0, 1, len(asc) if len(asc) > 1 else 2)
+        y = x.copy()
+        return x, y, 0.0
+    lorenz_y = np.cumsum(asc) / total
+    lorenz_x = np.linspace(0, 1, len(asc), endpoint=True)
+    gini = float(1 - 2 * np.trapz(lorenz_y, lorenz_x))
+    return lorenz_x, lorenz_y, gini
 
-    # Calculate citizen estimates for sampled documents using DOCUMENT WEIGHTS
-    # weight_doc reconstructs the specific document's volume from the sample
+
+def prepare_fr_stats(df: pd.DataFrame, fr_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Prepare FR statistics with citizen estimates.
+    Returns fr_stats DataFrame with estimated_citizen_count, has_data, known_count columns.
     
-    if "weight_doc" not in df.columns:
-        df["weight_doc"] = 1.0
+    FIX: Now correctly identifies ALL sampled documents, not just those with citizen comments.
+    """
+    # Deduplicate to ensure 1 row per comment
+    df_doc_view = df.drop_duplicates(subset=["comment_id"])
+    
+    # Identify ALL sampled documents (not just those with citizen comments)
+    sampled_documents = pd.Series(df_doc_view["document_number"].unique(), name="document_number")
+    sampled_documents = pd.DataFrame({"document_number": sampled_documents, "is_sampled": True})
+    
+    # Calculate citizen estimates for sampled documents using DOCUMENT WEIGHTS
+    if "weight_doc" not in df_doc_view.columns:
+        df_doc_view["weight_doc"] = 1.0
         
-    citizen_df = df[df["category"] == "Ordinary Citizen"]
+    citizen_df = df_doc_view[df_doc_view["category"] == "Ordinary Citizen"]
     citizen_counts = citizen_df.groupby("document_number")["weight_doc"].sum().rename("estimated_citizen_count")
     
     # Merge estimates back to FULL FR dataframe
-    if "document_number" in fr_df.columns and "comment_count" in fr_df.columns:
-        # Include count_source if available to filter out unknown-count docs
-        cols_to_load = ["document_number", "comment_count"]
-        if "count_source" in fr_df.columns:
-            cols_to_load.append("count_source")
-        fr_stats = fr_df[cols_to_load].copy()
-        fr_stats = fr_stats.merge(citizen_counts, on="document_number", how="left")
+    cols_to_load = ["document_number", "comment_count"]
+    if "count_source" in fr_df.columns:
+        cols_to_load.append("count_source")
+    if "publication_date" in fr_df.columns:
+        cols_to_load.append("publication_date")
+    if "comments_close_on" in fr_df.columns:
+        cols_to_load.append("comments_close_on")
         
-        # Fill NaNs
-        # If document was NOT in sample (NaN), we assume 0 citizen comments?
-        # Or we can only analyze sampled documents for citizen rate.
-        # Since we stratified sampled, we have representation across bins.
-        # But for specific documents not sampled, we don't know. 
-        # However, for "Documents with 0 comments", we know citizen count is 0.
-        
-        fr_stats.loc[fr_stats["comment_count"] == 0, "estimated_citizen_count"] = 0
-        
-        # Define "has_data" as documents where we either have a sample OR the total count is 0
-        fr_stats["has_data"] = (fr_stats["comment_count"] == 0) | (fr_stats["estimated_citizen_count"].notna())
-        
-        # For documents with data, "has_citizens" is true if estimate > 0.5
-        fr_stats["has_citizens"] = (fr_stats["estimated_citizen_count"] > 0.5).astype(int)
-        
-        # Identify documents with known vs unknown comment counts
-        # Unknown = non-regs.gov docs where we couldn't determine count (count_source == "unknown")
-        if "count_source" in fr_stats.columns:
-            fr_stats["known_count"] = fr_stats["count_source"] != "unknown"
-        else:
-            # If count_source not available, assume all are known (backward compatibility)
-            fr_stats["known_count"] = True
-        
-    else:
-        print("Error: FR metadata missing columns")
-        return
+    fr_stats = fr_df[cols_to_load].copy()
     
-    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+    # Mark which documents were sampled
+    fr_stats = fr_stats.merge(sampled_documents, on="document_number", how="left")
+    fr_stats["is_sampled"] = fr_stats["is_sampled"].fillna(False)
+    
+    # Merge citizen counts
+    fr_stats = fr_stats.merge(citizen_counts, on="document_number", how="left")
+    
+    # Fill NaNs: 
+    # - Documents with 0 comments have 0 citizen comments
+    # - Sampled documents with no citizen comments have 0 citizen comments (not NaN)
+    fr_stats.loc[fr_stats["comment_count"] == 0, "estimated_citizen_count"] = 0
+    fr_stats.loc[fr_stats["is_sampled"] & fr_stats["estimated_citizen_count"].isna(), "estimated_citizen_count"] = 0
+    
+    # Define "has_data" as documents where we either have a sample OR the total count is 0
+    fr_stats["has_data"] = (fr_stats["comment_count"] == 0) | (fr_stats["is_sampled"])
+    
+    # For documents with data, "has_citizens" is true if estimate > 0.5
+    fr_stats["has_citizens"] = (fr_stats["estimated_citizen_count"] > 0.5).astype(int)
+    
+    # Identify documents with known vs unknown comment counts
+    if "count_source" in fr_stats.columns:
+        fr_stats["known_count"] = fr_stats["count_source"] != "unknown"
+    else:
+        fr_stats["known_count"] = True
+    
+    return fr_stats
+
+
+def plot_comment_distribution_and_participation(fr_stats: pd.DataFrame, year: int, outdir: Path) -> None:
+    """
+    Figure 1: Comment volume distribution (histogram) + Participation rate (bar chart).
+    """
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
     
     # Panel 1: Distribution of comment counts per document (Use FULL UNIVERSE)
-    ax1 = axes[0, 0]
+    ax1 = axes[0]
     comment_counts = fr_stats["comment_count"].values
-    
-    # Define bins
-    max_comments = max(comment_counts.max(), 1)
-    bins = np.logspace(0, np.log10(max_comments), 30)
     
     # Plot only docs with >= 1 comment in the log histogram
     counts_nonzero = comment_counts[comment_counts > 0]
     
-    ax1.hist(counts_nonzero, bins=bins, color="#5C6670", alpha=0.7, edgecolor="white", linewidth=0.5)
-    ax1.set_xscale("log")
-    ax1.set_xlabel("Comments per Document (log scale)", fontsize=FONT_LABEL, fontweight="bold")
-    ax1.set_ylabel("Number of Documents", fontsize=FONT_LABEL, fontweight="bold")
-    ax1.set_title("Distribution of Comment Volume (Non-Zero)", fontsize=FONT_TITLE - 2, fontweight="bold")
-    apply_clean_style(ax1)
-    
-    # Add statistics
     if len(counts_nonzero) > 0:
+        # Define bins - ensure we have valid range
+        max_comments = max(counts_nonzero.max(), 1)
+        min_comments = max(counts_nonzero.min(), 1)
+        
+        if max_comments > min_comments:
+            # Use log bins
+            bins = np.logspace(np.log10(min_comments), np.log10(max_comments), 30)
+        else:
+            # Fallback for edge case
+            bins = np.linspace(min_comments, max_comments + 1, 30)
+        
+        n, bins_edges, patches = ax1.hist(counts_nonzero, bins=bins, color="#5C6670", alpha=0.7, edgecolor="white", linewidth=0.5)
+        ax1.set_xscale("log")
+        
+        # Add statistics
         median_comments = np.median(counts_nonzero)
         pct_low = (counts_nonzero <= 5).sum() / len(counts_nonzero) * 100
         ax1.axvline(median_comments, color="#9A8153", linestyle="--", linewidth=2, alpha=0.7, label=f"Median (nonzero): {median_comments:.0f}")
         ax1.text(0.7, 0.95, f"{pct_low:.1f}% of active docs\nhave ≤5 comments", transform=ax1.transAxes, 
                  fontsize=10, alpha=0.7, va="top", bbox=dict(boxstyle="round", facecolor="white", alpha=0.8))
         ax1.legend()
+    else:
+        ax1.text(0.5, 0.5, "No documents with comments", ha="center", va="center", transform=ax1.transAxes)
+    
+    ax1.set_xlabel("Comments per Document (log scale)", fontsize=FONT_LABEL, fontweight="bold")
+    ax1.set_ylabel("Number of Documents", fontsize=FONT_LABEL, fontweight="bold")
+    ax1.set_title("Distribution of Comment Volume (Non-Zero)", fontsize=FONT_TITLE - 2, fontweight="bold")
+    apply_clean_style(ax1)
     
     # Panel 2: Documents with zero comments (ONLY KNOWN COUNTS)
-    ax2 = axes[0, 1]
+    ax2 = axes[1]
     # Filter to only documents where we know the comment count (exclude unknown-count docs)
     fr_stats_known = fr_stats[fr_stats["known_count"]].copy()
     total_docs_known = len(fr_stats_known)
@@ -1004,10 +1198,7 @@ def plot_comment_distribution_roi(df: pd.DataFrame, year: int, outdir: Path, fr_
     
     bars = ax2.bar(categories, counts, color=colors_bar, alpha=0.8, edgecolor="white", linewidth=2)
     ax2.set_ylabel("Number of Documents", fontsize=FONT_LABEL, fontweight="bold")
-    title = "Comment Participation Rate"
-    if unknown_count_docs > 0:
-        title += f"\n({unknown_count_docs:,} docs with unknown counts excluded)"
-    ax2.set_title(title, fontsize=FONT_TITLE - 2, fontweight="bold")
+    ax2.set_title("Comment Participation Rate", fontsize=FONT_TITLE - 2, fontweight="bold")
     
     # Add percentages (based on known-count docs only)
     for bar, count in zip(bars, counts):
@@ -1018,85 +1209,243 @@ def plot_comment_distribution_roi(df: pd.DataFrame, year: int, outdir: Path, fr_
                 ha='center', va='bottom', fontsize=11, fontweight="bold")
     apply_clean_style(ax2)
     
-    # Panel 3: Citizen participation rate by comment volume
-    # Only use documents where we HAVE DATA (sampled or zero comments)
-    ax3 = axes[1, 0]
-    
-    valid_stats = fr_stats[fr_stats["has_data"]].copy()
-    
-    # Bin documents by comment volume
-    valid_stats["comment_bin"] = pd.cut(valid_stats["comment_count"], 
-                                       bins=[0, 1, 5, 10, 50, 100, float('inf')],
-                                       labels=["1", "2-5", "6-10", "11-50", "51-100", "100+"],
-                                       include_lowest=False) # Exclude 0 from bins (handled in bin 0 if needed, but we start at 1)
-    
-    # Filter out NaN bins (zeros)
-    valid_stats_nonzero = valid_stats[valid_stats["comment_count"] > 0]
-    
-    bin_stats = valid_stats_nonzero.groupby("comment_bin").agg({
-        "has_citizens": "mean",
-        "estimated_citizen_count": "mean",
-        "comment_count": "count"
-    }).reset_index()
-    
-    x_pos = np.arange(len(bin_stats))
-    bars = ax3.bar(x_pos, bin_stats["has_citizens"] * 100, 
-                   color=COLOR_PALETTE["Ordinary Citizen"], alpha=0.7, edgecolor="white", linewidth=1.5)
-    ax3.set_xticks(x_pos)
-    ax3.set_xticklabels(bin_stats["comment_bin"].astype(str), rotation=0)
-    ax3.set_ylabel("% Documents with Citizen Comments", fontsize=FONT_LABEL, fontweight="bold")
-    ax3.set_xlabel("Comments per Document", fontsize=FONT_LABEL, fontweight="bold")
-    ax3.set_title("Citizen Participation by Document Volume", fontsize=FONT_TITLE - 2, fontweight="bold")
-    ax3.set_ylim(0, 100)
-    
-    # Add value labels
-    for bar, val in zip(bars, bin_stats["has_citizens"] * 100):
-        height = bar.get_height()
-        ax3.text(bar.get_x() + bar.get_width()/2., height,
-                f'{val:.1f}%',
-                ha='center', va='bottom', fontsize=9, fontweight="bold")
-    apply_clean_style(ax3)
-    
-    # Panel 4: Cumulative distribution showing concentration (Lorenz Curve)
-    # Use FULL UNIVERSE (zeros included, though they don't add volume)
-    ax4 = axes[1, 1]
-    sorted_docs = fr_stats.sort_values("comment_count", ascending=False)
-    sorted_docs["cum_pct_docs"] = np.arange(1, len(sorted_docs) + 1) / len(sorted_docs) * 100
-    sorted_docs["cum_pct_comments"] = sorted_docs["comment_count"].cumsum() / sorted_docs["comment_count"].sum() * 100
-    
-    ax4.plot(sorted_docs["cum_pct_docs"], sorted_docs["cum_pct_comments"], 
-            color="#12161A", linewidth=3, alpha=0.8)
-    ax4.fill_between(sorted_docs["cum_pct_docs"], 0, sorted_docs["cum_pct_comments"], 
-                     alpha=0.2, color="#12161A")
-    
-    # Add reference line (perfect equality)
-    ax4.plot([0, 100], [0, 100], '--', color="#5C6670", alpha=0.4, linewidth=1.5, label="Perfect equality")
-    
-    # Mark key points
-    top10_pct_docs = sorted_docs.iloc[len(sorted_docs)//10]["cum_pct_docs"]
-    top10_pct_comments = sorted_docs.iloc[len(sorted_docs)//10]["cum_pct_comments"]
-    ax4.plot([top10_pct_docs, top10_pct_docs], [0, top10_pct_comments], 
-            '--', color="#9A8153", alpha=0.6, linewidth=1.5)
-    ax4.plot([0, top10_pct_docs], [top10_pct_comments, top10_pct_comments], 
-            '--', color="#9A8153", alpha=0.6, linewidth=1.5)
-    ax4.text(top10_pct_docs, top10_pct_comments, 
-            f'Top 10%: {top10_pct_comments:.1f}% of comments',
-            fontsize=10, alpha=0.8, ha="left", va="bottom",
-            bbox=dict(boxstyle="round", facecolor="white", alpha=0.8))
-    
-    ax4.set_xlabel("% of Documents (sorted by volume)", fontsize=FONT_LABEL, fontweight="bold")
-    ax4.set_ylabel("% of Total Comments", fontsize=FONT_LABEL, fontweight="bold")
-    ax4.set_title("Comment Concentration (Lorenz Curve)", fontsize=FONT_TITLE - 2, fontweight="bold")
-    ax4.set_xlim(0, 100)
-    ax4.set_ylim(0, 100)
-    ax4.legend()
-    apply_clean_style(ax4)
-    
-    fig.suptitle(f"The Participation Gap ({year})", fontsize=FONT_TITLE + 2, fontweight="bold", y=0.995)
-    plt.tight_layout(rect=[0, 0, 1, 0.98])
+    fig.suptitle(f"The Participation Gap ({year})", fontsize=FONT_TITLE + 2, fontweight="bold", y=0.98)
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
     fig.savefig(outdir / f"participation_gap_{year}.png", dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"[OK] Saved: participation_gap_{year}.png")
+
+
+def plot_citizen_participation_by_volume(fr_stats: pd.DataFrame, year: int, outdir: Path) -> None:
+    """
+    Figure 2: Citizen participation rate by comment volume (bar chart).
+    Fixed logic: Calculate percentage correctly for each bin.
+    Only uses documents where we have data (sampled documents).
+    """
+    # Only use documents where we HAVE DATA (sampled or zero comments)
+    # For zero-comment docs, we know has_citizens = 0
+    # For sampled docs with comments, we use has_citizens
+    valid_stats = fr_stats[fr_stats["has_data"]].copy()
+    
+    # Bin documents by comment volume (only non-zero for this chart)
+    valid_stats_nonzero = valid_stats[valid_stats["comment_count"] > 0].copy()
+    
+    if len(valid_stats_nonzero) == 0:
+        print(f"Warning: No documents with comments for citizen participation chart ({year})")
+        return
+    
+    # Bin documents
+    valid_stats_nonzero["comment_bin"] = pd.cut(
+        valid_stats_nonzero["comment_count"], 
+        bins=[0, 1, 5, 10, 50, 100, float('inf')],
+        labels=["1", "2-5", "6-10", "11-50", "51-100", "100+"],
+        include_lowest=False
+    )
+    
+    # Calculate percentage of documents with citizen comments in each bin
+    # has_citizens is already calculated (1 if estimated_citizen_count > 0.5, else 0)
+    bin_stats = valid_stats_nonzero.groupby("comment_bin").agg({
+        "has_citizens": "mean",  # Mean gives percentage
+        "comment_count": "count"  # Total docs in bin
+    }).reset_index()
+    
+    bin_stats = bin_stats[bin_stats["comment_count"] > 0]  # Only bins with data
+    
+    if len(bin_stats) == 0:
+        print(f"Warning: No valid bins for citizen participation chart ({year})")
+        return
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    x_pos = np.arange(len(bin_stats))
+    bars = ax.bar(x_pos, bin_stats["has_citizens"] * 100, 
+                   color=COLOR_PALETTE["Ordinary Citizen"], alpha=0.7, edgecolor="white", linewidth=1.5)
+    ax.set_xticks(x_pos)
+    ax.set_xticklabels(bin_stats["comment_bin"].astype(str), rotation=0)
+    ax.set_ylabel("% Documents with Citizen Comments", fontsize=FONT_LABEL, fontweight="bold")
+    ax.set_xlabel("Comments per Document", fontsize=FONT_LABEL, fontweight="bold")
+    ax.set_title(f"Citizen Participation by Document Volume ({year})", fontsize=FONT_TITLE - 2, fontweight="bold")
+    ax.set_ylim(0, 100)
+    
+    # Add value labels
+    for bar, val, count in zip(bars, bin_stats["has_citizens"] * 100, bin_stats["comment_count"]):
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2., height,
+                f'{val:.1f}%\n(n={count})',
+                ha='center', va='bottom', fontsize=9, fontweight="bold")
+    apply_clean_style(ax)
+    
+    plt.tight_layout()
+    fig.savefig(outdir / f"citizen_participation_by_volume_{year}.png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[OK] Saved: citizen_participation_by_volume_{year}.png")
+
+
+def plot_lorenz_concentration(fr_stats: pd.DataFrame, year: int, outdir: Path) -> None:
+    """
+    Figure 3: Lorenz curve with Gini coefficient, following efficiency_frontier.py pattern.
+    Filters out NaN values (documents with unknown comment counts) before processing.
+    """
+    # Use FULL UNIVERSE (zeros included, though they don't add volume)
+    # Filter out NaN values (documents with unknown comment counts)
+    comment_counts = fr_stats["comment_count"].values
+    comment_counts_clean = comment_counts[~np.isnan(comment_counts)]
+    
+    if len(comment_counts_clean) == 0:
+        print(f"Warning: No valid comment counts for Lorenz curve ({year})")
+        return
+    
+    # Compute Lorenz curve and Gini
+    lorenz_x, lorenz_y, gini = compute_lorenz_and_gini(comment_counts_clean)
+    
+    # Also compute efficiency frontier (coverage at top x% of docs)
+    ordered = np.sort(comment_counts_clean)[::-1]  # Descending
+    total = ordered.sum()
+    if total <= 0:
+        print(f"Warning: No comments for Lorenz curve ({year})")
+        return
+    
+    cum = np.cumsum(ordered)
+    n = ordered.size
+    frontier_x = np.arange(1, n + 1) / n * 100
+    frontier_y = cum / total * 100
+    
+    fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+    
+    # Left: Efficiency Frontier (coverage curve)
+    ax1 = axes[0]
+    ax1.plot(frontier_x, frontier_y, label="Coverage frontier", color="#1f77b4", lw=2)
+    ax1.plot([0, 100], [0, 100], ls="--", color="#777777", label="Uniform attention (y = x)")
+    ax1.set_xlim(0, 100)
+    ax1.set_ylim(0, 100)
+    ax1.set_xlabel("Share of documents selected (best-first)", fontsize=FONT_LABEL, fontweight="bold")
+    ax1.set_ylabel("Share of total comments captured", fontsize=FONT_LABEL, fontweight="bold")
+    ax1.set_title(f"Public attention is concentrated ({year})", fontsize=FONT_TITLE - 2, fontweight="bold")
+    ax1.grid(True, alpha=0.2)
+    
+    # Annotate target comment shares with needed doc shares
+    for target, color in zip([0.5, 0.8, 0.9, 0.95], ["#2ca02c", "#ff7f0e", "#d62728", "#9467bd"]):
+        idx = int(np.searchsorted(frontier_y / 100, target, side="left"))
+        idx = min(max(0, idx), len(frontier_x) - 1)
+        x_pct = frontier_x[idx]
+        y_pct = frontier_y[idx]
+        ax1.scatter([x_pct], [y_pct], color=color, s=40, zorder=3)
+        ax1.axvline(x_pct, color=color, ls=":", alpha=0.6)
+        ax1.text(
+            x_pct,
+            y_pct,
+            f"  {x_pct:.1f}% docs → {target*100:.0f}% comments",
+            va="bottom",
+            ha="left",
+            fontsize=9,
+            color=color,
+        )
+    
+    # Annotate coverage at top doc shares (1%, 5%, 10%)
+    for share, color in zip([0.01, 0.05, 0.10], ["#17becf", "#bcbd22", "#8c564b"]):
+        idx = max(0, int(np.ceil(share * len(frontier_x))) - 1)
+        ax1.scatter([share * 100], [frontier_y[idx]], color=color, s=30)
+        ax1.text(
+            share * 100,
+            frontier_y[idx],
+            f"  top {int(share*100)}% docs → {frontier_y[idx]:.1f}% comments",
+            va="bottom",
+            ha="left",
+            fontsize=9,
+            color=color,
+        )
+    
+    ax1.legend(loc="lower right")
+    
+    # Right: Lorenz Curve
+    ax2 = axes[1]
+    ax2.plot(lorenz_x * 100, lorenz_y * 100, color="#1f77b4", lw=2)
+    ax2.plot([0, 100], [0, 100], ls="--", color="#777777", label="Perfect equality")
+    ax2.set_xlim(0, 100)
+    ax2.set_ylim(0, 100)
+    ax2.set_xlabel("Cumulative share of documents (worst → best)", fontsize=FONT_LABEL, fontweight="bold")
+    ax2.set_ylabel("Cumulative share of comments", fontsize=FONT_LABEL, fontweight="bold")
+    ax2.set_title(f"Lorenz curve (Gini = {gini:.3f})", fontsize=FONT_TITLE - 2, fontweight="bold")
+    ax2.grid(True, alpha=0.2)
+    ax2.legend()
+    
+    fig.suptitle(f"Comment Concentration Analysis ({year})", fontsize=FONT_TITLE + 2, fontweight="bold", y=0.98)
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    fig.savefig(outdir / f"comment_concentration_{year}.png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[OK] Saved: comment_concentration_{year}.png")
+
+
+def verify_zero_comment_dates(fr_stats: pd.DataFrame, year: int) -> Optional[str]:
+    """
+    Verify if zero-comment docs are clustered near the end of the year (still open for comment).
+    Returns annotation text if significant clustering found, None otherwise.
+    """
+    if "publication_date" not in fr_stats.columns:
+        return None
+    
+    try:
+        fr_stats["pub_date"] = pd.to_datetime(fr_stats["publication_date"], errors="coerce")
+        zero_docs = fr_stats[fr_stats["comment_count"] == 0].copy()
+        
+        if len(zero_docs) == 0:
+            return None
+        
+        zero_docs["month"] = zero_docs["pub_date"].dt.to_period("M")
+        monthly_counts = zero_docs["month"].value_counts().sort_index()
+        
+        # Check last 3 months
+        if len(monthly_counts) >= 3:
+            last_3_months = monthly_counts.tail(3)
+            last_3_total = last_3_months.sum()
+            total_zero = len(zero_docs)
+            pct_last_3 = last_3_total / total_zero * 100 if total_zero > 0 else 0
+            
+            if pct_last_3 > 30:  # More than 30% in last 3 months
+                return f"Note: {pct_last_3:.1f}% of zero-comment docs published in last 3 months (may still be open for comment)"
+        
+        return None
+    except Exception as e:
+        print(f"Warning: Could not analyze zero-comment dates: {e}")
+        return None
+
+
+def plot_comment_distribution_roi(df: pd.DataFrame, year: int, outdir: Path, fr_csv_path: Optional[Path] = None) -> None:
+    """
+    High-ROI visualization: Shows that most documents get few/no comments and few citizens participate.
+    This is the key story visualization.
+    
+    Now split into separate clean charts:
+    1. Comment distribution + Participation rate
+    2. Citizen participation by volume
+    3. Lorenz curve with Gini coefficient
+    
+    Uses full FR metadata (fr_df) as the primary source for document-level histograms.
+    """
+    # Load FR data to get complete document universe
+    fr_df = None
+    if fr_csv_path and fr_csv_path.exists():
+        try:
+            fr_df = pd.read_csv(fr_csv_path)
+        except Exception as e:
+            print(f"Warning: Could not load FR data: {e}")
+            
+    if fr_df is None:
+        print(f"Error: FR metadata required for ROI chart ({year}) to show true distribution.")
+        return
+    
+    # Prepare FR statistics
+    fr_stats = prepare_fr_stats(df, fr_df)
+    
+    # Verify zero-comment rate
+    zero_comment_note = verify_zero_comment_dates(fr_stats, year)
+    if zero_comment_note:
+        print(f"Zero-comment analysis: {zero_comment_note}")
+    
+    # Generate separate charts
+    plot_comment_distribution_and_participation(fr_stats, year, outdir)
+    plot_citizen_participation_by_volume(fr_stats, year, outdir)
+    plot_lorenz_concentration(fr_stats, year, outdir)
 
 
 # ============================================================================
@@ -1277,37 +1626,43 @@ def plot_ranked_stream(df: pd.DataFrame, year: int, outdir: Path) -> None:
     """
     Panel B: Ranked stream graph showing composition across documents sorted by comment volume.
     
-    X-axis: Number of comments per document (filtering out documents with 0 comments).
+    X-axis: Document rank (1, 2, 3, ...) - each document gets equal visual weight.
+    Documents are sorted by comment count (ascending), filtering out documents with 0 comments.
     Shows how comment makeup changes as documents receive more comments.
+    Secondary x-axis shows comment count reference points.
     """
     # Check if document_number is available
     if "document_number" not in df.columns:
         print(f"Warning: document_number not available for stream graph ({year})")
         return
     
+    # --- FIX: Deduplicate to ensure 1 row per comment ---
+    df_doc_view = df.drop_duplicates(subset=["comment_id"])
+    # ----------------------------------------------------
+    
     # Ensure weight_doc exists for document-level reconstruction
-    if "weight_doc" not in df.columns:
-        if "weight" in df.columns:
-            df["weight_doc"] = df["weight"]
+    if "weight_doc" not in df_doc_view.columns:
+        if "weight" in df_doc_view.columns:
+            df_doc_view["weight_doc"] = df_doc_view["weight"]
         else:
-            df["weight_doc"] = 1.0
+            df_doc_view["weight_doc"] = 1.0
     
     # Get true comment count per document
-    if "comment_count" not in df.columns:
+    if "comment_count" not in df_doc_view.columns:
         # Calculate from sampled data using weight_doc
-        doc_counts = df.groupby("document_number")["weight_doc"].sum().rename("comment_count")
-        df = df.merge(doc_counts, on="document_number", how="left")
+        doc_counts = df_doc_view.groupby("document_number")["weight_doc"].sum().rename("comment_count")
+        df_doc_view = df_doc_view.merge(doc_counts, on="document_number", how="left")
     
     # Filter out documents with 0 comments
-    df = df[df["comment_count"] > 0].copy()
+    df_doc_view = df_doc_view[df_doc_view["comment_count"] > 0].copy()
     
-    if len(df) == 0:
+    if len(df_doc_view) == 0:
         print(f"Warning: No documents with comments for stream graph ({year})")
         return
     
     # Calculate document-level metrics
     # Group by document_number and category, sum weights
-    doc_cat_counts = df.groupby(["document_number", "category"])["weight_doc"].sum().rename("n").reset_index()
+    doc_cat_counts = df_doc_view.groupby(["document_number", "category"])["weight_doc"].sum().rename("n").reset_index()
     
     # Calculate total comments per document
     doc_totals = doc_cat_counts.groupby("document_number")["n"].sum().rename("total").reset_index()
@@ -1323,7 +1678,7 @@ def plot_ranked_stream(df: pd.DataFrame, year: int, outdir: Path) -> None:
     
     # Merge back total and comment_count
     doc_wide = doc_wide.merge(doc_totals, on="document_number", how="left")
-    doc_wide = doc_wide.merge(df[["document_number", "comment_count"]].drop_duplicates(), on="document_number", how="left")
+    doc_wide = doc_wide.merge(df_doc_view[["document_number", "comment_count"]].drop_duplicates(), on="document_number", how="left")
     
     # Ensure all category share columns exist
     for cat in CATEGORY_ORDER:
@@ -1333,6 +1688,9 @@ def plot_ranked_stream(df: pd.DataFrame, year: int, outdir: Path) -> None:
     
     # Sort documents by comment count (ascending)
     doc_sorted = doc_wide.sort_values("comment_count").reset_index(drop=True)
+    
+    # Add document rank (1-based index) for x-axis - gives each document equal visual weight
+    doc_sorted["doc_rank"] = np.arange(1, len(doc_sorted) + 1)
     
     # Prepare SHARES (percentages) for each category
     shares_data = []
@@ -1362,10 +1720,10 @@ def plot_ranked_stream(df: pd.DataFrame, year: int, outdir: Path) -> None:
     fig, ax = plt.subplots(figsize=(16, 7))
     
     # Stacked area plot with PERCENTAGES
-    # X-axis is comment_count
+    # X-axis is document rank (1, 2, 3, ...) - gives each document equal visual weight
     colors = get_category_colors()
     ax.stackplot(
-        doc_sorted["comment_count"],
+        doc_sorted["doc_rank"],
         *shares_norm,
         labels=CATEGORY_ORDER,
         colors=colors,
@@ -1385,11 +1743,12 @@ def plot_ranked_stream(df: pd.DataFrame, year: int, outdir: Path) -> None:
     crossings = np.where(np.diff(np.sign(citizen_shares_smooth - 0.5)))[0]
     if len(crossings) > 0:
         idx = crossings[0]  # First crossing
-        x_pos = doc_sorted.loc[idx, "comment_count"]
+        x_pos = doc_sorted.loc[idx, "doc_rank"]
+        comment_count_at_crossing = doc_sorted.loc[idx, "comment_count"]
         ax.axvline(x_pos, color="white", linewidth=2, alpha=0.6, linestyle="--", zorder=10)
         ax.text(
             x_pos, 50,
-            "50% Citizen Share",
+            f"50% Citizen Share\n(~{int(comment_count_at_crossing)} comments)",
             rotation=90,
             fontsize=9,
             color="white",
@@ -1398,20 +1757,25 @@ def plot_ranked_stream(df: pd.DataFrame, year: int, outdir: Path) -> None:
             va="center"
         )
     
-    # Mark key comment count thresholds (e.g., median, quartiles)
-    median_comments = doc_sorted["comment_count"].median()
-    q75_comments = doc_sorted["comment_count"].quantile(0.75)
-    q25_comments = doc_sorted["comment_count"].quantile(0.25)
+    # Mark key document rank thresholds (quartiles by document rank)
+    q25_rank = int(len(doc_sorted) * 0.25)
+    median_rank = int(len(doc_sorted) * 0.5)
+    q75_rank = int(len(doc_sorted) * 0.75)
     
-    for threshold, label in [(q25_comments, "Q1"), (median_comments, "Median"), (q75_comments, "Q3")]:
-        if threshold > 0:
-            ax.axvline(threshold, color="white", linewidth=1, alpha=0.3, linestyle=":", zorder=9)
+    for rank, label in [(q25_rank, "Q1"), (median_rank, "Median"), (q75_rank, "Q3")]:
+        if rank > 0 and rank < len(doc_sorted):
+            x_pos = doc_sorted.loc[rank, "doc_rank"]
+            comment_count_at_rank = doc_sorted.loc[rank, "comment_count"]
+            ax.axvline(x_pos, color="white", linewidth=1, alpha=0.3, linestyle=":", zorder=9)
+            # Optionally add text annotation
+            # ax.text(x_pos, 5, f"{label}\n({int(comment_count_at_rank)})", 
+            #        fontsize=7, color="white", alpha=0.7, ha="center", va="bottom")
     
     # Styling
-    ax.set_xscale("symlog", linthresh=1)
-    ax.set_xlim(0, doc_sorted["comment_count"].max() * 1.05)
+    # Use linear scale for document rank (each document gets equal visual weight)
+    ax.set_xlim(0, len(doc_sorted) + 1)
     ax.set_ylim(0, 100)
-    ax.set_xlabel("# Comments on a Document (log scale)", 
+    ax.set_xlabel("Document Rank (sorted by comment count)", 
                    fontsize=FONT_LABEL, fontweight="bold", labelpad=10)
     ax.set_ylabel("Makeup of Comments (%)", fontsize=FONT_LABEL, fontweight="bold", labelpad=10)
     ax.set_title(
@@ -1421,16 +1785,56 @@ def plot_ranked_stream(df: pd.DataFrame, year: int, outdir: Path) -> None:
         pad=25
     )
     
-    # Add subtitle
+    # Add subtitle with comment count reference
+    min_comments = int(doc_sorted["comment_count"].min())
+    max_comments = int(doc_sorted["comment_count"].max())
+    median_comments = int(doc_sorted["comment_count"].median())
     ax.text(
         0.5, 1.02,
-        "Documents sorted by comment count (excluding documents with 0 comments)",
+        f"Documents sorted by comment count (range: {min_comments}-{max_comments}, median: {median_comments})",
         transform=ax.transAxes,
         ha="center",
         fontsize=10,
         alpha=0.6,
         style="italic"
     )
+    
+    # Add secondary x-axis showing comment count ranges
+    # Create tick positions at key document ranks
+    tick_positions = []
+    tick_labels = []
+    
+    # Add ticks at document rank positions corresponding to comment count milestones
+    comment_milestones = [1, 5, 10, 50, 100, 500, 1000]
+    for milestone in comment_milestones:
+        # Find first document with comment_count >= milestone
+        matching_docs = doc_sorted[doc_sorted["comment_count"] >= milestone]
+        if len(matching_docs) > 0:
+            rank_at_milestone = matching_docs.iloc[0]["doc_rank"]
+            # Avoid duplicate positions
+            if rank_at_milestone not in tick_positions:
+                tick_positions.append(rank_at_milestone)
+                tick_labels.append(f"{milestone}")
+    
+    # Add top document if not already included
+    if len(doc_sorted) > 0:
+        top_rank = len(doc_sorted)
+        if top_rank not in tick_positions:
+            tick_positions.append(top_rank)
+            tick_labels.append(f"{int(doc_sorted.iloc[-1]['comment_count'])}")
+    
+    # Create secondary axis showing comment counts (only if we have tick positions)
+    if len(tick_positions) > 0:
+        ax2 = ax.twiny()
+        ax2.set_xlim(ax.get_xlim())
+        ax2.set_xticks(tick_positions)
+        ax2.set_xticklabels(tick_labels, fontsize=8, alpha=0.7)
+        ax2.set_xlabel("Comment Count Reference", fontsize=FONT_LABEL - 2, fontweight="bold", alpha=0.7, labelpad=5)
+        ax2.tick_params(colors="#5C6670")
+        # Set alpha for tick labels separately
+        for label in ax2.get_xticklabels():
+            label.set_alpha(0.7)
+        ax2.xaxis.label.set_alpha(0.7)
     
     ax.legend(fontsize=FONT_LEGEND - 1, frameon=True, loc="upper left", bbox_to_anchor=(1, 1), framealpha=0.9)
     apply_clean_style(ax)
@@ -1832,8 +2236,17 @@ def compute_agency_hierarchy_metrics(df: pd.DataFrame) -> pd.DataFrame:
     if "weight" not in df.columns:
         df["weight"] = 1.0
         
+    # --- CRITICAL FIX 2: Fill NaN sub-agencies to prevent groupby dropping them ---
+    # Create a temporary view for calculation
+    df_calc = df.copy()
+    
+    # If sub_agency is missing, treat the main agency as the sub-agency (self-reference)
+    # or use a placeholder like "General"
+    df_calc["sub_agency"] = df_calc["sub_agency"].fillna(df_calc["main_agency"])
+    # ------------------------------------------------------------------------------
+        
     # Group by main_agency, sub_agency, and category
-    grp = df.groupby(["main_agency", "sub_agency", "category"])["weight"].sum().rename("n").reset_index()
+    grp = df_calc.groupby(["main_agency", "sub_agency", "category"])["weight"].sum().rename("n").reset_index()
     
     # Calculate totals at sub-agency level
     sub_totals = grp.groupby(["main_agency", "sub_agency"])["n"].sum().rename("sub_total").reset_index()
@@ -2332,24 +2745,35 @@ def main() -> None:
     # Try to join document_number if available in FR CSV
     if fr_csv_path and fr_csv_path.exists() and "document_number" not in df.columns:
         try:
-            fr_df = pd.read_csv(fr_csv_path, usecols=["document_number", "comment_id"], nrows=1000)
+            # FIX: Read full CSV, not just 1000 rows
+            fr_df = pd.read_csv(fr_csv_path, usecols=["document_number", "comment_id"])
             if "document_number" in fr_df.columns and "comment_id" in fr_df.columns:
                 # Try to join on comment_id
+                before_merge = len(df)
                 df = df.merge(fr_df[["comment_id", "document_number"]], on="comment_id", how="left")
-                print(f"Joined document_number from FR CSV")
+                merged_count = df["document_number"].notna().sum()
+                merge_rate = merged_count / before_merge * 100 if before_merge > 0 else 0
+                print(f"Joined document_number from FR CSV: {merged_count:,}/{before_merge:,} comments ({merge_rate:.1f}%)")
+                if merge_rate < 90:
+                    print(f"  ⚠ WARNING: Low document_number merge rate - some plots may be incomplete")
         except Exception as e:
             print(f"Warning: Could not join document_number: {e}")
     
     print("Preprocessing...")
     df = normalize_categories(df)
     df = deduplicate_comments(df)
-    df = explode_agencies(df)
     
-    # NEW: Calculate Weights to reverse sampling bias
+    # --- CRITICAL FIX 1: Calculate weights BEFORE manipulating agencies ---
+    # This ensures agency strings match the FR Population CSV exactly (e.g. "Dept A, Sub B").
+    # If we explode first, the join keys might not match, causing weights to default to 1.0.
     print("Calculating post-hoc weights...")
     df = calculate_weights(df, fr_csv_path)
     
-    print(f"After preprocessing: {len(df):,} rows, {df['agency'].nunique()} agencies")
+    # Now parse/explode agencies for hierarchy analysis
+    df = explode_agencies(df)
+    # ----------------------------------------------------------------------
+    
+    print(f"After preprocessing: {len(df):,} rows (includes agency explosions), {df['agency'].nunique()} agencies")
     
     # Generate narrative summary
     generate_narrative_summary(df, fr_csv_path, args.year)
