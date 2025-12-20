@@ -254,9 +254,9 @@ def calculate_weights(df: pd.DataFrame, fr_csv_path: Optional[Path]) -> pd.DataF
         print(f"  Comments with weight=1.0 (orphaned): {orphaned:,} ({pct_orphaned:.1f}%)")
         
         if orphaned > 0 and orphaned < total * 0.05:  # Less than 5% orphaned is acceptable
-            print(f"  ✓ Weight calculation success rate: {100-pct_orphaned:.1f}%")
+            print(f"  [OK] Weight calculation success rate: {100-pct_orphaned:.1f}%")
         elif orphaned >= total * 0.05:
-            print(f"  ⚠ WARNING: High rate of orphaned comments ({pct_orphaned:.1f}%) - check agency matching")
+            print(f"  [WARNING] High rate of orphaned comments ({pct_orphaned:.1f}%) - check agency matching")
         
         return df
         
@@ -428,10 +428,21 @@ def plot_weight_distribution(df: pd.DataFrame, outdir: Path) -> None:
     # Panel 1: Stratum Weights
     weights = df["weight"].values
     ax1 = axes[0]
-    ax1.hist(weights, bins=np.logspace(np.log10(max(1, weights.min())), np.log10(weights.max()), 50), 
-            color="#5C6670", alpha=0.7, edgecolor="white")
-    ax1.set_xscale("log")
-    ax1.set_xlabel("Weight (log scale)", fontsize=FONT_LABEL, fontweight="bold")
+    
+    # Handle edge case where all weights are the same
+    if weights.min() == weights.max():
+        # If all weights are 1.0, show a simple bar
+        ax1.bar([0], [len(weights)], color="#5C6670", alpha=0.7, width=0.5)
+        ax1.set_xlim(-1, 1)
+        ax1.set_xlabel("Weight", fontsize=FONT_LABEL, fontweight="bold")
+        ax1.text(0, len(weights)/2, f"All weights = {weights[0]:.1f}\n(n={len(weights):,})", 
+                ha="center", va="center", fontsize=11, fontweight="bold")
+    else:
+        ax1.hist(weights, bins=np.logspace(np.log10(max(1, weights.min())), np.log10(weights.max()), 50), 
+                color="#5C6670", alpha=0.7, edgecolor="white")
+        ax1.set_xscale("log")
+        ax1.set_xlabel("Weight (log scale)", fontsize=FONT_LABEL, fontweight="bold")
+    
     ax1.set_ylabel("Number of Comments", fontsize=FONT_LABEL, fontweight="bold")
     ax1.set_title("Stratum Weights (Population Expansion)", fontsize=FONT_TITLE-2, fontweight="bold")
     
@@ -439,14 +450,26 @@ def plot_weight_distribution(df: pd.DataFrame, outdir: Path) -> None:
     if "weight_doc" in df.columns:
         weights_doc = df["weight_doc"].values
         ax2 = axes[1]
-        ax2.hist(weights_doc, bins=np.logspace(np.log10(max(1, weights_doc.min())), np.log10(weights_doc.max()), 50), 
-                color="#9A8153", alpha=0.7, edgecolor="white")
-        ax2.set_xscale("log")
-        ax2.set_xlabel("Weight (log scale)", fontsize=FONT_LABEL, fontweight="bold")
+        
+        # Handle edge case where all weights are the same
+        if weights_doc.min() == weights_doc.max():
+            ax2.bar([0], [len(weights_doc)], color="#9A8153", alpha=0.7, width=0.5)
+            ax2.set_xlim(-1, 1)
+            ax2.set_xlabel("Weight", fontsize=FONT_LABEL, fontweight="bold")
+            ax2.text(0, len(weights_doc)/2, f"All weights = {weights_doc[0]:.1f}\n(n={len(weights_doc):,})", 
+                    ha="center", va="center", fontsize=11, fontweight="bold")
+        else:
+            ax2.hist(weights_doc, bins=np.logspace(np.log10(max(1, weights_doc.min())), np.log10(weights_doc.max()), 50), 
+                    color="#9A8153", alpha=0.7, edgecolor="white")
+            ax2.set_xscale("log")
+            ax2.set_xlabel("Weight (log scale)", fontsize=FONT_LABEL, fontweight="bold")
+        
+        ax2.set_ylabel("Number of Comments", fontsize=FONT_LABEL, fontweight="bold")
         ax2.set_title("Document Weights (Reconstruction)", fontsize=FONT_TITLE-2, fontweight="bold")
     
     apply_clean_style(ax1)
-    apply_clean_style(ax2)
+    if "weight_doc" in df.columns:
+        apply_clean_style(ax2)
     plt.tight_layout()
     fig.savefig(outdir / "weight_distribution.png", dpi=300, bbox_inches="tight")
     plt.close(fig)
@@ -787,14 +810,14 @@ def plot_workload_vs_makeup(df: pd.DataFrame, year: int, outdir: Path) -> None:
     print(f"[OK] Saved: workload_vs_makeup_{year}.png")
 
 
-def fit_exponential_trend(x_data: np.ndarray, y_data: np.ndarray, n_bins: int = 30) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+def fit_exponential_trend(x_data: np.ndarray, y_data: np.ndarray, n_bins: int = 50) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
-    Fit exponential trend with mean + std bands by fitting directly to all data points.
-    Uses power law fit (y = a * x^b) and calculates std bands from residuals.
-    Returns: (x_fit, y_mean, y_mean_plus_std, y_mean_minus_std)
+    Fit exponential trend with tighter quantile-based bands (p10-p90) and smooth median curve.
+    Median follows exponential growth at low x (~10^1), then smoothly transitions to approach y=x.
+    Returns: (x_fit, y_median, y_p90, y_p10)
     """
-    # Filter out zeros and negatives
-    mask = (x_data > 0) & (y_data > 0)
+    # Filter out zeros and negatives (allow y=0 for better near-zero handling)
+    mask = (x_data > 0) & (y_data >= 0)
     x_clean = x_data[mask]
     y_clean = y_data[mask]
     
@@ -802,71 +825,175 @@ def fit_exponential_trend(x_data: np.ndarray, y_data: np.ndarray, n_bins: int = 
         return np.array([]), np.array([]), np.array([]), np.array([])
     
     try:
-        # Fit power law directly to ALL data points in log space
-        # This gives us the true curve, not just binned averages
-        log_x = np.log10(x_clean)
-        log_y = np.log10(y_clean)
-        mask_fit = np.isfinite(log_x) & np.isfinite(log_y)
+        from scipy.interpolate import interp1d, UnivariateSpline
         
-        if mask_fit.sum() < 3:
+        # Use log-spaced bins for better coverage across orders of magnitude
+        log_x_min = np.log10(x_clean.min())
+        log_x_max = np.log10(x_clean.max())
+        
+        if log_x_max <= log_x_min:
             return np.array([]), np.array([]), np.array([]), np.array([])
         
-        # Weighted least squares fit in log space: log(y) = log(a) + b*log(x)
-        # Use weights to downweight outliers (robust fitting)
-        coeffs = np.polyfit(log_x[mask_fit], log_y[mask_fit], 1)
-        a_fit = 10 ** coeffs[1]  # intercept -> a
-        b_fit = coeffs[0]  # slope -> b
+        # Create more bins for better resolution
+        log_bins = np.linspace(log_x_min, log_x_max, n_bins + 1)
+        bins = 10 ** log_bins
+        
+        # Calculate quantiles within each bin (p10, p50, p90) - tighter bands
+        x_binned = []
+        y_median = []
+        y_p10 = []
+        y_p90 = []
+        
+        for i in range(len(bins) - 1):
+            bin_mask = (x_clean >= bins[i]) & (x_clean < bins[i + 1])
+            if bin_mask.sum() >= 10:  # Need at least 10 points for p10/p90
+                x_bin_center = np.sqrt(bins[i] * bins[i + 1])  # Geometric mean
+                y_bin_values = y_clean[bin_mask]
+                
+                x_binned.append(x_bin_center)
+                y_median.append(np.median(y_bin_values))
+                y_p10.append(np.percentile(y_bin_values, 10))
+                y_p90.append(np.percentile(y_bin_values, 90))
+            elif bin_mask.sum() >= 5:  # 5-9 points: use p25/p75 as proxy
+                x_bin_center = np.sqrt(bins[i] * bins[i + 1])
+                y_bin_values = y_clean[bin_mask]
+                x_binned.append(x_bin_center)
+                y_median.append(np.median(y_bin_values))
+                y_p10.append(np.percentile(y_bin_values, 25))  # Wider proxy
+                y_p90.append(np.percentile(y_bin_values, 75))
+            elif bin_mask.sum() >= 3:  # 3-4 points: use min/median/max
+                x_bin_center = np.sqrt(bins[i] * bins[i + 1])
+                y_bin_values = y_clean[bin_mask]
+                x_binned.append(x_bin_center)
+                y_median.append(np.median(y_bin_values))
+                y_p10.append(np.min(y_bin_values))
+                y_p90.append(np.max(y_bin_values))
+        
+        if len(x_binned) < 3:
+            return np.array([]), np.array([]), np.array([]), np.array([])
+        
+        x_binned = np.array(x_binned)
+        y_median = np.array(y_median)
+        y_p10 = np.array(y_p10)
+        y_p90 = np.array(y_p90)
+        
+        # Sort by x for proper interpolation
+        sort_idx = np.argsort(x_binned)
+        x_binned = x_binned[sort_idx]
+        y_median = y_median[sort_idx]
+        y_p10 = y_p10[sort_idx]
+        y_p90 = y_p90[sort_idx]
+        
+        # Use log-space for interpolation
+        log_x_binned = np.log10(x_binned)
+        y_min_positive = max(y_median[y_median > 0].min() if (y_median > 0).any() else 1, 1e-10)
+        
+        # Generate smooth curve for plotting
+        log_x_fit = np.linspace(log_x_min, log_x_max, 500)
+        x_fit = 10 ** log_x_fit
+        
+        # ===== MEDIAN TREND: Exponential growth at low x, then transition to y=x =====
+        # Fit power law to low values (x < 10^2)
+        low_x_mask = x_binned < 100
+        if low_x_mask.sum() >= 3:
+            log_x_low = np.log10(x_binned[low_x_mask])
+            log_y_low = np.log10(np.maximum(y_median[low_x_mask], y_min_positive))
+            coeffs = np.polyfit(log_x_low, log_y_low, 1)
+            a_low = 10 ** coeffs[1]
+            b_low = coeffs[0]
+        else:
+            # Fallback: use simple power law
+            log_x_all = np.log10(x_binned)
+            log_y_all = np.log10(np.maximum(y_median, y_min_positive))
+            coeffs = np.polyfit(log_x_all, log_y_all, 1)
+            a_low = 10 ** coeffs[1]
+            b_low = coeffs[0]
         
         # Power law function
         def power_law(x, a, b):
             return a * (x ** b)
         
-        # Calculate residuals from the fit (in log space)
-        y_predicted = power_law(x_clean[mask_fit], a_fit, b_fit)
-        log_residuals = np.log10(y_clean[mask_fit]) - np.log10(y_predicted)
+        # Transition point: where we start blending toward y=x
+        # Use a smooth transition function: sigmoid-like blend
+        transition_x = 10  # Start transition around x=10
+        transition_width = 2.0  # Width of transition in log space
         
-        # Use simple global std for smooth bands
-        global_std = np.std(log_residuals)
+        # Calculate power law prediction
+        y_power = power_law(x_fit, a_low, b_low)
         
-        # Generate smooth exponential curve
-        log_x_clean = log_x[mask_fit]
-        log_x_min = log_x_clean.min()
-        log_x_max = log_x_clean.max()
-        x_fit = np.logspace(log_x_min, log_x_max, 500)
-        y_fit = power_law(x_fit, a_fit, b_fit)
+        # Calculate y=x line
+        y_equals_x = x_fit
         
-        # Simple smooth std bands that follow the exponential curve
-        # In log-normal distribution: if log(y) ~ N(μ, σ), then:
-        # y_upper ≈ y_mean * 10^σ, y_lower ≈ y_mean / 10^σ
-        # This creates perfectly smooth bands that follow the exponential curve
-        y_mean_plus_std = y_fit * (10 ** global_std)
-        y_mean_minus_std = np.maximum(y_fit / (10 ** global_std), 0)
+        # Smooth transition: blend power law with y=x
+        # Transition weight: 0 at low x, 1 at high x
+        log_x_fit_vals = np.log10(x_fit)
+        transition_weight = 1 / (1 + np.exp(-(log_x_fit_vals - np.log10(transition_x)) / transition_width))
         
-        return x_fit, y_fit, y_mean_plus_std, y_mean_minus_std
+        # Blend: at low x use power law, at high x use y=x, smooth transition in between
+        y_median_fit = y_power * (1 - transition_weight) + y_equals_x * transition_weight
+        
+        # Ensure median doesn't exceed y=x (should approach from below)
+        y_median_fit = np.minimum(y_median_fit, y_equals_x)
+        
+        # ===== CONFIDENCE BANDS: Smooth p10-p90 =====
+        # Use cubic spline interpolation for smoother bands
+        log_y_p10 = np.log10(np.maximum(y_p10, y_min_positive))
+        log_y_p90 = np.log10(np.maximum(y_p90, y_min_positive))
+        
+        # Use UnivariateSpline for very smooth curves
+        try:
+            spline_p10 = UnivariateSpline(log_x_binned, log_y_p10, s=len(log_x_binned) * 0.1, k=3)
+            spline_p90 = UnivariateSpline(log_x_binned, log_y_p90, s=len(log_x_binned) * 0.1, k=3)
+            y_p10_fit = 10 ** spline_p10(log_x_fit)
+            y_p90_fit = 10 ** spline_p90(log_x_fit)
+        except:
+            # Fallback to cubic interpolation if spline fails
+            interp_p10 = interp1d(log_x_binned, log_y_p10, kind='cubic', 
+                                   fill_value='extrapolate', bounds_error=False)
+            interp_p90 = interp1d(log_x_binned, log_y_p90, kind='cubic', 
+                                   fill_value='extrapolate', bounds_error=False)
+            y_p10_fit = 10 ** interp_p10(log_x_fit)
+            y_p90_fit = 10 ** interp_p90(log_x_fit)
+        
+        # Ensure proper ordering: p10 <= median <= p90
+        y_p10_fit = np.maximum(np.minimum(y_p10_fit, y_median_fit), 0)
+        y_p90_fit = np.maximum(y_p90_fit, y_median_fit)
+        
+        return x_fit, y_median_fit, y_p90_fit, y_p10_fit
+        
     except Exception as e:
-        # Fallback: simple binned approach
+        # Fallback: simple binned approach with quantiles
         log_x_min = np.log10(x_clean.min())
         log_x_max = np.log10(x_clean.max())
         log_bins = np.linspace(log_x_min, log_x_max, n_bins + 1)
         bins = 10 ** log_bins
         
         x_binned = []
-        y_mean = []
-        y_std = []
+        y_median = []
+        y_p10 = []
+        y_p90 = []
         
         for i in range(len(bins) - 1):
             bin_mask = (x_clean >= bins[i]) & (x_clean < bins[i + 1])
-            if bin_mask.sum() > 0:
+            if bin_mask.sum() >= 10:
                 x_bin_center = np.sqrt(bins[i] * bins[i + 1])
                 y_bin_values = y_clean[bin_mask]
                 x_binned.append(x_bin_center)
-                y_mean.append(y_bin_values.mean())
-                y_std.append(y_bin_values.std())
+                y_median.append(np.median(y_bin_values))
+                y_p10.append(np.percentile(y_bin_values, 10))
+                y_p90.append(np.percentile(y_bin_values, 90))
+            elif bin_mask.sum() >= 3:
+                x_bin_center = np.sqrt(bins[i] * bins[i + 1])
+                y_bin_values = y_clean[bin_mask]
+                x_binned.append(x_bin_center)
+                y_median.append(np.median(y_bin_values))
+                y_p10.append(np.min(y_bin_values))
+                y_p90.append(np.max(y_bin_values))
         
         if len(x_binned) < 3:
             return np.array([]), np.array([]), np.array([]), np.array([])
         
-        return np.array(x_binned), np.array(y_mean), np.array(y_mean) + np.array(y_std), np.array(y_mean) - np.array(y_std)
+        return np.array(x_binned), np.array(y_median), np.array(y_p90), np.array(y_p10)
 
 
 def plot_workload_vs_citizen_by_agency(df: pd.DataFrame, year: int, outdir: Path) -> None:
@@ -899,29 +1026,29 @@ def plot_workload_vs_citizen_by_agency(df: pd.DataFrame, year: int, outdir: Path
         linewidths=0.5
     )
     
-    # Fit and plot exponential trend with mean + std bands
+    # Fit and plot exponential trend with quantile-based bands (p10-p90)
     x_data = df_metrics["total"].values
     y_data = df_metrics[oc_count_col].values
-    x_fit, y_mean, y_mean_plus_std, y_mean_minus_std = fit_exponential_trend(x_data, y_data)
+    x_fit, y_median, y_p90, y_p10 = fit_exponential_trend(x_data, y_data)
     
     if len(x_fit) > 0:
-        # Plot std bands
+        # Plot p10-p90 bands - tighter, cleaner bands
         ax.fill_between(
             x_fit,
-            y_mean_minus_std,
-            y_mean_plus_std,
+            y_p10,
+            y_p90,
             alpha=0.2,
             color="#9A8153",
-            label="Mean ± 1 STD"
+            label="10th-90th percentile"
         )
-        # Plot mean trend line
+        # Plot median trend line (exponential growth transitioning to y=x)
         ax.plot(
             x_fit,
-            y_mean,
+            y_median,
             color="#9A8153",
             linewidth=2.5,
             alpha=0.9,
-            label="Exponential trend (mean)"
+            label="Median trend"
         )
     
     # Add diagonal reference line (perfect citizen participation)
@@ -1006,29 +1133,29 @@ def plot_workload_vs_citizen_by_document(df: pd.DataFrame, year: int, outdir: Pa
         linewidths=0.3
     )
     
-    # Fit and plot exponential trend with mean + std bands
+    # Fit and plot exponential trend with quantile-based bands (p10-p90)
     x_data = doc_grp["true_total"].values
     y_data = doc_grp["estimated_citizen_total"].values
-    x_fit, y_mean, y_mean_plus_std, y_mean_minus_std = fit_exponential_trend(x_data, y_data)
+    x_fit, y_median, y_p90, y_p10 = fit_exponential_trend(x_data, y_data)
     
     if len(x_fit) > 0:
-        # Plot std bands
+        # Plot p10-p90 bands - tighter, cleaner bands
         ax.fill_between(
             x_fit,
-            y_mean_minus_std,
-            y_mean_plus_std,
+            y_p10,
+            y_p90,
             alpha=0.2,
             color="#9A8153",
-            label="Mean ± 1 STD"
+            label="10th-90th percentile"
         )
-        # Plot mean trend line
+        # Plot median trend line (exponential growth transitioning to y=x)
         ax.plot(
             x_fit,
-            y_mean,
+            y_median,
             color="#9A8153",
             linewidth=2.5,
             alpha=0.9,
-            label="Exponential trend (mean)"
+            label="Median trend"
         )
     
     # Add diagonal reference line
@@ -1167,12 +1294,9 @@ def plot_comment_distribution_and_participation(fr_stats: pd.DataFrame, year: in
         ax1.set_xscale("log")
         
         # Add statistics
-        median_comments = np.median(counts_nonzero)
         pct_low = (counts_nonzero <= 5).sum() / len(counts_nonzero) * 100
-        ax1.axvline(median_comments, color="#9A8153", linestyle="--", linewidth=2, alpha=0.7, label=f"Median (nonzero): {median_comments:.0f}")
         ax1.text(0.7, 0.95, f"{pct_low:.1f}% of active docs\nhave ≤5 comments", transform=ax1.transAxes, 
                  fontsize=10, alpha=0.7, va="top", bbox=dict(boxstyle="round", facecolor="white", alpha=0.8))
-        ax1.legend()
     else:
         ax1.text(0.5, 0.5, "No documents with comments", ha="center", va="center", transform=ax1.transAxes)
     
@@ -1200,13 +1324,19 @@ def plot_comment_distribution_and_participation(fr_stats: pd.DataFrame, year: in
     ax2.set_ylabel("Number of Documents", fontsize=FONT_LABEL, fontweight="bold")
     ax2.set_title("Comment Participation Rate", fontsize=FONT_TITLE - 2, fontweight="bold")
     
-    # Add percentages (based on known-count docs only)
+    # Add percentages on top of bars in black font
+    max_height = max(counts)
     for bar, count in zip(bars, counts):
         height = bar.get_height()
         pct = count / total_docs_known * 100 if total_docs_known > 0 else 0
-        ax2.text(bar.get_x() + bar.get_width()/2., height,
+        # Position text on top of bar
+        y_pos = height + max_height * 0.02
+        ax2.text(bar.get_x() + bar.get_width()/2., y_pos,
                 f'{count:,}\n({pct:.1f}%)',
-                ha='center', va='bottom', fontsize=11, fontweight="bold")
+                ha='center', va='bottom', fontsize=10, fontweight="bold", color='black')
+    
+    # Add padding at top to prevent overlap
+    ax2.set_ylim(0, max_height * 1.15)
     apply_clean_style(ax2)
     
     fig.suptitle(f"The Participation Gap ({year})", fontsize=FONT_TITLE + 2, fontweight="bold", y=0.98)
@@ -1323,39 +1453,54 @@ def plot_lorenz_concentration(fr_stats: pd.DataFrame, year: int, outdir: Path) -
     ax1.set_title(f"Public attention is concentrated ({year})", fontsize=FONT_TITLE - 2, fontweight="bold")
     ax1.grid(True, alpha=0.2)
     
-    # Annotate target comment shares with needed doc shares
-    for target, color in zip([0.5, 0.8, 0.9, 0.95], ["#2ca02c", "#ff7f0e", "#d62728", "#9467bd"]):
-        idx = int(np.searchsorted(frontier_y / 100, target, side="left"))
-        idx = min(max(0, idx), len(frontier_x) - 1)
+    # Simplified: Only 3 points - 0.05%, 0.1%, and 0.2% of documents
+    doc_shares = [0.05, 0.1, 0.2]  # Percentage of documents
+    colors = ["#2ca02c", "#ff7f0e", "#d62728"]  # Green, Orange, Red
+    
+    # Calculate comment percentages captured at each document share
+    for i, doc_share in enumerate(doc_shares):
+        # Find the index corresponding to this document share
+        idx = max(0, int(np.ceil(doc_share / 100 * len(frontier_x))) - 1)
+        idx = min(idx, len(frontier_x) - 1)
+        
         x_pct = frontier_x[idx]
         y_pct = frontier_y[idx]
-        ax1.scatter([x_pct], [y_pct], color=color, s=40, zorder=3)
-        ax1.axvline(x_pct, color=color, ls=":", alpha=0.6)
-        ax1.text(
-            x_pct,
-            y_pct,
-            f"  {x_pct:.1f}% docs → {target*100:.0f}% comments",
-            va="bottom",
-            ha="left",
+        color = colors[i]
+        
+        # Draw point on curve
+        ax1.scatter([x_pct], [y_pct], color=color, s=60, zorder=3, edgecolors="white", linewidths=1.5)
+        
+        # Format label
+        if doc_share < 0.1:
+            label = f"{doc_share:.2f}% docs\n→ {y_pct:.1f}% cmt"
+        else:
+            label = f"{doc_share:.1f}% docs\n→ {y_pct:.1f}% cmt"
+        
+        # Position labels on the right side, aligned with their y-coordinates to avoid arrow tangling
+        # Use different x positions to prevent arrows from crossing
+        text_x = 25 + (i * 8)  # Stagger x positions: 25, 33, 41
+        text_y = y_pct  # Align with curve point's y-coordinate
+        
+        ax1.annotate(
+            label,
+            xy=(x_pct, y_pct),
+            xytext=(text_x, text_y),
             fontsize=9,
             color=color,
-        )
-    
-    # Annotate coverage at top doc shares (1%, 5%, 10%)
-    for share, color in zip([0.01, 0.05, 0.10], ["#17becf", "#bcbd22", "#8c564b"]):
-        idx = max(0, int(np.ceil(share * len(frontier_x))) - 1)
-        ax1.scatter([share * 100], [frontier_y[idx]], color=color, s=30)
-        ax1.text(
-            share * 100,
-            frontier_y[idx],
-            f"  top {int(share*100)}% docs → {frontier_y[idx]:.1f}% comments",
-            va="bottom",
+            fontweight="bold",
             ha="left",
-            fontsize=9,
-            color=color,
+            va="center",
+            arrowprops=dict(
+                arrowstyle='->',
+                color=color,
+                lw=1.5,
+                alpha=0.7,
+                connectionstyle="arc3,rad=0.1"
+            ),
+            bbox=dict(boxstyle="round,pad=0.4", facecolor="white", alpha=0.9, edgecolor=color, linewidth=1.2)
         )
     
-    ax1.legend(loc="lower right")
+    ax1.legend(loc="lower right", fontsize=9)
     
     # Right: Lorenz Curve
     ax2 = axes[1]
@@ -1704,8 +1849,8 @@ def plot_ranked_stream(df: pd.DataFrame, year: int, outdir: Path) -> None:
     shares = np.array(shares_data)
     
     # Apply moving average smoothing
-    # Use a window size relative to number of documents
-    window_size = max(3, int(len(doc_sorted) * 0.05))
+    # Use a window size relative to number of documents (0.08 = heavier smoothing)
+    window_size = max(5, int(len(doc_sorted) * 0.08))
     if window_size % 2 == 0:
         window_size += 1
     
@@ -1717,10 +1862,14 @@ def plot_ranked_stream(df: pd.DataFrame, year: int, outdir: Path) -> None:
     shares_smooth_sum[shares_smooth_sum == 0] = 1
     shares_norm = shares_smooth / shares_smooth_sum * 100
     
-    fig, ax = plt.subplots(figsize=(16, 7))
+    # Create figure with gridspec: main stream on top, slice bars below
+    fig = plt.figure(figsize=(16, 10))
+    gs = fig.add_gridspec(2, 1, height_ratios=[3, 1], hspace=0.25)
+    
+    ax = fig.add_subplot(gs[0])
+    ax_slices = fig.add_subplot(gs[1])
     
     # Stacked area plot with PERCENTAGES
-    # X-axis is document rank (1, 2, 3, ...) - gives each document equal visual weight
     colors = get_category_colors()
     ax.stackplot(
         doc_sorted["doc_rank"],
@@ -1730,119 +1879,253 @@ def plot_ranked_stream(df: pd.DataFrame, year: int, outdir: Path) -> None:
         alpha=0.85
     )
     
-    # Mark key transition points
-    # Find where citizen share crosses 50%
-    citizen_share_col = f"share_Ordinary Citizen"
-    if citizen_share_col in doc_sorted.columns:
-        # Rolling mean to match smooth graph
-        citizen_shares_smooth = pd.Series(doc_sorted[citizen_share_col]).rolling(window_size, center=True).mean()
-    else:
-        citizen_shares_smooth = pd.Series([0] * len(doc_sorted))
+    # Calculate p10, p50, p90 positions for slice bars below (don't draw on main chart)
+    percentiles = [10, 50, 90]
+    percentile_indices = {}
+    for p in percentiles:
+        idx = int(len(doc_sorted) * p / 100)
+        idx = max(0, min(idx, len(doc_sorted) - 1))
+        percentile_indices[p] = idx
     
-    # Find where it crosses 0.5
-    crossings = np.where(np.diff(np.sign(citizen_shares_smooth - 0.5)))[0]
-    if len(crossings) > 0:
-        idx = crossings[0]  # First crossing
-        x_pos = doc_sorted.loc[idx, "doc_rank"]
-        comment_count_at_crossing = doc_sorted.loc[idx, "comment_count"]
-        ax.axvline(x_pos, color="white", linewidth=2, alpha=0.6, linestyle="--", zorder=10)
-        ax.text(
-            x_pos, 50,
-            f"50% Citizen Share\n(~{int(comment_count_at_crossing)} comments)",
-            rotation=90,
-            fontsize=9,
-            color="white",
-            fontweight="bold",
-            ha="right",
-            va="center"
-        )
-    
-    # Mark key document rank thresholds (quartiles by document rank)
-    q25_rank = int(len(doc_sorted) * 0.25)
-    median_rank = int(len(doc_sorted) * 0.5)
-    q75_rank = int(len(doc_sorted) * 0.75)
-    
-    for rank, label in [(q25_rank, "Q1"), (median_rank, "Median"), (q75_rank, "Q3")]:
-        if rank > 0 and rank < len(doc_sorted):
-            x_pos = doc_sorted.loc[rank, "doc_rank"]
-            comment_count_at_rank = doc_sorted.loc[rank, "comment_count"]
-            ax.axvline(x_pos, color="white", linewidth=1, alpha=0.3, linestyle=":", zorder=9)
-            # Optionally add text annotation
-            # ax.text(x_pos, 5, f"{label}\n({int(comment_count_at_rank)})", 
-            #        fontsize=7, color="white", alpha=0.7, ha="center", va="bottom")
-    
-    # Styling
-    # Use linear scale for document rank (each document gets equal visual weight)
+    # Styling for main stream chart
     ax.set_xlim(0, len(doc_sorted) + 1)
     ax.set_ylim(0, 100)
-    ax.set_xlabel("Document Rank (sorted by comment count)", 
-                   fontsize=FONT_LABEL, fontweight="bold", labelpad=10)
     ax.set_ylabel("Makeup of Comments (%)", fontsize=FONT_LABEL, fontweight="bold", labelpad=10)
     ax.set_title(
-        f"Makeup Evolution by Document Comment Volume ({year})",
+        f"Comment Composition by Document Volume ({year})",
         fontsize=FONT_TITLE,
         fontweight="bold",
-        pad=25
+        pad=15
     )
     
-    # Add subtitle with comment count reference
+    # Create 6 tick intervals based on comment count milestones
+    tick_positions = [1]
+    tick_labels_main = ["1"]
+    
     min_comments = int(doc_sorted["comment_count"].min())
     max_comments = int(doc_sorted["comment_count"].max())
-    median_comments = int(doc_sorted["comment_count"].median())
-    ax.text(
-        0.5, 1.02,
-        f"Documents sorted by comment count (range: {min_comments}-{max_comments}, median: {median_comments})",
-        transform=ax.transAxes,
-        ha="center",
-        fontsize=10,
-        alpha=0.6,
-        style="italic"
-    )
     
-    # Add secondary x-axis showing comment count ranges
-    # Create tick positions at key document ranks
-    tick_positions = []
-    tick_labels = []
+    milestones = [10, 50, 100, 500, 1000, 10000, 100000, 1000000]
+    milestones = [m for m in milestones if m <= max_comments and m > min_comments]
+    milestones = milestones[:5]
     
-    # Add ticks at document rank positions corresponding to comment count milestones
-    comment_milestones = [1, 5, 10, 50, 100, 500, 1000]
-    for milestone in comment_milestones:
-        # Find first document with comment_count >= milestone
+    for milestone in milestones:
         matching_docs = doc_sorted[doc_sorted["comment_count"] >= milestone]
         if len(matching_docs) > 0:
             rank_at_milestone = matching_docs.iloc[0]["doc_rank"]
-            # Avoid duplicate positions
             if rank_at_milestone not in tick_positions:
                 tick_positions.append(rank_at_milestone)
-                tick_labels.append(f"{milestone}")
+                tick_labels_main.append(f"{milestone:,}")
     
-    # Add top document if not already included
     if len(doc_sorted) > 0:
         top_rank = len(doc_sorted)
         if top_rank not in tick_positions:
             tick_positions.append(top_rank)
-            tick_labels.append(f"{int(doc_sorted.iloc[-1]['comment_count'])}")
+            tick_labels_main.append(f"{max_comments:,}")
     
-    # Create secondary axis showing comment counts (only if we have tick positions)
-    if len(tick_positions) > 0:
-        ax2 = ax.twiny()
-        ax2.set_xlim(ax.get_xlim())
-        ax2.set_xticks(tick_positions)
-        ax2.set_xticklabels(tick_labels, fontsize=8, alpha=0.7)
-        ax2.set_xlabel("Comment Count Reference", fontsize=FONT_LABEL - 2, fontweight="bold", alpha=0.7, labelpad=5)
-        ax2.tick_params(colors="#5C6670")
-        # Set alpha for tick labels separately
-        for label in ax2.get_xticklabels():
-            label.set_alpha(0.7)
-        ax2.xaxis.label.set_alpha(0.7)
+    ax.set_xticks(tick_positions)
+    ax.set_xticklabels(tick_labels_main, fontsize=10, rotation=0)
+    ax.set_xlabel("Documents, ordered by number comments", fontsize=FONT_LABEL, fontweight="bold", labelpad=10)
     
-    ax.legend(fontsize=FONT_LEGEND - 1, frameon=True, loc="upper left", bbox_to_anchor=(1, 1), framealpha=0.9)
+    ax.legend(title="Legend", fontsize=FONT_LEGEND - 1, title_fontsize=FONT_LEGEND, 
+              frameon=True, loc="upper left", bbox_to_anchor=(1, 1), framealpha=0.9)
     apply_clean_style(ax)
+    
+    # ===== Draw p10, p50, p90 slice bars below =====
+    slice_y_positions = [0.7, 0.4, 0.1]  # y positions for p10, p50, p90 bars
+    bar_height = 0.2
+    
+    for i, p in enumerate(percentiles):
+        idx = percentile_indices[p]
+        y_pos = slice_y_positions[i]
+        
+        # Get composition at this percentile (use smoothed values for consistency)
+        shares_at_p = [shares_norm[cat_idx, idx] for cat_idx in range(len(CATEGORY_ORDER))]
+        
+        # Draw stacked horizontal bar
+        left = 0
+        for share, color in zip(shares_at_p, colors):
+            ax_slices.barh(y_pos, share, left=left, height=bar_height, color=color, edgecolor="white", linewidth=1)
+            left += share
+        
+        # Label for percentile
+        comment_count_at_p = int(doc_sorted.iloc[idx]["comment_count"])
+        ax_slices.text(-2, y_pos, f"p{p}\n({comment_count_at_p:,} comments)", 
+                       ha="right", va="center", fontsize=10, fontweight="bold")
+    
+    ax_slices.set_xlim(0, 100)
+    ax_slices.set_ylim(0, 1)
+    ax_slices.axis("off")
+    ax_slices.set_title("Composition at Percentiles", fontsize=FONT_LABEL, fontweight="bold", loc="left")
     
     plt.tight_layout()
     fig.savefig(outdir / f"ranked_stream_composition_{year}.png", dpi=300, bbox_inches="tight")
     plt.close(fig)
     print(f"[OK] Saved: ranked_stream_composition_{year}.png")
+
+
+def plot_ranked_stream_experiments(df: pd.DataFrame, year: int, outdir: Path) -> None:
+    """
+    Experimental alternative projections for the ranked stream composition.
+    Creates multiple visualizations exploring different ways to show the interaction
+    between # comments, # documents, and document density.
+    """
+    if "document_number" not in df.columns:
+        print(f"Warning: document_number not available for stream experiments ({year})")
+        return
+    
+    df_doc_view = df.drop_duplicates(subset=["comment_id"])
+    
+    if "weight_doc" not in df_doc_view.columns:
+        df_doc_view["weight_doc"] = df_doc_view.get("weight", 1.0)
+    
+    if "comment_count" not in df_doc_view.columns:
+        doc_counts = df_doc_view.groupby("document_number")["weight_doc"].sum().rename("comment_count")
+        df_doc_view = df_doc_view.merge(doc_counts, on="document_number", how="left")
+    
+    df_doc_view = df_doc_view[df_doc_view["comment_count"] > 0].copy()
+    
+    if len(df_doc_view) == 0:
+        return
+    
+    # Calculate document-level metrics
+    doc_cat_counts = df_doc_view.groupby(["document_number", "category"])["weight_doc"].sum().rename("n").reset_index()
+    doc_totals = doc_cat_counts.groupby("document_number")["n"].sum().rename("total").reset_index()
+    doc_metrics = doc_cat_counts.merge(doc_totals, on="document_number", how="left")
+    doc_metrics["share"] = doc_metrics["n"] / doc_metrics["total"].where(doc_metrics["total"] > 0, 1)
+    
+    doc_wide = doc_metrics.pivot(index="document_number", columns="category", values="share").fillna(0.0)
+    doc_wide = doc_wide.reset_index()
+    doc_wide = doc_wide.merge(doc_totals, on="document_number", how="left")
+    doc_wide = doc_wide.merge(df_doc_view[["document_number", "comment_count"]].drop_duplicates(), on="document_number", how="left")
+    
+    for cat in CATEGORY_ORDER:
+        if cat not in doc_wide.columns:
+            doc_wide[cat] = 0.0
+    
+    doc_sorted = doc_wide.sort_values("comment_count").reset_index(drop=True)
+    colors = get_category_colors()
+    
+    # ===== EXPERIMENT 1: Binned Composition Bars =====
+    # Shows average composition per comment-count bin with # documents labeled
+    fig1, ax1 = plt.subplots(figsize=(14, 8))
+    
+    # Define comment count bins
+    bins = [0, 5, 10, 50, 100, 500, 1000, 10000, float('inf')]
+    bin_labels = ["1-5", "6-10", "11-50", "51-100", "101-500", "501-1K", "1K-10K", "10K+"]
+    
+    doc_sorted["comment_bin"] = pd.cut(doc_sorted["comment_count"], bins=bins, labels=bin_labels, include_lowest=True)
+    
+    # Calculate mean composition and document count per bin
+    bin_stats = []
+    for bin_label in bin_labels:
+        bin_data = doc_sorted[doc_sorted["comment_bin"] == bin_label]
+        if len(bin_data) > 0:
+            stats = {"bin": bin_label, "n_docs": len(bin_data)}
+            for cat in CATEGORY_ORDER:
+                stats[cat] = bin_data[cat].mean() * 100
+            bin_stats.append(stats)
+    
+    if len(bin_stats) > 0:
+        bin_df = pd.DataFrame(bin_stats)
+        x_pos = np.arange(len(bin_df))
+        
+        # Stacked bar chart
+        bottom = np.zeros(len(bin_df))
+        for cat, color in zip(CATEGORY_ORDER, colors):
+            values = bin_df[cat].values
+            ax1.bar(x_pos, values, bottom=bottom, color=color, label=cat, edgecolor="white", linewidth=0.5)
+            bottom += values
+        
+        # Add document count labels on top
+        for i, (_, row) in enumerate(bin_df.iterrows()):
+            ax1.text(i, 102, f"n={int(row['n_docs'])}", ha="center", va="bottom", fontsize=9, fontweight="bold")
+        
+        ax1.set_xticks(x_pos)
+        ax1.set_xticklabels(bin_df["bin"], fontsize=10)
+        ax1.set_xlabel("Comments per Document (bin)", fontsize=FONT_LABEL, fontweight="bold")
+        ax1.set_ylabel("Average Composition (%)", fontsize=FONT_LABEL, fontweight="bold")
+        ax1.set_ylim(0, 115)
+        ax1.set_title(f"Composition by Comment Volume Bin ({year})\nShowing # documents per bin", 
+                      fontsize=FONT_TITLE, fontweight="bold")
+        ax1.legend(title="Legend", fontsize=FONT_LEGEND - 1, frameon=True, loc="upper left", bbox_to_anchor=(1, 1))
+        apply_clean_style(ax1)
+    
+    plt.tight_layout()
+    fig1.savefig(outdir / f"stream_experiment_binned_{year}.png", dpi=300, bbox_inches="tight")
+    plt.close(fig1)
+    print(f"[OK] Saved: stream_experiment_binned_{year}.png")
+    
+    # ===== EXPERIMENT 2: Document-Weighted Area with Density Markers =====
+    # X-axis shows document rank (equal visual weight per doc), with markers showing comment density
+    fig2, (ax2_main, ax2_density) = plt.subplots(2, 1, figsize=(16, 9), 
+                                                   gridspec_kw={'height_ratios': [4, 1]}, sharex=True)
+    
+    doc_sorted["doc_rank"] = np.arange(1, len(doc_sorted) + 1)
+    
+    # Prepare shares
+    shares_data = np.array([[doc_sorted[cat].values[i] * 100 for i in range(len(doc_sorted))] for cat in CATEGORY_ORDER])
+    
+    # Smooth
+    from scipy.ndimage import uniform_filter1d
+    window_size = max(5, int(len(doc_sorted) * 0.08))
+    if window_size % 2 == 0:
+        window_size += 1
+    shares_smooth = np.array([uniform_filter1d(row, size=window_size, mode="nearest") for row in shares_data])
+    shares_smooth_sum = shares_smooth.sum(axis=0, keepdims=True)
+    shares_smooth_sum[shares_smooth_sum == 0] = 1
+    shares_norm = shares_smooth / shares_smooth_sum * 100
+    
+    ax2_main.stackplot(doc_sorted["doc_rank"], *shares_norm, labels=CATEGORY_ORDER, colors=colors, alpha=0.85)
+    ax2_main.set_ylabel("Composition (%)", fontsize=FONT_LABEL, fontweight="bold")
+    ax2_main.set_ylim(0, 100)
+    ax2_main.set_title(f"Equal Document Weight with Comment Density ({year})", fontsize=FONT_TITLE, fontweight="bold")
+    ax2_main.legend(title="Legend", fontsize=FONT_LEGEND - 1, frameon=True, loc="upper right")
+    apply_clean_style(ax2_main)
+    
+    # Density subplot: show comment count as area/line
+    ax2_density.fill_between(doc_sorted["doc_rank"], 0, doc_sorted["comment_count"], 
+                             color="#5C6670", alpha=0.5, label="Comment count")
+    ax2_density.set_yscale("log")
+    ax2_density.set_ylabel("# Comments\n(log)", fontsize=FONT_LABEL - 2, fontweight="bold")
+    ax2_density.set_xlabel("Document Rank (sorted by comment count)", fontsize=FONT_LABEL, fontweight="bold")
+    ax2_density.set_xlim(0, len(doc_sorted) + 1)
+    apply_clean_style(ax2_density)
+    
+    plt.tight_layout()
+    fig2.savefig(outdir / f"stream_experiment_density_{year}.png", dpi=300, bbox_inches="tight")
+    plt.close(fig2)
+    print(f"[OK] Saved: stream_experiment_density_{year}.png")
+    
+    # ===== EXPERIMENT 3: Heatmap View =====
+    # Shows composition as a heatmap with log-scaled x-axis for comment counts
+    fig3, axes3 = plt.subplots(len(CATEGORY_ORDER), 1, figsize=(14, 10), sharex=True)
+    
+    # Create log-spaced bins for comment counts
+    log_bins = np.logspace(0, np.log10(max(doc_sorted["comment_count"].max(), 10)), 50)
+    
+    for ax, cat, color in zip(axes3, CATEGORY_ORDER, colors):
+        # Calculate mean share in each log bin
+        doc_sorted["log_bin"] = pd.cut(doc_sorted["comment_count"], bins=log_bins, include_lowest=True)
+        bin_means = doc_sorted.groupby("log_bin", observed=True)[cat].mean() * 100
+        
+        if len(bin_means) > 0:
+            x_centers = [(interval.left + interval.right) / 2 for interval in bin_means.index]
+            ax.fill_between(x_centers, 0, bin_means.values, color=color, alpha=0.7)
+            ax.plot(x_centers, bin_means.values, color=color, linewidth=2)
+        
+        ax.set_ylabel(cat[:15] + "...\n(%)" if len(cat) > 15 else cat + "\n(%)", fontsize=8)
+        ax.set_ylim(0, 100)
+        ax.set_xscale("log")
+        apply_clean_style(ax)
+    
+    axes3[-1].set_xlabel("Comments per Document (log scale)", fontsize=FONT_LABEL, fontweight="bold")
+    fig3.suptitle(f"Category Composition by Comment Volume ({year})", fontsize=FONT_TITLE, fontweight="bold", y=0.98)
+    
+    plt.tight_layout(rect=[0, 0, 1, 0.96])
+    fig3.savefig(outdir / f"stream_experiment_heatmap_{year}.png", dpi=300, bbox_inches="tight")
+    plt.close(fig3)
+    print(f"[OK] Saved: stream_experiment_heatmap_{year}.png")
 
 
 def plot_spotlight_strip(df: pd.DataFrame, year: int, outdir: Path) -> None:
@@ -1869,26 +2152,31 @@ def plot_spotlight_strip(df: pd.DataFrame, year: int, outdir: Path) -> None:
         ("Highest % Corporate", max_org_pct, f"{100*max_org_pct['share_Large Organization/Corporation']:.1f}%"),
     ]
     
-    fig, axes = plt.subplots(4, 1, figsize=(14, 6))
+    fig, axes = plt.subplots(4, 1, figsize=(20, 6))
+    
+    # Define bar region to leave space for labels
+    bar_x_start = 0.30
+    bar_x_end = 1.0
+    bar_width = bar_x_end - bar_x_start
     
     for ax, (label, row, metric) in zip(axes, extremes):
         # Get shares for this agency
         shares = [row[f"share_{cat}"] for cat in CATEGORY_ORDER]
         colors = get_category_colors()
         
-        # Stacked bar
-        left = 0
+        # Stacked bar (shifted right to leave room for labels)
+        left = bar_x_start
         for share, color in zip(shares, colors):
-            ax.barh(0, share, left=left, color=color, height=0.6, edgecolor="white", linewidth=2)
-            left += share
+            ax.barh(0, share * bar_width, left=left, color=color, height=0.6, edgecolor="white", linewidth=2)
+            left += share * bar_width
         
-        # Labels
-        agency_name = str(row["agency"])[:40]
-        ax.text(-0.02, 0, f"{label}\n{agency_name}", ha="right", va="center", fontsize=11, fontweight="bold")
-        ax.text(1.02, 0, metric, ha="left", va="center", fontsize=11, fontweight="bold", color="#2E6F88")
+        # Labels - full agency name with more space
+        agency_name = str(row["agency"])
+        ax.text(bar_x_start - 0.02, 0, f"{label}\n{agency_name}", ha="right", va="center", fontsize=12, fontweight="bold")
+        ax.text(bar_x_end + 0.02, 0, metric, ha="left", va="center", fontsize=12, fontweight="bold", color="#2E6F88")
         
         # Styling
-        ax.set_xlim(0, 1)
+        ax.set_xlim(0, 1.15)
         ax.set_ylim(-0.5, 0.5)
         ax.axis("off")
     
@@ -2215,8 +2503,145 @@ def plot_agency_clustering(df: pd.DataFrame, year: int, outdir: Path, min_commen
         fig.savefig(outdir / f"agency_clustering_dendrogram_{year}.png", dpi=300, bbox_inches="tight")
         plt.close(fig)
         print(f"[OK] Saved: agency_clustering_dendrogram_{year}.png")
+        
+        # Generate text report
+        write_agency_clustering_report(merged_filtered, sub_totals_filtered, year, outdir)
+        
     except Exception as e:
         print(f"Error generating dendrogram ({year}): {e}")
+        import traceback
+        traceback.print_exc()
+
+
+def write_agency_clustering_report(merged: pd.DataFrame, sub_totals: pd.DataFrame, year: int, outdir: Path) -> None:
+    """
+    Write a text report summarizing agency clustering by dominant commenter category.
+    
+    Outputs two tables:
+    1. Summary: # agencies per dominant category
+    2. Detailed: Each agency with dominant category, % share, and delta to second-biggest
+    """
+    try:
+        # Calculate dominant category for each sub-agency
+        agency_stats = []
+        
+        for _, row in sub_totals.iterrows():
+            main = row["main_agency"]
+            sub_raw = row["sub_agency"]
+            
+            # Get full agency name for display
+            if pd.notna(sub_raw) and str(sub_raw).strip() != "" and sub_raw != main:
+                agency_name = f"{main}, {sub_raw}"
+                sub_data = merged[
+                    (merged["main_agency"] == main) & 
+                    (merged["sub_agency"] == sub_raw)
+                ]
+            else:
+                agency_name = main
+                sub_data = merged[
+                    (merged["main_agency"] == main) & 
+                    (merged["sub_agency"].isna() | (merged["sub_agency"] == "") | (merged["sub_agency"] == main))
+                ]
+            
+            if len(sub_data) == 0:
+                continue
+            
+            # Calculate category shares
+            total = sub_data["n"].sum()
+            if total == 0:
+                continue
+            
+            cat_shares = {}
+            for cat in CATEGORY_ORDER:
+                cat_total = sub_data[sub_data["category"] == cat]["n"].sum()
+                cat_shares[cat] = (cat_total / total) * 100
+            
+            # Find dominant and second-biggest
+            sorted_cats = sorted(cat_shares.items(), key=lambda x: x[1], reverse=True)
+            dominant_cat, dominant_share = sorted_cats[0]
+            second_cat, second_share = sorted_cats[1] if len(sorted_cats) > 1 else (None, 0)
+            delta = dominant_share - second_share
+            
+            agency_stats.append({
+                "agency": agency_name,
+                "dominant_category": dominant_cat,
+                "share_pct": dominant_share,
+                "delta_to_second": delta,
+                "second_category": second_cat,
+                "second_share": second_share,
+                "total_comments": int(total)
+            })
+        
+        if len(agency_stats) == 0:
+            print(f"Warning: No agency stats to write for report ({year})")
+            return
+        
+        # Create report
+        report_lines = []
+        report_lines.append(f"Agency Clustering Report ({year})")
+        report_lines.append("=" * 80)
+        report_lines.append("")
+        
+        # Table 1: Summary by dominant category
+        report_lines.append("TABLE 1: AGENCIES BY DOMINANT COMMENTER CATEGORY")
+        report_lines.append("-" * 50)
+        report_lines.append(f"{'Dominant Category':<45} | {'# Agencies':>10}")
+        report_lines.append("-" * 50)
+        
+        cat_counts = {}
+        for stat in agency_stats:
+            cat = stat["dominant_category"]
+            cat_counts[cat] = cat_counts.get(cat, 0) + 1
+        
+        for cat in CATEGORY_ORDER:
+            count = cat_counts.get(cat, 0)
+            report_lines.append(f"{cat:<45} | {count:>10}")
+        
+        report_lines.append("-" * 50)
+        report_lines.append(f"{'TOTAL':<45} | {len(agency_stats):>10}")
+        report_lines.append("")
+        report_lines.append("")
+        
+        # Table 2: Detailed breakdown
+        report_lines.append("TABLE 2: DETAILED AGENCY BREAKDOWN")
+        report_lines.append("-" * 120)
+        header = f"{'Agency':<50} | {'Dominant Category':<25} | {'Share':>7} | {'Delta':>8} | {'Comments':>10}"
+        report_lines.append(header)
+        report_lines.append("-" * 120)
+        
+        # Sort by dominant category, then by share
+        sorted_stats = sorted(agency_stats, key=lambda x: (CATEGORY_ORDER.index(x["dominant_category"]), -x["share_pct"]))
+        
+        current_cat = None
+        for stat in sorted_stats:
+            # Add separator between categories
+            if stat["dominant_category"] != current_cat:
+                if current_cat is not None:
+                    report_lines.append("")
+                current_cat = stat["dominant_category"]
+                report_lines.append(f"--- {current_cat} ---")
+            
+            agency_display = stat["agency"][:48]
+            cat_display = stat["dominant_category"][:23]
+            line = f"{agency_display:<50} | {cat_display:<25} | {stat['share_pct']:>6.1f}% | {stat['delta_to_second']:>+7.1f}pp | {stat['total_comments']:>10,}"
+            report_lines.append(line)
+        
+        report_lines.append("-" * 120)
+        report_lines.append("")
+        report_lines.append("Notes:")
+        report_lines.append("- Share: Percentage of comments from the dominant category")
+        report_lines.append("- Delta: Difference in percentage points between dominant and second-largest category")
+        report_lines.append("- pp = percentage points")
+        
+        # Write to file
+        report_path = outdir / f"agency_clustering_report_{year}.txt"
+        with open(report_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(report_lines))
+        
+        print(f"[OK] Saved: agency_clustering_report_{year}.txt")
+        
+    except Exception as e:
+        print(f"Error writing clustering report ({year}): {e}")
         import traceback
         traceback.print_exc()
 
@@ -2803,6 +3228,7 @@ def main() -> None:
         print("="*60)
         plot_compass_with_ribbon(df, args.year, outdir)
         plot_ranked_stream(df, args.year, outdir)
+        plot_ranked_stream_experiments(df, args.year, outdir)
         plot_spotlight_strip(df, args.year, outdir)
         plot_agency_clustering(df, args.year, outdir)
         plot_sankey_agency_category(df, args.year, outdir)
