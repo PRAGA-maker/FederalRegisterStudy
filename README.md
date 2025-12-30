@@ -12,7 +12,7 @@ We believe there remains huge whitespace in the notice-and-commenting systems in
 *   **Visibility:** Most (important!) notices go unnoticed by ordinary citizens. We match laypeople with bills, notices, and rulechanges that directly affect them or issues they care about.
 *   **Ease of Commenting:** Laypeople are often unable or simply too uninterested to pursue long, complex commenting procedures or hash through the nuances of a proper response. We handle the commenting medium itself (ie. via Federal Register, or Regulations.gov, or direct contact) and let people focus on their comments.
 
-Made with love by Emilia Hernandez [https://emiliahernandez.com/] and Praneel Patel [https://praneelp.me/] in collaboration with The Courtyards Institute [https://www.courtyardsinstitute.org/]
+Made with love by Praneel Patel [https://praneelp.me/] in collaboration with The Courtyards Institute [https://www.courtyardsinstitute.org/]
 
 
 **Known Issues:** 
