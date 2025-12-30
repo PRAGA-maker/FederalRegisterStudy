@@ -1,9 +1,29 @@
 #!/bin/bash
+# ============================================================================
+# Federal Register Study - Multi-Year Pipeline Runner
+# ============================================================================
+#
+# This script runs the full analysis pipeline for multiple years.
+# It's a thin wrapper around the Python CLI.
+#
+# Prerequisites:
+#   1. Set REGS_API_KEYS: export REGS_API_KEYS='key1:5000,key2:1000'
+#   2. Set OPENAI_API_KEY: export OPENAI_API_KEY='your-key-here'
+#   3. Install dependencies: uv sync (or pip install -e .)
+#
+# Usage:
+#   ./run_all_years.sh                    # Run years 2017-2024 (default)
+#   ./run_all_years.sh 2020-2024          # Run specific range
+#   ./run_all_years.sh --steps fetch,mine # Run only specific steps
+#
+# ============================================================================
 
-# Set API keys (set these before running or pass as environment variables)
+set -e  # Exit on error
+
+# Validate environment
 if [ -z "$REGS_API_KEYS" ]; then
     echo "ERROR: REGS_API_KEYS environment variable not set!"
-    echo "Set it with: export REGS_API_KEYS='key1:rpm1,key2:rpm2,...'"
+    echo "Set it with: export REGS_API_KEYS='key1:5000,key2:1000,...'"
     exit 1
 fi
 
@@ -13,60 +33,27 @@ if [ -z "$OPENAI_API_KEY" ]; then
     exit 1
 fi
 
+# Default years if not specified
+YEARS="${1:-2017-2024}"
+shift 2>/dev/null || true
+
 echo "=========================================="
-echo "Starting Federal Register Study Pipeline"
-echo "Years: 2015-2025"
+echo "Federal Register Study Pipeline"
+echo "Years: $YEARS"
 echo "=========================================="
 echo ""
 
-# Array of years to process
-YEARS=(2017 2018 2019 2020 2021 2022 2023 2024)
+# Run the Python pipeline
+python -m stratification_scripts --years "$YEARS" "$@"
 
-# Process each year
-for YEAR in "${YEARS[@]}"; do
+exit_code=$?
+if [ $exit_code -ne 0 ]; then
     echo ""
-    echo "=========================================="
-    echo "Processing Year: $YEAR"
-    echo "=========================================="
-    echo ""
-    
-    echo "Step 1/4: Fetching and enriching documents..."
-    python stratification_scripts/2024distribution.py --year $YEAR
-    if [ $? -ne 0 ]; then
-        echo "ERROR: 2024distribution.py failed for year $YEAR"
-        exit 1
-    fi
-    
-    echo ""
-    echo "Step 2/4: Mining comments..."
-    python stratification_scripts/makeup/mine_comments.py --year $YEAR --concurrent-workers 10
-    if [ $? -ne 0 ]; then
-        echo "ERROR: mine_comments.py failed for year $YEAR"
-        exit 1
-    fi
-    
-    echo ""
-    echo "Step 3/4: Classifying comment makeup..."
-    python stratification_scripts/makeup/classify_makeup.py --year $YEAR
-    if [ $? -ne 0 ]; then
-        echo "ERROR: classify_makeup.py failed for year $YEAR"
-        exit 1
-    fi
-    
-    echo ""
-    echo "Step 4/4: Generating plots..."
-    python stratification_scripts/output/makeup_plots.py --year $YEAR
-    if [ $? -ne 0 ]; then
-        echo "ERROR: makeup_plots.py failed for year $YEAR"
-        exit 1
-    fi
-    
-    echo ""
-    echo "✓ Year $YEAR complete!"
-done
+    echo "ERROR: Pipeline failed with exit code $exit_code"
+    exit $exit_code
+fi
 
 echo ""
 echo "=========================================="
 echo "All years processed successfully!"
 echo "=========================================="
-

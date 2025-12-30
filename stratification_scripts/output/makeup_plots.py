@@ -5,9 +5,23 @@ Generates policy-brief visualizations showing who participates in federal rulema
 Produces both simple 3-chart sets and complex continuum pages with ribbon analysis.
 
 Optional dependency: adjustText (pip install adjusttext) for better label positioning
+
+Example:
+    # CLI usage
+    $ python -m stratification_scripts.output.makeup_plots --year 2024
+    
+    # Programmatic usage
+    >>> from stratification_scripts.output.makeup_plots import generate_plots_for_year
+    >>> from stratification_scripts.config import PipelineConfig
+    >>> 
+    >>> config = PipelineConfig(year=2024)
+    >>> generate_plots_for_year(config)
 """
 
+from __future__ import annotations
+
 import argparse
+import sys
 import warnings
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -18,6 +32,19 @@ from matplotlib.patheffects import withStroke
 import numpy as np
 import pandas as pd
 
+from stratification_scripts.config import (
+    PipelineConfig,
+    get_makeup_data_path,
+    get_fr_csv_path,
+    get_plots_dir,
+)
+from stratification_scripts.logging_utils import (
+    get_logger,
+    log_banner,
+    setup_logging,
+)
+
+logger = get_logger(__name__)
 warnings.filterwarnings('ignore')
 
 # ============================================================================
@@ -3073,7 +3100,116 @@ def generate_narrative_summary(df: pd.DataFrame, fr_csv_path: Optional[Path], ye
 # MAIN
 # ============================================================================
 
-def main() -> None:
+def generate_plots_for_year(
+    config: PipelineConfig,
+    simple_only: bool = False,
+    continuum_only: bool = False,
+) -> None:
+    """
+    Generate visualizations for a single year.
+    
+    This is the main entry point for programmatic use.
+    
+    Args:
+        config: Pipeline configuration
+        simple_only: Only generate simple 3-chart set
+        continuum_only: Only generate complex continuum page
+    
+    Side Effects:
+        Writes plot files to plots directory.
+        Logs progress to configured logger.
+    """
+    year = config.year
+    makeup_path = get_makeup_data_path(year)
+    fr_csv_path = get_fr_csv_path(year)
+    outdir = get_plots_dir(year)
+    
+    if not makeup_path.exists():
+        logger.error(f"{makeup_path} not found. Run classify_makeup.py first.")
+        return
+    
+    log_banner(logger, "Federal Register Comment Visualization Suite")
+    logger.info(f"Year: {year}")
+    logger.info(f"Input: {makeup_path}")
+    logger.info(f"Output: {outdir}")
+    
+    # Load and preprocess data
+    logger.info("Loading data...")
+    df = pd.read_csv(makeup_path)
+    
+    required_cols = ["comment_id", "category"]
+    for col in required_cols:
+        if col not in df.columns:
+            logger.error(f"Missing required column: {col}")
+            return
+
+    logger.info(f"Loaded {len(df):,} rows")
+    
+    # Check for FR CSV
+    if fr_csv_path.exists():
+        logger.info(f"Found FR CSV: {fr_csv_path}")
+    else:
+        fr_csv_path = None
+    
+    # Try to join document_number if available
+    if fr_csv_path and "document_number" not in df.columns:
+        try:
+            fr_df = pd.read_csv(fr_csv_path, usecols=["document_number", "comment_id"])
+            if "document_number" in fr_df.columns and "comment_id" in fr_df.columns:
+                before_merge = len(df)
+                df = df.merge(fr_df[["comment_id", "document_number"]], on="comment_id", how="left")
+                merged_count = df["document_number"].notna().sum()
+                merge_rate = merged_count / before_merge * 100 if before_merge > 0 else 0
+                logger.info(f"Joined document_number: {merged_count:,}/{before_merge:,} ({merge_rate:.1f}%)")
+                if merge_rate < 90:
+                    logger.warning("Low merge rate - some plots may be incomplete")
+        except Exception as e:
+            logger.debug(f"Could not join document_number: {e}")
+    
+    logger.info("Preprocessing...")
+    df = normalize_categories(df)
+    df = deduplicate_comments(df)
+    
+    logger.info("Calculating weights...")
+    df = calculate_weights(df, fr_csv_path)
+    df = explode_agencies(df)
+    
+    logger.info(f"After preprocessing: {len(df):,} rows, {df['agency'].nunique()} agencies")
+    
+    # Generate narrative summary
+    generate_narrative_summary(df, fr_csv_path, year)
+    
+    # Generate visualizations
+    generate_simple = not continuum_only
+    generate_continuum = not simple_only
+    
+    plot_weight_distribution(df, outdir)
+    
+    if generate_simple:
+        log_banner(logger, "SIMPLE 3-CHART SET")
+        plot_composition_donut(df, year, outdir, fr_csv_path)
+        plot_agency_compass(df, year, outdir)
+        plot_workload_vs_makeup(df, year, outdir)
+        plot_workload_vs_citizen_by_agency(df, year, outdir)
+        if "document_number" in df.columns:
+            plot_workload_vs_citizen_by_document(df, year, outdir)
+        plot_comment_distribution_roi(df, year, outdir, fr_csv_path)
+    
+    if generate_continuum:
+        log_banner(logger, "COMPLEX CONTINUUM PAGE")
+        plot_compass_with_ribbon(df, year, outdir)
+        plot_ranked_stream(df, year, outdir)
+        plot_ranked_stream_experiments(df, year, outdir)
+        plot_spotlight_strip(df, year, outdir)
+        plot_agency_clustering(df, year, outdir)
+        plot_sankey_agency_category(df, year, outdir)
+        plot_continuum_page(df, year, outdir)
+    
+    log_banner(logger, f"COMPLETE - All visualizations saved to: {outdir}")
+
+
+def main() -> int:
+    """CLI entry point."""
     parser = argparse.ArgumentParser(
         description="Generate policy-brief visualizations for Federal Register comment makeup"
     )
@@ -3100,147 +3236,40 @@ def main() -> None:
         action="store_true",
         help="Only generate complex continuum page"
     )
+    parser.add_argument("--verbose", action="store_true")
+    parser.add_argument("--quiet", action="store_true")
     
     args = parser.parse_args()
     
-    # Auto-detect makeup file
-    if args.makeup is None:
-        base_path = Path(__file__).parent
-        candidates = [
-            base_path / f"makeup_data_{args.year}.csv",
-            base_path / "makeup_data.csv",
-            base_path / ".." / "makeup" / "data" / f"makeup_results_{args.year}.csv",
-        ]
-        for path in candidates:
-            if path.exists():
-                args.makeup = str(path)
-                break
-        
-        if args.makeup is None:
-            print("ERROR: Could not find makeup CSV. Please specify --makeup")
-            return
+    setup_logging(verbose=args.verbose, quiet=args.quiet, year=args.year)
     
-    makeup_path = Path(args.makeup)
-    if not makeup_path.exists():
-        print(f"ERROR: {makeup_path} not found")
-        return
-
-    # Auto-create output directory
-    if args.out_dir is None:
-        base_outdir = Path(__file__).parent.parent / "makeup" / "data" / "plots"
-        outdir = base_outdir / str(args.year)
-    else:
+    config = PipelineConfig(
+        year=args.year,
+        verbose=args.verbose,
+        quiet=args.quiet,
+    )
+    
+    # Handle custom paths if provided
+    if args.makeup:
+        makeup_path = Path(args.makeup)
+        if not makeup_path.exists():
+            logger.error(f"{makeup_path} not found")
+            return 1
+    
+    if args.out_dir:
         outdir = Path(args.out_dir)
+        outdir.mkdir(parents=True, exist_ok=True)
     
-    outdir.mkdir(parents=True, exist_ok=True)
-    
-    print(f"\n{'='*60}")
-    print(f"Federal Register Comment Visualization Suite")
-    print(f"{'='*60}")
-    print(f"Year: {args.year}")
-    print(f"Input: {makeup_path}")
-    print(f"Output: {outdir}")
-    print(f"{'='*60}\n")
-    
-    # Load and preprocess data
-    print("Loading data...")
-    df = pd.read_csv(makeup_path)
-    
-    required_cols = ["comment_id", "category"]
-    for col in required_cols:
-        if col not in df.columns:
-            print(f"ERROR: Missing required column: {col}")
-            return
-
-    print(f"Loaded {len(df):,} rows")
-    
-    # Try to find FR CSV for additional context
-    fr_csv_path = None
-    base_path = Path(__file__).parent.parent.parent
-    fr_candidates = [
-        base_path / "stratification_scripts" / "output" / f"federal_register_{args.year}_comments.csv",
-        base_path / "stratification_scripts" / "output" / "federal_register_2015_comments.csv",
-    ]
-    for path in fr_candidates:
-        if path.exists():
-            fr_csv_path = path
-            print(f"Found FR CSV: {fr_csv_path}")
-            break
-    
-    # Try to join document_number if available in FR CSV
-    if fr_csv_path and fr_csv_path.exists() and "document_number" not in df.columns:
-        try:
-            # FIX: Read full CSV, not just 1000 rows
-            fr_df = pd.read_csv(fr_csv_path, usecols=["document_number", "comment_id"])
-            if "document_number" in fr_df.columns and "comment_id" in fr_df.columns:
-                # Try to join on comment_id
-                before_merge = len(df)
-                df = df.merge(fr_df[["comment_id", "document_number"]], on="comment_id", how="left")
-                merged_count = df["document_number"].notna().sum()
-                merge_rate = merged_count / before_merge * 100 if before_merge > 0 else 0
-                print(f"Joined document_number from FR CSV: {merged_count:,}/{before_merge:,} comments ({merge_rate:.1f}%)")
-                if merge_rate < 90:
-                    print(f"  ⚠ WARNING: Low document_number merge rate - some plots may be incomplete")
-        except Exception as e:
-            print(f"Warning: Could not join document_number: {e}")
-    
-    print("Preprocessing...")
-    df = normalize_categories(df)
-    df = deduplicate_comments(df)
-    
-    # --- CRITICAL FIX 1: Calculate weights BEFORE manipulating agencies ---
-    # This ensures agency strings match the FR Population CSV exactly (e.g. "Dept A, Sub B").
-    # If we explode first, the join keys might not match, causing weights to default to 1.0.
-    print("Calculating post-hoc weights...")
-    df = calculate_weights(df, fr_csv_path)
-    
-    # Now parse/explode agencies for hierarchy analysis
-    df = explode_agencies(df)
-    # ----------------------------------------------------------------------
-    
-    print(f"After preprocessing: {len(df):,} rows (includes agency explosions), {df['agency'].nunique()} agencies")
-    
-    # Generate narrative summary
-    generate_narrative_summary(df, fr_csv_path, args.year)
-    
-    # Generate visualizations
-    generate_simple = not args.continuum_only
-    generate_continuum = not args.simple_only
-    
-    # Plot weight distribution
-    plot_weight_distribution(df, outdir)
-    
-    if generate_simple:
-        print("\n" + "="*60)
-        print("SIMPLE 3-CHART SET")
-        print("="*60)
-        plot_composition_donut(df, args.year, outdir, fr_csv_path)
-        plot_agency_compass(df, args.year, outdir)
-        plot_workload_vs_makeup(df, args.year, outdir)
-        plot_workload_vs_citizen_by_agency(df, args.year, outdir)
-        if "document_number" in df.columns:
-            plot_workload_vs_citizen_by_document(df, args.year, outdir)
-        plot_comment_distribution_roi(df, args.year, outdir, fr_csv_path)
-    
-    if generate_continuum:
-        print("\n" + "="*60)
-        print("COMPLEX CONTINUUM PAGE")
-        print("="*60)
-        plot_compass_with_ribbon(df, args.year, outdir)
-        plot_ranked_stream(df, args.year, outdir)
-        plot_ranked_stream_experiments(df, args.year, outdir)
-        plot_spotlight_strip(df, args.year, outdir)
-        plot_agency_clustering(df, args.year, outdir)
-        plot_sankey_agency_category(df, args.year, outdir)
-        plot_continuum_page(df, args.year, outdir)
-    
-    print("\n" + "="*60)
-    print(f"[COMPLETE] All visualizations saved to: {outdir}")
-    print("="*60 + "\n")
+    try:
+        generate_plots_for_year(config, args.simple_only, args.continuum_only)
+        return 0
+    except Exception as e:
+        logger.error(f"Plot generation failed: {e}")
+        return 1
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
 
 
 # learnings from building the plotting suite:
