@@ -41,17 +41,18 @@ def run_year(
     """
     Run the full pipeline for a single year.
     
-    The pipeline consists of 5 steps:
+    The pipeline consists of 6 steps:
     1. fetch: Fetch and enrich Federal Register documents
     2. mine: Mine comments from regulations.gov
     3. deduplicate: Deduplicate comments using embedding similarity
     4. classify: Classify comment authors using OpenAI
-    5. plot: Generate visualizations
+    5. track_responses: Track agency responses using Gemini
+    6. plot: Generate visualizations
     
     Args:
         config: Pipeline configuration with year and settings
         steps: Optional list of steps to run. If None, runs all steps.
-               Valid values: "fetch", "mine", "deduplicate", "classify", "plot"
+               Valid values: "fetch", "mine", "deduplicate", "classify", "track_responses", "plot"
     
     Returns:
         True if pipeline completed successfully, False otherwise.
@@ -59,6 +60,7 @@ def run_year(
     Side Effects:
         Makes HTTP requests to Federal Register and Regulations.gov APIs.
         Makes API calls to OpenAI for classification.
+        Makes API calls to Gemini for response tracking.
         Writes CSV files and plot images to disk.
         Logs progress to configured logger.
     """
@@ -66,7 +68,7 @@ def run_year(
     set_year_context(year)
     
     if steps is None:
-        steps = ["fetch", "mine", "deduplicate", "classify", "plot"]
+        steps = ["fetch", "mine", "deduplicate", "classify", "track_responses", "plot"]
     
     total_steps = len(steps)
     current_step = 0
@@ -127,7 +129,21 @@ def run_year(
             classify_comments_for_year(config)
             log_completion(logger, "Classification complete")
         
-        # Step 5: Generate plots
+        # Step 5: Track agency responses
+        if "track_responses" in steps:
+            current_step += 1
+            log_step(logger, current_step, total_steps, "Tracking agency responses")
+            
+            # Verify Gemini key is available
+            from stratification_scripts.config import get_gemini_api_key
+            get_gemini_api_key(required=True)
+            
+            from stratification_scripts.makeup.track_responses import track_responses_for_year
+            
+            track_responses_for_year(config)
+            log_completion(logger, "Response tracking complete")
+        
+        # Step 6: Generate plots
         if "plot" in steps:
             current_step += 1
             log_step(logger, current_step, total_steps, "Generating visualizations")

@@ -37,6 +37,7 @@ from stratification_scripts.config import (
     get_makeup_data_path,
     get_fr_csv_path,
     get_plots_dir,
+    get_agency_responses_path,
 )
 from stratification_scripts.logging_utils import (
     get_logger,
@@ -1231,7 +1232,15 @@ def compute_lorenz_and_gini(counts: np.ndarray) -> Tuple[np.ndarray, np.ndarray,
         return x, y, 0.0
     lorenz_y = np.cumsum(asc) / total
     lorenz_x = np.linspace(0, 1, len(asc), endpoint=True)
-    gini = float(1 - 2 * np.trapz(lorenz_y, lorenz_x))
+    # Use trapezoidal integration (trapz equivalent)
+    try:
+        gini = float(1 - 2 * np.trapz(lorenz_y, lorenz_x))
+    except AttributeError:
+        # Fallback: manual trapezoidal integration
+        dx = lorenz_x[1:] - lorenz_x[:-1]
+        y_avg = (lorenz_y[1:] + lorenz_y[:-1]) / 2
+        area = np.sum(dx * y_avg)
+        gini = float(1 - 2 * area)
     return lorenz_x, lorenz_y, gini
 
 
@@ -3103,6 +3112,488 @@ def generate_narrative_summary(df: pd.DataFrame, fr_csv_path: Optional[Path], ye
 # MAIN
 # ============================================================================
 
+# ============================================================================
+# RESPONSE TRACKING PLOTS
+# ============================================================================
+
+def load_response_data(year: int) -> Optional[pd.DataFrame]:
+    """Load agency_responses_{year}.csv if exists"""
+    responses_path = get_agency_responses_path(year)
+    if not responses_path.exists():
+        return None
+    return pd.read_csv(responses_path)
+
+
+def generate_response_plots(
+    df_responses: pd.DataFrame,
+    df_makeup: pd.DataFrame,
+    plots_dir: Path,
+    year: int,
+) -> None:
+    """
+    Generate all response tracking plots.
+    
+    Args:
+        df_responses: DataFrame with response tracking data
+        df_makeup: DataFrame with makeup data (for joining commenter types)
+        plots_dir: Directory to save plots
+        year: Year being analyzed
+    """
+    logger.info("Generating response tracking plots...")
+    
+    # Join responses with makeup data on comment_id
+    df = df_responses.merge(df_makeup[["comment_id", "category"]], on="comment_id", how="left")
+    
+    # Normalize categories
+    df = normalize_categories(df)
+    
+    # 1. Response Rate by Agency
+    plot_response_rate_by_agency(df, year, plots_dir)
+    
+    # 2. Response Rate by Commenter Type
+    plot_response_rate_by_type(df, year, plots_dir)
+    
+    # 3. Accept/Reject Distribution
+    plot_decision_distribution(df, year, plots_dir)
+    
+    # 4. Accept/Reject by Commenter Type
+    plot_decision_by_type(df, year, plots_dir)
+    
+    # 5. Comment Length vs Response Probability
+    plot_length_vs_response(df, year, plots_dir)
+    
+    # 6. Comment Length vs Acceptance
+    plot_length_vs_acceptance(df, year, plots_dir)
+    
+    # 7. Response Length vs Commenter Type
+    plot_response_length_by_type(df, year, plots_dir)
+    
+    # 8. Response Length vs Comment Length
+    plot_response_vs_comment_length(df, year, plots_dir)
+    
+    # 9. Agency Response Heatmap
+    plot_response_heatmap(df, year, plots_dir)
+    
+    logger.info("Response tracking plots complete")
+
+
+def plot_response_rate_by_agency(df: pd.DataFrame, year: int, outdir: Path) -> None:
+    """Bar chart showing % of comments responded to per agency"""
+    if len(df) == 0 or "agency" not in df.columns:
+        logger.warning("No data for response rate by agency plot")
+        return
+    
+    fig, ax = plt.subplots(figsize=(12, 8))
+    
+    # Calculate response rates by agency
+    agency_stats = df.groupby("agency").agg({
+        "response_found": lambda x: (x == "yes").sum() / len(x) * 100
+    }).reset_index()
+    agency_stats.columns = ["agency", "response_rate"]
+    
+    if len(agency_stats) == 0:
+        logger.warning("No agency data for response rate plot")
+        plt.close()
+        return
+    
+    # Sort by response rate
+    agency_stats = agency_stats.sort_values("response_rate", ascending=True)
+    
+    # Take top 20 agencies
+    agency_stats = agency_stats.tail(20)
+    
+    if len(agency_stats) == 0:
+        logger.warning("No agencies to plot")
+        plt.close()
+        return
+    
+    # Plot
+    ax.barh(agency_stats["agency"], agency_stats["response_rate"], color="#6B7D6D")
+    ax.set_xlabel("Response Rate (%)", fontsize=FONT_LABEL)
+    ax.set_title(f"Agency Response Rate - {year}", fontsize=FONT_TITLE, fontweight="bold")
+    ax.grid(axis="x", alpha=GRID_ALPHA, color=GRID_COLOR)
+    
+    plt.tight_layout()
+    plt.savefig(outdir / f"response_rate_by_agency_{year}.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+
+def plot_response_rate_by_type(df: pd.DataFrame, year: int, outdir: Path) -> None:
+    """Stacked bar showing response rates by commenter type"""
+    if len(df) == 0 or "category" not in df.columns or "response_found" not in df.columns:
+        logger.warning("No data for response rate by type plot")
+        return
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    # Flatten multi-level columns
+    type_stats = df.groupby("category")["response_found"].value_counts(normalize=True).unstack(fill_value=0) * 100
+    
+    if len(type_stats) == 0:
+        logger.warning("No category data for response rate by type plot")
+        plt.close()
+        return
+    
+    # Plot stacked bar
+    type_stats.plot(kind="bar", stacked=True, ax=ax, color=["#6B7D6D", "#DDE3EA", "#9A8153"])
+    ax.set_ylabel("Percentage", fontsize=FONT_LABEL)
+    ax.set_xlabel("Commenter Type", fontsize=FONT_LABEL)
+    ax.set_title(f"Response Rate by Commenter Type - {year}", fontsize=FONT_TITLE, fontweight="bold")
+    ax.legend(title="Response Found", fontsize=FONT_LEGEND)
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
+    
+    plt.tight_layout()
+    plt.savefig(outdir / f"response_rate_by_type_{year}.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+
+def plot_decision_distribution(df: pd.DataFrame, year: int, outdir: Path) -> None:
+    """Donut chart of agency decisions (accept/reject/uncertain)"""
+    fig, ax = plt.subplots(figsize=(8, 8))
+    
+    # Filter to responses that were found
+    df_found = df[df["response_found"] == "yes"]
+    
+    if len(df_found) == 0:
+        logger.warning("No responses found for decision distribution plot")
+        return
+    
+    # Count decisions
+    decision_counts = df_found["agency_decision"].value_counts()
+    
+    # Plot donut
+    colors = ["#6B7D6D", "#DDE3EA", "#9A8153"]
+    wedges, texts, autotexts = ax.pie(
+        decision_counts.values,
+        labels=decision_counts.index,
+        autopct="%1.1f%%",
+        colors=colors,
+        startangle=90,
+        wedgeprops=dict(width=0.5),
+    )
+    
+    for autotext in autotexts:
+        autotext.set_color("white")
+        autotext.set_fontsize(FONT_LABEL)
+        autotext.set_fontweight("bold")
+    
+    ax.set_title(f"Agency Decision Distribution - {year}", fontsize=FONT_TITLE, fontweight="bold")
+    
+    plt.tight_layout()
+    plt.savefig(outdir / f"decision_distribution_{year}.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+
+def plot_decision_by_type(df: pd.DataFrame, year: int, outdir: Path) -> None:
+    """Grouped bar chart of accept/reject by commenter type"""
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    # Filter to responses that were found
+    df_found = df[df["response_found"] == "yes"]
+    
+    if len(df_found) == 0:
+        logger.warning("No responses found for decision by type plot")
+        return
+    
+    # Calculate decision rates by category
+    decision_by_type = df_found.groupby("category")["agency_decision"].value_counts(normalize=True).unstack(fill_value=0) * 100
+    
+    # Plot grouped bar
+    decision_by_type.plot(kind="bar", ax=ax, color=["#6B7D6D", "#DDE3EA", "#9A8153"])
+    ax.set_ylabel("Percentage", fontsize=FONT_LABEL)
+    ax.set_xlabel("Commenter Type", fontsize=FONT_LABEL)
+    ax.set_title(f"Agency Decision by Commenter Type - {year}", fontsize=FONT_TITLE, fontweight="bold")
+    ax.legend(title="Decision", fontsize=FONT_LEGEND)
+    ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
+    ax.grid(axis="y", alpha=GRID_ALPHA, color=GRID_COLOR)
+    
+    plt.tight_layout()
+    plt.savefig(outdir / f"decision_by_type_{year}.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+
+def plot_length_vs_response(df: pd.DataFrame, year: int, outdir: Path) -> None:
+    """Scatter plot of comment length vs response probability"""
+    if len(df) == 0 or "comment_text_length" not in df.columns or "response_found" not in df.columns:
+        logger.warning("No data for length vs response plot")
+        return
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    # Create binary response variable
+    df["responded"] = (df["response_found"] == "yes").astype(int)
+    
+    # Filter out invalid lengths
+    df_valid = df[df["comment_text_length"].notna() & (df["comment_text_length"] > 0)]
+    
+    if len(df_valid) == 0:
+        logger.warning("No valid comment lengths for plot")
+        plt.close()
+        return
+    
+    # Bin comment lengths
+    df_valid["length_bin"] = pd.cut(df_valid["comment_text_length"], bins=20)
+    
+    # Calculate response rate by length bin
+    length_stats = df_valid.groupby("length_bin")["responded"].agg(["mean", "count"]).reset_index()
+    length_stats["bin_center"] = length_stats["length_bin"].apply(lambda x: x.mid)
+    
+    # Filter bins with at least 5 comments
+    length_stats = length_stats[length_stats["count"] >= 5]
+    
+    if len(length_stats) == 0:
+        logger.warning("No bins with sufficient data for length vs response plot")
+        plt.close()
+        return
+    
+    # Plot
+    ax.scatter(length_stats["bin_center"], length_stats["mean"] * 100, s=length_stats["count"], alpha=0.6, color="#6B7D6D")
+    ax.set_xlabel("Comment Length (characters)", fontsize=FONT_LABEL)
+    ax.set_ylabel("Response Rate (%)", fontsize=FONT_LABEL)
+    ax.set_title(f"Comment Length vs Response Probability - {year}", fontsize=FONT_TITLE, fontweight="bold")
+    ax.grid(alpha=GRID_ALPHA, color=GRID_COLOR)
+    
+    plt.tight_layout()
+    plt.savefig(outdir / f"length_vs_response_{year}.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+
+def plot_length_vs_acceptance(df: pd.DataFrame, year: int, outdir: Path) -> None:
+    """Box plots of comment length by decision type"""
+    if len(df) == 0 or "response_found" not in df.columns:
+        logger.warning("No data for length vs acceptance plot")
+        return
+    
+    # Filter to responses that were found
+    df_found = df[df["response_found"] == "yes"]
+    
+    if len(df_found) == 0:
+        logger.warning("No responses found for length vs acceptance plot")
+        return
+    
+    if "comment_text_length" not in df_found.columns:
+        logger.warning("No comment_text_length column for plot")
+        return
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    # Create box plot
+    decision_order = ["accept", "reject", "uncertain"]
+    data_to_plot = []
+    labels_to_plot = []
+    for d in decision_order:
+        data = df_found[df_found["agency_decision"] == d]["comment_text_length"].dropna()
+        if len(data) > 0:
+            data_to_plot.append(data)
+            labels_to_plot.append(d)
+    
+    if len(data_to_plot) == 0:
+        logger.warning("No valid data for length vs acceptance plot")
+        plt.close()
+        return
+    
+    bp = ax.boxplot(data_to_plot, labels=labels_to_plot, patch_artist=True)
+    
+    # Color boxes
+    colors = ["#6B7D6D", "#DDE3EA", "#9A8153"]
+    for i, patch in enumerate(bp["boxes"]):
+        patch.set_facecolor(colors[i % len(colors)])
+    
+    ax.set_ylabel("Comment Length (characters)", fontsize=FONT_LABEL)
+    ax.set_xlabel("Agency Decision", fontsize=FONT_LABEL)
+    ax.set_title(f"Comment Length by Decision Type - {year}", fontsize=FONT_TITLE, fontweight="bold")
+    ax.grid(axis="y", alpha=GRID_ALPHA, color=GRID_COLOR)
+    
+    plt.tight_layout()
+    plt.savefig(outdir / f"length_vs_acceptance_{year}.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+
+def plot_response_length_by_type(df: pd.DataFrame, year: int, outdir: Path) -> None:
+    """Violin plot of response length by commenter type"""
+    if len(df) == 0 or "response_found" not in df.columns or "response_text" not in df.columns:
+        logger.warning("No data for response length by type plot")
+        return
+    
+    # Filter to responses that were found
+    df_found = df[(df["response_found"] == "yes") & (df["response_text"] != "N/A")]
+    
+    if len(df_found) == 0:
+        logger.warning("No response text found for response length by type plot")
+        return
+    
+    # Calculate response text length
+    df_found["response_length"] = df_found["response_text"].str.len()
+    
+    if "category" not in df_found.columns:
+        logger.warning("No category column for response length by type plot")
+        return
+    
+    # Create violin plot
+    categories = df_found["category"].unique()
+    data_to_plot = []
+    valid_categories = []
+    for cat in categories:
+        data = df_found[df_found["category"] == cat]["response_length"].dropna()
+        if len(data) > 0:
+            data_to_plot.append(data)
+            valid_categories.append(cat)
+    
+    if len(data_to_plot) == 0:
+        logger.warning("No valid data for response length by type plot")
+        return
+    
+    fig, ax = plt.subplots(figsize=(12, 6))
+    
+    parts = ax.violinplot(data_to_plot, positions=range(len(valid_categories)), showmeans=True, showmedians=True)
+    
+    # Color violins
+    for pc in parts["bodies"]:
+        pc.set_facecolor("#6B7D6D")
+        pc.set_alpha(0.6)
+    
+    ax.set_xticks(range(len(valid_categories)))
+    ax.set_xticklabels(valid_categories, rotation=45, ha="right")
+    ax.set_ylabel("Response Length (characters)", fontsize=FONT_LABEL)
+    ax.set_xlabel("Commenter Type", fontsize=FONT_LABEL)
+    ax.set_title(f"Response Length by Commenter Type - {year}", fontsize=FONT_TITLE, fontweight="bold")
+    ax.grid(axis="y", alpha=GRID_ALPHA, color=GRID_COLOR)
+    
+    plt.tight_layout()
+    plt.savefig(outdir / f"response_length_by_type_{year}.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+
+def plot_response_vs_comment_length(df: pd.DataFrame, year: int, outdir: Path) -> None:
+    """Scatter plot of response length vs comment length with correlation"""
+    if len(df) == 0 or "response_found" not in df.columns or "response_text" not in df.columns:
+        logger.warning("No data for response vs comment length plot")
+        return
+    
+    # Filter to responses that were found
+    df_found = df[(df["response_found"] == "yes") & (df["response_text"] != "N/A")]
+    
+    if len(df_found) == 0:
+        logger.warning("No response text found for response vs comment length plot")
+        return
+    
+    if "comment_text_length" not in df_found.columns:
+        logger.warning("No comment_text_length column for plot")
+        return
+    
+    # Calculate response text length
+    df_found["response_length"] = df_found["response_text"].str.len()
+    
+    # Remove outliers for better visualization
+    df_plot = df_found[
+        (df_found["comment_text_length"].notna()) &
+        (df_found["response_length"].notna()) &
+        (df_found["comment_text_length"] > 0) &
+        (df_found["response_length"] > 0)
+    ]
+    
+    if len(df_plot) == 0:
+        logger.warning("No valid data points for response vs comment length plot")
+        return
+    
+    # Remove extreme outliers
+    if len(df_plot) > 10:
+        df_plot = df_plot[
+            (df_plot["comment_text_length"] < df_plot["comment_text_length"].quantile(0.95)) &
+            (df_plot["response_length"] < df_plot["response_length"].quantile(0.95))
+        ]
+    
+    if len(df_plot) == 0:
+        logger.warning("No data after outlier removal")
+        return
+    
+    fig, ax = plt.subplots(figsize=(10, 6))
+    
+    # Plot scatter
+    ax.scatter(df_plot["comment_text_length"], df_plot["response_length"], alpha=0.5, color="#6B7D6D")
+    
+    # Calculate and plot trend line if enough points
+    if len(df_plot) >= 2:
+        try:
+            z = np.polyfit(df_plot["comment_text_length"], df_plot["response_length"], 1)
+            p = np.poly1d(z)
+            ax.plot(df_plot["comment_text_length"], p(df_plot["comment_text_length"]), "r--", linewidth=2)
+            
+            # Calculate correlation
+            corr = df_plot["comment_text_length"].corr(df_plot["response_length"])
+            if not pd.isna(corr):
+                ax.text(0.05, 0.95, f"Correlation: {corr:.3f}", transform=ax.transAxes, fontsize=FONT_LABEL, verticalalignment="top")
+        except Exception as e:
+            logger.debug(f"Could not plot trend line: {e}")
+    
+    ax.set_xlabel("Comment Length (characters)", fontsize=FONT_LABEL)
+    ax.set_ylabel("Response Length (characters)", fontsize=FONT_LABEL)
+    ax.set_title(f"Response Length vs Comment Length - {year}", fontsize=FONT_TITLE, fontweight="bold")
+    ax.grid(alpha=GRID_ALPHA, color=GRID_COLOR)
+    
+    plt.tight_layout()
+    plt.savefig(outdir / f"response_vs_comment_length_{year}.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+
+def plot_response_heatmap(df: pd.DataFrame, year: int, outdir: Path) -> None:
+    """Heatmap of response rates by agency × commenter type"""
+    if len(df) == 0 or "agency" not in df.columns or "category" not in df.columns:
+        logger.warning("No data for response heatmap plot")
+        return
+    
+    # Calculate response rates
+    df["responded"] = (df["response_found"] == "yes").astype(int)
+    
+    # Create pivot table
+    try:
+        heatmap_data = df.groupby(["agency", "category"])["responded"].mean().unstack(fill_value=0) * 100
+    except Exception as e:
+        logger.warning(f"Could not create heatmap pivot table: {e}")
+        return
+    
+    if len(heatmap_data) == 0 or len(heatmap_data.columns) == 0:
+        logger.warning("No data for heatmap after pivot")
+        return
+    
+    # Take top 15 agencies by total comments
+    try:
+        top_agencies = df["agency"].value_counts().head(15).index
+        heatmap_data = heatmap_data.loc[heatmap_data.index.isin(top_agencies)]
+    except Exception:
+        pass
+    
+    if len(heatmap_data) == 0 or len(heatmap_data.columns) == 0:
+        logger.warning("No data for heatmap after filtering")
+        return
+    
+    fig, ax = plt.subplots(figsize=(12, 10))
+    
+    # Plot heatmap
+    im = ax.imshow(heatmap_data.values, cmap="YlGn", aspect="auto")
+    
+    # Set ticks
+    ax.set_xticks(range(len(heatmap_data.columns)))
+    ax.set_yticks(range(len(heatmap_data.index)))
+    ax.set_xticklabels(heatmap_data.columns, rotation=45, ha="right")
+    ax.set_yticklabels(heatmap_data.index)
+    
+    # Add colorbar
+    cbar = plt.colorbar(im, ax=ax)
+    cbar.set_label("Response Rate (%)", fontsize=FONT_LABEL)
+    
+    # Add values to cells
+    for i in range(len(heatmap_data.index)):
+        for j in range(len(heatmap_data.columns)):
+            text = ax.text(j, i, f"{heatmap_data.values[i, j]:.1f}", ha="center", va="center", color="black", fontsize=8)
+    
+    ax.set_title(f"Response Rate Heatmap: Agency × Commenter Type - {year}", fontsize=FONT_TITLE, fontweight="bold")
+    
+    plt.tight_layout()
+    plt.savefig(outdir / f"response_heatmap_{year}.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+
 def generate_plots_for_year(
     config: PipelineConfig,
     simple_only: bool = False,
@@ -3207,6 +3698,14 @@ def generate_plots_for_year(
         plot_agency_clustering(df, year, outdir)
         plot_sankey_agency_category(df, year, outdir)
         plot_continuum_page(df, year, outdir)
+    
+    # Generate response tracking plots if data available
+    df_responses = load_response_data(year)
+    if df_responses is not None:
+        log_banner(logger, "RESPONSE TRACKING PLOTS")
+        generate_response_plots(df_responses, df, outdir, year)
+    else:
+        logger.info("No response tracking data found, skipping response plots")
     
     log_banner(logger, f"COMPLETE - All visualizations saved to: {outdir}")
 

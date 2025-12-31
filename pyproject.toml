@@ -33,6 +33,10 @@ dependencies = [
     # OpenAI API
     "openai>=1.0.0",
     
+    # Google Gemini API (new SDK)
+    "google-genai>=0.2.0",
+    "pydantic>=2.0.0",
+    
     # Visualization
     "matplotlib>=3.7.0",
     

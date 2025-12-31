@@ -121,6 +121,30 @@ def get_openai_api_key(required: bool = False) -> Optional[str]:
     return api_key if api_key else None
 
 
+def get_gemini_api_key(required: bool = False) -> Optional[str]:
+    """
+    Get Gemini API key from environment.
+    
+    Args:
+        required: If True, raise ConfigurationError when key not found.
+    
+    Returns:
+        API key string or None if not set.
+    
+    Raises:
+        ConfigurationError: If required=True and key is not configured.
+    """
+    api_key = os.environ.get("GEMINI_API_KEY", "")
+    
+    if required and not api_key:
+        raise ConfigurationError(
+            "GEMINI_API_KEY environment variable not set. "
+            "Set it with: export GEMINI_API_KEY='your-key-here'"
+        )
+    
+    return api_key if api_key else None
+
+
 def get_package_root() -> Path:
     """
     Get the root directory of the stratification_scripts package.
@@ -252,6 +276,19 @@ def get_makeup_data_path(year: int) -> Path:
     return get_output_dir() / f"makeup_data_{year}.csv"
 
 
+def get_agency_responses_path(year: int) -> Path:
+    """
+    Get path to agency responses CSV for a year.
+    
+    Args:
+        year: Year to get CSV path for.
+    
+    Returns:
+        Path to agency_responses_{year}.csv
+    """
+    return get_data_dir() / f"agency_responses_{year}.csv"
+
+
 @dataclass
 class PipelineConfig:
     """
@@ -315,6 +352,13 @@ class PipelineConfig:
     fr_sleep: float = 0.2
     fr_detail_sleep: float = 0.5
     per_key_hourly: int = 1000
+    
+    # Gemini API settings
+    gemini_model: str = "gemini-3-flash-preview"
+    gemini_max_concurrency: int = 10
+    enable_search_grounding: bool = True
+    max_comment_pages: int = 30
+    gemini_thinking_level: Optional[str] = None  # "minimal"|"low"|"medium"|"high"
     
     # Derived paths (computed on access)
     _output_dir: Optional[Path] = field(default=None, repr=False)
