@@ -271,6 +271,9 @@ class PipelineConfig:
         openai_model: OpenAI model for classification
         max_concurrency: Max concurrent OpenAI requests
         sample_threshold: Use sampling for docs with more comments
+        deduplication_threshold: Cosine similarity threshold for duplicate detection
+        deduplication_model: Sentence transformer model for embeddings
+        enable_deduplication: Enable comment deduplication feature
         fr_sleep: Sleep between FR page requests
         fr_detail_sleep: Sleep between FR detail requests
         verbose: Enable verbose logging
@@ -302,6 +305,11 @@ class PipelineConfig:
     max_concurrency: int = 100
     sample_threshold: int = 1000
     sampling_seed: Optional[int] = None
+    
+    # Deduplication settings
+    deduplication_threshold: float = 0.95
+    deduplication_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    enable_deduplication: bool = True
     
     # Federal Register API settings
     fr_sleep: float = 0.2

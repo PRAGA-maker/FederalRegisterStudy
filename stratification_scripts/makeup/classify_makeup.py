@@ -190,14 +190,80 @@ def density_aware_sampling(
     return sampled_indices
 
 
+def propagate_results_to_duplicates(
+    results: List[Tuple[str, Optional[str], str, str]],
+    df_comments: pl.DataFrame,
+) -> List[Tuple[str, Optional[str], str, str]]:
+    """
+    Propagate classification results to duplicate comments.
+    
+    For each canonical comment result, find all duplicates in the same group
+    and create result entries for them with the same classification.
+    
+    Args:
+        results: List of (comment_id, category, prompt, model_response) tuples
+        df_comments: DataFrame with duplicate_group_id and canonical_comment_id columns
+    
+    Returns:
+        Expanded list of results including duplicates
+    """
+    if "duplicate_group_id" not in df_comments.columns:
+        # No deduplication columns, return as-is
+        return results
+    
+    # Build mapping from canonical_comment_id to result
+    canonical_to_result = {r[0]: r for r in results}
+    
+    # Find all duplicates that need results propagated
+    expanded_results = list(results)  # Start with canonical results
+    
+    # Group by duplicate_group_id to find duplicates
+    duplicate_groups = df_comments.filter(
+        pl.col("duplicate_group_id").is_not_null() & 
+        (pl.col("is_canonical") == False)
+    )
+    
+    if len(duplicate_groups) > 0:
+        for row in duplicate_groups.iter_rows(named=True):
+            duplicate_id = row["comment_id"]
+            canonical_id = row["canonical_comment_id"]
+            
+            # If canonical was classified, propagate to duplicate
+            if canonical_id in canonical_to_result:
+                canonical_result = canonical_to_result[canonical_id]
+                # Create duplicate result with same classification
+                duplicate_result = (
+                    duplicate_id,
+                    canonical_result[1],  # category
+                    canonical_result[2],  # prompt
+                    canonical_result[3],  # model_response
+                )
+                expanded_results.append(duplicate_result)
+    
+    return expanded_results
+
+
 def save_results(
     results_csv: Path,
     results: List[Tuple[str, Optional[str], str, str]],
     model: str,
+    df_comments: Optional[pl.DataFrame] = None,
 ) -> None:
-    """Append results to CSV."""
+    """
+    Append results to CSV, optionally propagating to duplicates.
+    
+    Args:
+        results_csv: Path to results CSV
+        results: List of (comment_id, category, prompt, model_response) tuples
+        model: Model name
+        df_comments: Optional DataFrame with comments (for duplicate propagation)
+    """
     if not results:
         return
+    
+    # Propagate results to duplicates if comments DataFrame provided
+    if df_comments is not None:
+        results = propagate_results_to_duplicates(results, df_comments)
     
     df_new = pl.DataFrame({
         "comment_id": [r[0] for r in results],
@@ -271,6 +337,7 @@ async def process_classification_async(
     max_concurrency: int,
     sample_threshold: int,
     sampling_seed: Optional[int],
+    df_comments: Optional[pl.DataFrame] = None,
 ) -> None:
     """Process all documents in async context."""
     execution_queue: List[Tuple[str, str, Dict[str, str]]] = []
@@ -310,12 +377,12 @@ async def process_classification_async(
                 execution_queue.clear()
                 logger.info(f"\nProcessing batch of {len(batch)} comments...")
                 results = await classifier.classify_batch(batch, max_concurrency)
-                save_results(results_csv, results, model)
+                save_results(results_csv, results, model, df_comments)
     
     if execution_queue:
         logger.info(f"\nProcessing final {len(execution_queue)} comments...")
         results = await classifier.classify_batch(execution_queue, max_concurrency)
-        save_results(results_csv, results, model)
+        save_results(results_csv, results, model, df_comments)
 
 
 def classify_comments_for_year(config: PipelineConfig) -> None:
@@ -344,6 +411,15 @@ def classify_comments_for_year(config: PipelineConfig) -> None:
     
     df_comments = pl.read_csv(str(comments_csv))
     
+    # Check if deduplication was performed
+    has_deduplication = "is_canonical" in df_comments.columns
+    
+    if has_deduplication:
+        canonical_count = df_comments.filter(pl.col("is_canonical") == True).shape[0]
+        total_count = len(df_comments)
+        duplicate_count = total_count - canonical_count
+        logger.info(f"Deduplication detected: {canonical_count:,} canonical, {duplicate_count:,} duplicates")
+    
     # Load existing results
     classified_ids: Set[str] = set()
     if results_csv.exists():
@@ -351,7 +427,16 @@ def classify_comments_for_year(config: PipelineConfig) -> None:
         classified_ids = set(df_results["comment_id"].to_list())
         logger.info(f"Loaded {len(classified_ids)} already-classified comments")
     
-    df_unclassified = df_comments.filter(~pl.col("comment_id").is_in(list(classified_ids)))
+    # Filter unclassified comments
+    # If deduplication enabled, only classify canonical comments
+    if has_deduplication:
+        df_unclassified = df_comments.filter(
+            (pl.col("is_canonical") == True) &
+            (~pl.col("comment_id").is_in(list(classified_ids)))
+        )
+        logger.info(f"Filtering to canonical comments only: {len(df_unclassified):,} to classify")
+    else:
+        df_unclassified = df_comments.filter(~pl.col("comment_id").is_in(list(classified_ids)))
     
     if len(df_unclassified) == 0:
         logger.info("All comments already classified")
@@ -393,7 +478,7 @@ def classify_comments_for_year(config: PipelineConfig) -> None:
     logger.info(f"Needs LLM: {len(needs_llm)}")
     
     if metadata_results:
-        save_results(results_csv, metadata_results, "metadata")
+        save_results(results_csv, metadata_results, "metadata", df_comments if has_deduplication else None)
     
     # Phase 2: LLM classification
     if not needs_llm:
@@ -442,6 +527,7 @@ def classify_comments_for_year(config: PipelineConfig) -> None:
         max_retries=8,
     )
     
+    # Pass df_comments for duplicate propagation
     asyncio.run(process_classification_async(
         classifier,
         by_doc,
@@ -450,6 +536,7 @@ def classify_comments_for_year(config: PipelineConfig) -> None:
         config.max_concurrency,
         config.sample_threshold,
         config.sampling_seed,
+        df_comments if has_deduplication else None,
     ))
     
     join_and_write_output(comments_csv, results_csv, fr_csv, output_csv)

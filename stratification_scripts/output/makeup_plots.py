@@ -229,6 +229,7 @@ def calculate_weights(df: pd.DataFrame, fr_csv_path: Optional[Path]) -> pd.DataF
             return df
             
         # Calculate Sample Totals (N_sample) per Stratum
+        # NOTE: This counts ALL comments including duplicates (each duplicate is a separate submission)
         sample_strata = df.groupby(["agency", "comment_bin"]).size().rename("N_sample").reset_index()
         
         # Merge Population and Sample Stratum Totals
@@ -245,6 +246,7 @@ def calculate_weights(df: pd.DataFrame, fr_csv_path: Optional[Path]) -> pd.DataF
         # ---------------------------------------------------------
         
         # Count sampled comments per document
+        # NOTE: This counts ALL comments including duplicates (each duplicate is a separate submission)
         doc_sample_counts = df.groupby("document_number").size().rename("n_sample_doc")
         
         # Join back to DF
@@ -252,6 +254,7 @@ def calculate_weights(df: pd.DataFrame, fr_csv_path: Optional[Path]) -> pd.DataF
         
         # Calculate weight_doc = True Total / Sampled Total
         # This reconstructs the document exactly, without inflating for missing neighbor documents
+        # NOTE: Duplicates are counted separately - each duplicate comment gets the same weight as if unique
         df["weight_doc"] = df["comment_count"] / df["n_sample_doc"]
         
         # Fill missing weights and provide diagnostics

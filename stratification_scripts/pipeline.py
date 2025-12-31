@@ -41,16 +41,17 @@ def run_year(
     """
     Run the full pipeline for a single year.
     
-    The pipeline consists of 4 steps:
+    The pipeline consists of 5 steps:
     1. fetch: Fetch and enrich Federal Register documents
     2. mine: Mine comments from regulations.gov
-    3. classify: Classify comment authors using OpenAI
-    4. plot: Generate visualizations
+    3. deduplicate: Deduplicate comments using embedding similarity
+    4. classify: Classify comment authors using OpenAI
+    5. plot: Generate visualizations
     
     Args:
         config: Pipeline configuration with year and settings
         steps: Optional list of steps to run. If None, runs all steps.
-               Valid values: "fetch", "mine", "classify", "plot"
+               Valid values: "fetch", "mine", "deduplicate", "classify", "plot"
     
     Returns:
         True if pipeline completed successfully, False otherwise.
@@ -65,7 +66,7 @@ def run_year(
     set_year_context(year)
     
     if steps is None:
-        steps = ["fetch", "mine", "classify", "plot"]
+        steps = ["fetch", "mine", "deduplicate", "classify", "plot"]
     
     total_steps = len(steps)
     current_step = 0
@@ -103,7 +104,17 @@ def run_year(
             mine_comments_for_year(config)
             log_completion(logger, "Comment mining complete")
         
-        # Step 3: Classify comments
+        # Step 3: Deduplicate comments
+        if "deduplicate" in steps:
+            current_step += 1
+            log_step(logger, current_step, total_steps, "Deduplicating comments")
+            
+            from stratification_scripts.makeup.deduplicate_comments import deduplicate_comments_for_year
+            
+            deduplicate_comments_for_year(config)
+            log_completion(logger, "Deduplication complete")
+        
+        # Step 4: Classify comments
         if "classify" in steps:
             current_step += 1
             log_step(logger, current_step, total_steps, "Classifying comment makeup")
@@ -116,7 +127,7 @@ def run_year(
             classify_comments_for_year(config)
             log_completion(logger, "Classification complete")
         
-        # Step 4: Generate plots
+        # Step 5: Generate plots
         if "plot" in steps:
             current_step += 1
             log_step(logger, current_step, total_steps, "Generating visualizations")
@@ -176,6 +187,9 @@ def run_many(
             max_concurrency=config.max_concurrency,
             sample_threshold=config.sample_threshold,
             sampling_seed=config.sampling_seed,
+            deduplication_threshold=config.deduplication_threshold,
+            deduplication_model=config.deduplication_model,
+            enable_deduplication=config.enable_deduplication,
             fr_sleep=config.fr_sleep,
             fr_detail_sleep=config.fr_detail_sleep,
             per_key_hourly=config.per_key_hourly,
