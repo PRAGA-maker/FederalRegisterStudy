@@ -355,10 +355,11 @@ class PipelineConfig:
     
     # Gemini API settings
     gemini_model: str = "gemini-3-flash-preview"
-    gemini_max_concurrency: int = 10
+    gemini_max_concurrency: int = 50
     enable_search_grounding: bool = True
     max_comment_pages: int = 30
-    gemini_thinking_level: Optional[str] = None  # "minimal"|"low"|"medium"|"high"
+    #gemini_thinking_level: Optional[str] = None  # "minimal"|"low"|"medium"|"high"
+    gemini_thinking_level: Optional[str] = "medium"
     
     # Derived paths (computed on access)
     _output_dir: Optional[Path] = field(default=None, repr=False)
