@@ -344,7 +344,7 @@ class PipelineConfig:
     sampling_seed: Optional[int] = None
     
     # Deduplication settings
-    deduplication_threshold: float = 0.95
+    deduplication_threshold: float = 0.98
     deduplication_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     enable_deduplication: bool = True
     

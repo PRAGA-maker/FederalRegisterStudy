@@ -186,19 +186,77 @@ def load_existing_responses(responses_csv: Path) -> Set[str]:
         return set()
 
 
+def propagate_responses_to_duplicates(
+    results: List[Dict],
+    df_comments: pl.DataFrame,
+) -> List[Dict]:
+    """
+    Propagate response tracking results to duplicate comments.
+    
+    For each canonical comment result, find all duplicates in the same group
+    and create result entries for them with the same response tracking data.
+    
+    Args:
+        results: List of result dicts with comment_id and response fields
+        df_comments: DataFrame with duplicate_group_id and canonical_comment_id columns
+    
+    Returns:
+        Expanded list of results including duplicates
+    """
+    if "duplicate_group_id" not in df_comments.columns:
+        # No deduplication columns, return as-is
+        return results
+    
+    # Build mapping from canonical_comment_id to result
+    canonical_to_result = {}
+    for r in results:
+        comment_id = r.get("comment_id")
+        if comment_id:
+            canonical_to_result[str(comment_id)] = r
+    
+    # Find all duplicates that need results propagated
+    expanded_results = list(results)  # Start with canonical results
+    
+    # Group by duplicate_group_id to find duplicates
+    duplicate_groups = df_comments.filter(
+        pl.col("duplicate_group_id").is_not_null() & 
+        (pl.col("is_canonical") == False)
+    )
+    
+    if len(duplicate_groups) > 0:
+        for row in duplicate_groups.iter_rows(named=True):
+            duplicate_id = str(row["comment_id"])
+            canonical_id = str(row["canonical_comment_id"])
+            
+            # If canonical was processed, propagate to duplicate
+            if canonical_id in canonical_to_result:
+                canonical_result = canonical_to_result[canonical_id].copy()
+                # Update comment_id to the duplicate's ID
+                canonical_result["comment_id"] = duplicate_id
+                expanded_results.append(canonical_result)
+    
+    return expanded_results
+
+
 def save_responses_incremental(
     responses_csv: Path,
     new_results: List[Dict],
+    df_comments: Optional[pl.DataFrame] = None,
 ) -> None:
     """
-    Save response tracking results incrementally.
+    Save response tracking results incrementally, optionally propagating to duplicates.
     
     Args:
         responses_csv: Path to output CSV
         new_results: List of result dicts to append
+        df_comments: Optional DataFrame with comments (for duplicate propagation)
     """
     if not new_results:
         return
+    
+    # Propagate results to duplicates if comments DataFrame provided
+    if df_comments is not None:
+        new_results = propagate_responses_to_duplicates(new_results, df_comments)
     
     df_new = pl.DataFrame(new_results)
     
@@ -240,6 +298,7 @@ async def process_responses_async(
     max_concurrency: int,
     regs_client: Optional[RegsGovClient] = None,
     max_comment_pages: int = 30,
+    df_comments: Optional[pl.DataFrame] = None,
 ) -> None:
     """
     Process comments asynchronously in batches.
@@ -251,8 +310,9 @@ async def process_responses_async(
         max_concurrency: Max concurrent API calls
         regs_client: Optional RegsGovClient for re-downloading attachments
         max_comment_pages: Max pages to extract from PDFs
+        df_comments: Optional DataFrame with comments (for duplicate propagation)
     """
-    batch_size = 100
+    batch_size = 1000
     total_comments = len(comments_to_process)
     
     logger.info(f"Processing {total_comments} comments in batches of {batch_size}")
@@ -310,8 +370,8 @@ async def process_responses_async(
                 "has_attachment": bool(original_comment.get("attachment_text")),
             })
         
-        # Save incrementally
-        save_responses_incremental(responses_csv, csv_results)
+        # Save incrementally (with duplicate propagation if df_comments provided)
+        save_responses_incremental(responses_csv, csv_results, df_comments)
 
 
 def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None) -> None:
@@ -347,14 +407,23 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
     
     log_banner(logger, f"TRACKING AGENCY RESPONSES - YEAR {config.year}")
     
-    # Load makeup data (deduplicated canonical comments with classifications)
+    # Load makeup data (contains all comments including duplicates after classification propagation)
     logger.info(f"Loading makeup data from: {makeup_data_csv}")
     df_makeup = pl.read_csv(str(makeup_data_csv))
     logger.info(f"Loaded {len(df_makeup)} classified comments")
     
-    # Join with comments_raw to get full metadata
+    # Join with comments_raw to get full metadata (including deduplication columns if present)
     logger.info(f"Loading raw comments from: {comments_raw_csv}")
     df_raw = pl.read_csv(str(comments_raw_csv))
+    
+    # Check if deduplication was performed
+    has_deduplication = "is_canonical" in df_raw.columns
+    
+    if has_deduplication:
+        canonical_count = df_raw.filter(pl.col("is_canonical") == True).shape[0]
+        total_count = len(df_raw)
+        duplicate_count = total_count - canonical_count
+        logger.info(f"Deduplication detected: {canonical_count:,} canonical, {duplicate_count:,} duplicates")
     
     # Join on comment_id
     df_joined = df_makeup.join(df_raw, on="comment_id", how="left")
@@ -375,15 +444,22 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
     processed_ids = load_existing_responses(responses_csv)
     
     # Filter to unprocessed comments
-    df_unprocessed = df_joined.filter(
-        ~pl.col("comment_id").is_in(list(processed_ids))
-    )
+    # If deduplication enabled, only process canonical comments (duplicates will be propagated)
+    if has_deduplication:
+        df_unprocessed = df_joined.filter(
+            (pl.col("is_canonical") == True) &
+            (~pl.col("comment_id").is_in(list(processed_ids)))
+        )
+        logger.info(f"Filtering to canonical comments only: {len(df_unprocessed):,} to process")
+    else:
+        df_unprocessed = df_joined.filter(
+            ~pl.col("comment_id").is_in(list(processed_ids))
+        )
+        logger.info(f"Processing {len(df_unprocessed)} unprocessed comments")
     
     if len(df_unprocessed) == 0:
         logger.info("All comments already processed")
         return
-    
-    logger.info(f"Processing {len(df_unprocessed)} unprocessed comments")
     
     # Convert to list of dicts
     comments_to_process = df_unprocessed.to_dicts()
@@ -394,13 +470,15 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
         logger.info(f"Limited to {len(comments_to_process)} comments for testing")
     
     # Initialize Gemini tracker
+    logger.info(f"Initializing GeminiResponseTracker with model={config.gemini_model}")
     tracker = GeminiResponseTracker(
         api_key=api_key,
         model=config.gemini_model,
-        max_retries=5,
+        max_retries=10,
         enable_search=config.enable_search_grounding,
         thinking_level=config.gemini_thinking_level,
     )
+    logger.info(f"GeminiResponseTracker initialized successfully with model={tracker.model}")
     
     # Initialize RegsGovClient for re-downloading attachments if needed
     regs_client = None
@@ -413,7 +491,7 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
         logger.warning(f"Could not initialize RegsGovClient: {e}")
         logger.warning("Will use existing attachment text only")
     
-    # Process comments
+    # Process comments (pass df_raw for duplicate propagation if deduplication enabled)
     try:
         asyncio.run(process_responses_async(
             tracker,
@@ -422,6 +500,7 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
             config.gemini_max_concurrency,
             regs_client,
             config.max_comment_pages,
+            df_raw if has_deduplication else None,
         ))
     finally:
         if regs_client:
@@ -457,7 +536,7 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
 # ============================================================================
 # FUTURE STEP 2: HANDLE NO-RESPONSE CASES
 # ============================================================================
-# TODO: This section will be implemented by another developer
+# TODO: This section will be implemented by me after Jennifer's work is done.
 # 
 # Goal: For comments where response_found == "no" or "uncertain",
 #       perform additional processing to attempt finding responses
@@ -476,7 +555,7 @@ def main() -> int:
         description="Track federal agency responses to public comments"
     )
     parser.add_argument("--year", type=int, default=2024)
-    parser.add_argument("--max-concurrency", type=int, default=10)
+    parser.add_argument("--max-concurrency", type=int, default=50)
     parser.add_argument("--model", type=str, default="gemini-3-flash-preview")
     parser.add_argument("--limit", type=int, default=None,
                         help="Limit number of comments to process (for testing)")

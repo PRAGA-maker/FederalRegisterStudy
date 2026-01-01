@@ -24,7 +24,9 @@ Example:
 from __future__ import annotations
 
 import asyncio
+import json
 import random
+import re
 from typing import Dict, List, Optional, Tuple, Literal
 
 from pydantic import BaseModel, Field, ValidationError
@@ -81,7 +83,7 @@ class AgencyResponse(BaseModel):
         return d
 
 
-# Response tracking prompt template (no XML, no JSON examples)
+# Response tracking prompt template (optimized for structured JSON output)
 RESPONSE_TRACKING_PROMPT = """You are analyzing a public comment submitted to a U.S. federal agency.
 
 COMMENT INFORMATION:
@@ -101,11 +103,22 @@ TASK:
 3. If a response exists, classify whether the agency accepted the comment's suggestion, rejected it, or the disposition is unclear.
 4. Provide the response text (can be detailed, up to several paragraphs) and where you found it.
 
+OUTPUT REQUIREMENTS:
+- You MUST return your response as valid JSON matching the required schema.
+- The response_found field must be exactly one of: "yes", "no", or "uncertain"
+- The agency_decision field must be exactly one of: "accept", "reject", or "uncertain"
+- If response_found is "no" or "uncertain", set agency_decision to "uncertain"
+- response_text should contain the actual agency response text, or "N/A" if none found
+- response_location should contain the URL or location where you found the response, or "N/A" if none found
+- reasoning should be a brief 1-2 sentence explanation of your determination
+
 IMPORTANT:
-- If you cannot confidently determine, mark response_found="uncertain".
-- Keep response_text informative but concise (excerpt or summary is fine).
-- Be thorough in your search - check Federal Register, agency websites, and docket materials.
-- If multiple responses exist, summarize the primary/most relevant one.
+- If you cannot confidently determine whether a response exists, mark response_found="uncertain"
+- Keep response_text informative but concise (excerpt or summary is fine, up to several paragraphs if needed)
+- Be thorough in your search - check Federal Register, agency websites, and docket materials
+- If a document was withheld or otherwise materially changed for non-comment related reasons, this is a "no", not "uncertain". 
+- If multiple responses exist, write out explicitly a joined text of all in order for the most relevant one or one that directly is connected to the comment we give. 
+- Ensure all string fields are properly escaped for JSON format
 """
 
 
@@ -161,6 +174,17 @@ class GeminiResponseTracker:
         self.model = model
         self.max_retries = max_retries
         self.enable_search = enable_search
+        
+        # Validate model name
+        if not model or not isinstance(model, str):
+            raise ValueError(f"Invalid model name: {model}")
+        
+        # Warn if using old model name
+        if "gemini-2" in model.lower() or "thinking-exp" in model.lower():
+            logger.warning(
+                f"Using potentially outdated model: {model}. "
+                f"Consider using 'gemini-3-flash-preview' for better compatibility."
+            )
         
         # Async client
         self._client = genai.Client(api_key=api_key)
@@ -257,26 +281,145 @@ class GeminiResponseTracker:
             
             for attempt in range(self.max_retries):
                 try:
-                    response = await self._client.aio.models.generate_content(
-                        model=self.model,
-                        contents=prompt,
-                        config=self._base_config,
+                    # Log request details for debugging
+                    logger.debug(
+                        f"Gemini API call attempt {attempt+1}/{self.max_retries} for comment_id={comment_metadata.get('comment_id')}, "
+                        f"model={self.model}, prompt_length={len(prompt)}"
                     )
                     
-                    raw_text = (response.text or "").strip()
+                    # Convert prompt string to Content object/list format expected by SDK
+                    # Try different formats for compatibility with different SDK versions
+                    contents_input = None
+                    response = None
+                    last_error = None
+                    
+                    # Format 1: List of Content objects (most common for newer SDK versions)
+                    try:
+                        contents_input = [self._types.Content(
+                            role="user",
+                            parts=[self._types.Part(text=prompt)]
+                        )]
+                        response = await self._client.aio.models.generate_content(
+                            model=self.model,
+                            contents=contents_input,
+                            config=self._base_config,
+                        )
+                        logger.debug(f"API call succeeded with Content list format")
+                    except Exception as e1:
+                        last_error = e1
+                        logger.debug(f"Content list format failed: {type(e1).__name__}: {e1}")
+                        
+                        # Format 2: Single Content object
+                        try:
+                            contents_input = self._types.Content(
+                                role="user",
+                                parts=[self._types.Part(text=prompt)]
+                            )
+                            response = await self._client.aio.models.generate_content(
+                                model=self.model,
+                                contents=contents_input,
+                                config=self._base_config,
+                            )
+                            logger.debug(f"API call succeeded with single Content object format")
+                        except Exception as e2:
+                            last_error = e2
+                            logger.debug(f"Single Content object format failed: {type(e2).__name__}: {e2}")
+                            
+                            # Format 3: String directly (some SDK versions accept this)
+                            try:
+                                response = await self._client.aio.models.generate_content(
+                                    model=self.model,
+                                    contents=prompt,
+                                    config=self._base_config,
+                                )
+                                logger.debug(f"API call succeeded with string format")
+                            except Exception as e3:
+                                last_error = e3
+                                logger.debug(f"String format failed: {type(e3).__name__}: {e3}")
+                                # Re-raise the last error to be handled by outer exception handler
+                                raise e3
+                    
+                    if response is None:
+                        raise ValueError("All API call formats failed") from last_error
+                    
+                    # Log response structure for debugging
+                    logger.debug(
+                        f"Response received for comment_id={comment_metadata.get('comment_id')}, "
+                        f"has_text={hasattr(response, 'text')}, has_parsed={hasattr(response, 'parsed')}, "
+                        f"response_type={type(response).__name__}, response_attrs={[a for a in dir(response) if not a.startswith('_')][:10]}"
+                    )
+                    
+                    # Extract raw text from response
+                    raw_text = ""
+                    if hasattr(response, 'text'):
+                        raw_text = (response.text or "").strip()
+                    elif hasattr(response, 'candidates') and response.candidates:
+                        # Some SDK versions wrap text in candidates
+                        candidate = response.candidates[0]
+                        if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                            text_parts = [p.text for p in candidate.content.parts if hasattr(p, 'text')]
+                            raw_text = " ".join(text_parts).strip()
                     
                     # Preferred: parsed structured output
-                    parsed_obj = getattr(response, "parsed", None)
+                    parsed_obj = None
+                    if hasattr(response, 'parsed'):
+                        parsed_obj = response.parsed
+                    elif hasattr(response, 'candidates') and response.candidates:
+                        # Check if parsed data is in candidates
+                        candidate = response.candidates[0]
+                        if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                            for part in candidate.content.parts:
+                                if hasattr(part, 'struct_data'):
+                                    parsed_obj = part.struct_data
+                                    break
+                    
                     if parsed_obj is not None:
                         if isinstance(parsed_obj, AgencyResponse):
                             parsed = parsed_obj.normalized()
-                        else:
-                            # Sometimes SDK may return dict-like; validate via Pydantic
+                        elif isinstance(parsed_obj, dict):
+                            # SDK returned dict-like; validate via Pydantic
                             parsed = AgencyResponse.model_validate(parsed_obj).normalized()
-                    else:
-                        # Fallback: validate JSON string from response.text
-                        parsed = AgencyResponse.model_validate_json(raw_text).normalized()
+                        else:
+                            # Try to convert to dict first
+                            try:
+                                if hasattr(parsed_obj, '__dict__'):
+                                    parsed = AgencyResponse.model_validate(parsed_obj.__dict__).normalized()
+                                elif hasattr(parsed_obj, 'model_dump'):
+                                    parsed = AgencyResponse.model_validate(parsed_obj.model_dump()).normalized()
+                                else:
+                                    # Last resort: convert to string and parse as JSON
+                                    parsed = AgencyResponse.model_validate_json(str(parsed_obj)).normalized()
+                            except Exception as parse_err:
+                                logger.warning(f"Failed to parse parsed_obj: {parse_err}, falling back to raw_text")
+                                parsed_obj = None
                     
+                    if parsed_obj is None:
+                        # Fallback: validate JSON string from response.text
+                        if not raw_text:
+                            raise ValueError(
+                                f"Response has no text and no parsed object. "
+                                f"Response type: {type(response).__name__}, "
+                                f"Response attrs: {[a for a in dir(response) if not a.startswith('_')][:10]}"
+                            )
+                        
+                        # Try to parse as JSON
+                        try:
+                            parsed = AgencyResponse.model_validate_json(raw_text).normalized()
+                        except Exception as json_err:
+                            # If JSON parsing fails, try to extract JSON from text
+                            # Try to find JSON object in the text
+                            json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', raw_text, re.DOTALL)
+                            if json_match:
+                                try:
+                                    json_str = json_match.group(0)
+                                    parsed = AgencyResponse.model_validate_json(json_str).normalized()
+                                    logger.debug("Extracted JSON from response text using regex")
+                                except Exception:
+                                    raise ValueError(f"Failed to parse JSON from response text: {json_err}") from json_err
+                            else:
+                                raise ValueError(f"Failed to parse JSON from response text: {json_err}") from json_err
+                    
+                    logger.debug(f"Successfully parsed response for comment_id={comment_metadata.get('comment_id')}")
                     return (
                         comment_metadata.get("comment_id", "unknown"),
                         parsed,
@@ -285,7 +428,10 @@ class GeminiResponseTracker:
                     
                 except ValidationError as ve:
                     # Schema validation failed - not retryable
-                    logger.warning(f"Schema validation failed for {comment_metadata.get('comment_id')}: {ve}")
+                    logger.warning(
+                        f"Schema validation failed for {comment_metadata.get('comment_id')}: {ve}. "
+                        f"Response text preview: {raw_text[:500] if 'raw_text' in locals() and raw_text else 'not found'}"
+                    )
                     return (
                         comment_metadata.get("comment_id", "unknown"),
                         AgencyResponse(
@@ -299,11 +445,34 @@ class GeminiResponseTracker:
                     )
                     
                 except Exception as e:
+                    # Enhanced error logging
+                    error_type = type(e).__name__
+                    error_msg = str(e)
+                    error_repr = repr(e)
+                    
+                    # Try to get more details from the exception
+                    error_details = {
+                        "type": error_type,
+                        "message": error_msg,
+                        "repr": error_repr,
+                    }
+                    
+                    # Check if exception has additional attributes
+                    if hasattr(e, "__dict__"):
+                        error_details["attributes"] = {k: str(v)[:200] for k, v in e.__dict__.items()}
+                    
+                    logger.error(
+                        f"Gemini API error for comment_id={comment_metadata.get('comment_id')} "
+                        f"(attempt {attempt+1}/{self.max_retries}): {error_type}: {error_msg}\n"
+                        f"Full error details: {error_details}"
+                    )
+                    
                     retryable = self._is_retryable_error(e)
                     
                     if attempt >= self.max_retries - 1 or not retryable:
                         logger.warning(
-                            f"Gemini call failed (retryable={retryable}) after attempt {attempt+1}: {e}"
+                            f"Gemini call failed (retryable={retryable}) after attempt {attempt+1}: "
+                            f"{error_type}: {error_msg}"
                         )
                         return (
                             comment_metadata.get("comment_id", "unknown"),
@@ -312,9 +481,9 @@ class GeminiResponseTracker:
                                 agency_decision="uncertain",
                                 response_text="N/A",
                                 response_location="N/A",
-                                reasoning=f"API error: {type(e).__name__}",
+                                reasoning=f"API error: {error_type}",
                             ).normalized(),
-                            f"ERROR: {e}",
+                            f"ERROR: {error_msg}",
                         )
                     
                     jitter = random.uniform(0.5, 2.0)
@@ -322,7 +491,7 @@ class GeminiResponseTracker:
                     if "429" in str(e).lower():
                         sleep_time += 30.0
                     
-                    logger.debug(f"Retrying after error (attempt {attempt+1}): {e} (sleep {sleep_time:.1f}s)")
+                    logger.debug(f"Retrying after error (attempt {attempt+1}): {error_type}: {error_msg} (sleep {sleep_time:.1f}s)")
                     await asyncio.sleep(sleep_time)
                     backoff = min(backoff * 2, 120.0)
             
