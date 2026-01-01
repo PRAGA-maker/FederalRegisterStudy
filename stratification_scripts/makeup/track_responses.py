@@ -299,6 +299,7 @@ async def process_responses_async(
     regs_client: Optional[RegsGovClient] = None,
     max_comment_pages: int = 30,
     df_comments: Optional[pl.DataFrame] = None,
+    batch_size: int = 1000,
 ) -> None:
     """
     Process comments asynchronously in batches.
@@ -311,8 +312,8 @@ async def process_responses_async(
         regs_client: Optional RegsGovClient for re-downloading attachments
         max_comment_pages: Max pages to extract from PDFs
         df_comments: Optional DataFrame with comments (for duplicate propagation)
+        batch_size: Number of comments to process per batch (default: 1000)
     """
-    batch_size = 1000
     total_comments = len(comments_to_process)
     
     logger.info(f"Processing {total_comments} comments in batches of {batch_size}")
@@ -374,7 +375,7 @@ async def process_responses_async(
         save_responses_incremental(responses_csv, csv_results, df_comments)
 
 
-def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None) -> None:
+def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None, batch_size: int = 1000) -> None:
     """
     Track agency responses for a single year.
     
@@ -383,6 +384,7 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
     Args:
         config: Pipeline configuration
         limit: Optional limit on number of comments to process (for testing)
+        batch_size: Number of comments to process per batch (default: 1000)
     
     Side Effects:
         Makes API calls to Gemini
@@ -501,6 +503,7 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
             regs_client,
             config.max_comment_pages,
             df_raw if has_deduplication else None,
+            batch_size,
         ))
     finally:
         if regs_client:
@@ -555,7 +558,7 @@ def main() -> int:
         description="Track federal agency responses to public comments"
     )
     parser.add_argument("--year", type=int, default=2024)
-    parser.add_argument("--max-concurrency", type=int, default=50)
+    parser.add_argument("--max-concurrency", type=int, default=100)
     parser.add_argument("--model", type=str, default="gemini-3-flash-preview")
     parser.add_argument("--limit", type=int, default=None,
                         help="Limit number of comments to process (for testing)")
@@ -565,6 +568,8 @@ def main() -> int:
                         help="Disable Google Search grounding")
     parser.add_argument("--thinking-level", type=str, default=None,
                         help='Gemini 3 thinking level: minimal|low|medium|high')
+    parser.add_argument("--batch-size", type=int, default=1000,
+                        help="Number of comments to process per batch (default: 1000)")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--quiet", action="store_true")
     
@@ -584,7 +589,7 @@ def main() -> int:
     )
     
     try:
-        track_responses_for_year(config, limit=args.limit)
+        track_responses_for_year(config, limit=args.limit, batch_size=args.batch_size)
         return 0
     except Exception as e:
         logger.error(f"Response tracking failed: {e}")

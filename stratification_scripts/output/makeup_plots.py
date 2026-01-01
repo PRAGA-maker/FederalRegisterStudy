@@ -32,6 +32,17 @@ from matplotlib.patheffects import withStroke
 import numpy as np
 import pandas as pd
 
+try:
+    from plotnine import (
+        ggplot, aes, geom_density, facet_wrap, labs, theme_minimal,
+        theme, element_text, scale_fill_manual, scale_color_manual,
+        element_rect, element_line, guides
+    )
+    PLOTNINE_AVAILABLE = True
+except ImportError:
+    PLOTNINE_AVAILABLE = False
+    logger.warning("plotnine not available. Install with: pip install plotnine")
+
 from stratification_scripts.config import (
     PipelineConfig,
     get_makeup_data_path,
@@ -3165,14 +3176,17 @@ def generate_response_plots(
     # 6. Comment Length vs Acceptance
     plot_length_vs_acceptance(df, year, plots_dir)
     
-    # 7. Response Length vs Commenter Type
-    plot_response_length_by_type(df, year, plots_dir)
+    # 7. Response Length vs Commenter Type - REMOVED
+    # plot_response_length_by_type(df, year, plots_dir)
     
-    # 8. Response Length vs Comment Length
-    plot_response_vs_comment_length(df, year, plots_dir)
+    # 8. Response Length vs Comment Length - REMOVED
+    # plot_response_vs_comment_length(df, year, plots_dir)
     
     # 9. Agency Response Heatmap
     plot_response_heatmap(df, year, plots_dir)
+    
+    # 10. Agency Response vs Acceptance Rate
+    plot_agency_response_acceptance(df, year, plots_dir)
     
     logger.info("Response tracking plots complete")
 
@@ -3224,7 +3238,7 @@ def plot_response_rate_by_type(df: pd.DataFrame, year: int, outdir: Path) -> Non
         logger.warning("No data for response rate by type plot")
         return
     
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(12, 6))
     
     # Flatten multi-level columns
     type_stats = df.groupby("category")["response_found"].value_counts(normalize=True).unstack(fill_value=0) * 100
@@ -3234,15 +3248,28 @@ def plot_response_rate_by_type(df: pd.DataFrame, year: int, outdir: Path) -> Non
         plt.close()
         return
     
+    # Create display name mapping for cleaner labels
+    display_name_mapping = {
+        "Academic/Industry/Expert (incl. small/local business)": "Academic/Industry/Expert",
+        "Large Organization/Corporation": "Large Organization/Corporation",
+        "Ordinary Citizen": "Ordinary Citizen",
+        "Political Consultant/Lobbyist": "Political Consultant/Lobbyist",
+        "Undecided/Anonymous": "Undecided/Anonymous",
+    }
+    
+    # Rename index for display
+    type_stats_display = type_stats.rename(index=display_name_mapping)
+    
     # Plot stacked bar
-    type_stats.plot(kind="bar", stacked=True, ax=ax, color=["#6B7D6D", "#DDE3EA", "#9A8153"])
+    type_stats_display.plot(kind="bar", stacked=True, ax=ax, color=["#6B7D6D", "#DDE3EA", "#9A8153"])
     ax.set_ylabel("Percentage", fontsize=FONT_LABEL)
     ax.set_xlabel("Commenter Type", fontsize=FONT_LABEL)
     ax.set_title(f"Response Rate by Commenter Type - {year}", fontsize=FONT_TITLE, fontweight="bold")
-    ax.legend(title="Response Found", fontsize=FONT_LEGEND)
+    ax.legend(title="Response Found", fontsize=FONT_LEGEND, loc="upper right")
     ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
     
-    plt.tight_layout()
+    # Adjust layout to ensure legend stays within bounds
+    plt.tight_layout(rect=[0, 0, 0.95, 1])
     plt.savefig(outdir / f"response_rate_by_type_{year}.png", dpi=300, bbox_inches="tight")
     plt.close()
 
@@ -3286,7 +3313,7 @@ def plot_decision_distribution(df: pd.DataFrame, year: int, outdir: Path) -> Non
 
 def plot_decision_by_type(df: pd.DataFrame, year: int, outdir: Path) -> None:
     """Grouped bar chart of accept/reject by commenter type"""
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=(12, 6))
     
     # Filter to responses that were found
     df_found = df[df["response_found"] == "yes"]
@@ -3298,16 +3325,29 @@ def plot_decision_by_type(df: pd.DataFrame, year: int, outdir: Path) -> None:
     # Calculate decision rates by category
     decision_by_type = df_found.groupby("category")["agency_decision"].value_counts(normalize=True).unstack(fill_value=0) * 100
     
+    # Create display name mapping for cleaner labels
+    display_name_mapping = {
+        "Academic/Industry/Expert (incl. small/local business)": "Academic/Industry/Expert",
+        "Large Organization/Corporation": "Large Organization/Corporation",
+        "Ordinary Citizen": "Ordinary Citizen",
+        "Political Consultant/Lobbyist": "Political Consultant/Lobbyist",
+        "Undecided/Anonymous": "Undecided/Anonymous",
+    }
+    
+    # Rename index for display
+    decision_by_type_display = decision_by_type.rename(index=display_name_mapping)
+    
     # Plot grouped bar
-    decision_by_type.plot(kind="bar", ax=ax, color=["#6B7D6D", "#DDE3EA", "#9A8153"])
+    decision_by_type_display.plot(kind="bar", ax=ax, color=["#6B7D6D", "#DDE3EA", "#9A8153"])
     ax.set_ylabel("Percentage", fontsize=FONT_LABEL)
     ax.set_xlabel("Commenter Type", fontsize=FONT_LABEL)
     ax.set_title(f"Agency Decision by Commenter Type - {year}", fontsize=FONT_TITLE, fontweight="bold")
-    ax.legend(title="Decision", fontsize=FONT_LEGEND)
+    ax.legend(title="Decision", fontsize=FONT_LEGEND, loc="upper right")
     ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha="right")
     ax.grid(axis="y", alpha=GRID_ALPHA, color=GRID_COLOR)
     
-    plt.tight_layout()
+    # Adjust layout to ensure legend stays within bounds
+    plt.tight_layout(rect=[0, 0, 0.95, 1])
     plt.savefig(outdir / f"decision_by_type_{year}.png", dpi=300, bbox_inches="tight")
     plt.close()
 
@@ -3331,15 +3371,15 @@ def plot_length_vs_response(df: pd.DataFrame, year: int, outdir: Path) -> None:
         plt.close()
         return
     
-    # Bin comment lengths
-    df_valid["length_bin"] = pd.cut(df_valid["comment_text_length"], bins=20)
+    # Bin comment lengths - use more bins and lower threshold for better coverage
+    df_valid["length_bin"] = pd.cut(df_valid["comment_text_length"], bins=50)
     
     # Calculate response rate by length bin
     length_stats = df_valid.groupby("length_bin")["responded"].agg(["mean", "count"]).reset_index()
     length_stats["bin_center"] = length_stats["length_bin"].apply(lambda x: x.mid)
     
-    # Filter bins with at least 5 comments
-    length_stats = length_stats[length_stats["count"] >= 5]
+    # Filter bins with at least 1 comment (lower threshold to show more data points)
+    length_stats = length_stats[length_stats["count"] >= 1]
     
     if len(length_stats) == 0:
         logger.warning("No bins with sufficient data for length vs response plot")
@@ -3347,7 +3387,7 @@ def plot_length_vs_response(df: pd.DataFrame, year: int, outdir: Path) -> None:
         return
     
     # Plot
-    ax.scatter(length_stats["bin_center"], length_stats["mean"] * 100, s=length_stats["count"], alpha=0.6, color="#6B7D6D")
+    ax.scatter(length_stats["bin_center"], length_stats["mean"] * 100, s=length_stats["count"] * 2, alpha=0.6, color="#6B7D6D")
     ax.set_xlabel("Comment Length (characters)", fontsize=FONT_LABEL)
     ax.set_ylabel("Response Rate (%)", fontsize=FONT_LABEL)
     ax.set_title(f"Comment Length vs Response Probability - {year}", fontsize=FONT_TITLE, fontweight="bold")
@@ -3359,7 +3399,52 @@ def plot_length_vs_response(df: pd.DataFrame, year: int, outdir: Path) -> None:
 
 
 def plot_length_vs_acceptance(df: pd.DataFrame, year: int, outdir: Path) -> None:
-    """Box plots of comment length by decision type"""
+    """Smooth density plots of comment length by decision type using plotnine"""
+    if not PLOTNINE_AVAILABLE:
+        logger.warning("plotnine not available, falling back to matplotlib box plot")
+        # Fallback to matplotlib
+        if len(df) == 0 or "response_found" not in df.columns:
+            logger.warning("No data for length vs acceptance plot")
+            return
+        
+        df_found = df[df["response_found"] == "yes"]
+        if len(df_found) == 0:
+            logger.warning("No responses found for length vs acceptance plot")
+            return
+        
+        if "comment_text_length" not in df_found.columns:
+            logger.warning("No comment_text_length column for plot")
+            return
+        
+        fig, ax = plt.subplots(figsize=(10, 6))
+        decision_order = ["accept", "reject", "uncertain"]
+        data_to_plot = []
+        labels_to_plot = []
+        for d in decision_order:
+            data = df_found[df_found["agency_decision"] == d]["comment_text_length"].dropna()
+            if len(data) > 0:
+                data_to_plot.append(data)
+                labels_to_plot.append(d)
+        
+        if len(data_to_plot) == 0:
+            logger.warning("No valid data for length vs acceptance plot")
+            plt.close()
+            return
+        
+        bp = ax.boxplot(data_to_plot, labels=labels_to_plot, patch_artist=True)
+        colors = ["#6B7D6D", "#DDE3EA", "#9A8153"]
+        for i, patch in enumerate(bp["boxes"]):
+            patch.set_facecolor(colors[i % len(colors)])
+        
+        ax.set_ylabel("Comment Length (characters)", fontsize=FONT_LABEL)
+        ax.set_xlabel("Agency Decision", fontsize=FONT_LABEL)
+        ax.set_title(f"Comment Length by Decision Type - {year}", fontsize=FONT_TITLE, fontweight="bold")
+        ax.grid(axis="y", alpha=GRID_ALPHA, color=GRID_COLOR)
+        plt.tight_layout()
+        plt.savefig(outdir / f"length_vs_acceptance_{year}.png", dpi=300, bbox_inches="tight")
+        plt.close()
+        return
+    
     if len(df) == 0 or "response_found" not in df.columns:
         logger.warning("No data for length vs acceptance plot")
         return
@@ -3375,38 +3460,67 @@ def plot_length_vs_acceptance(df: pd.DataFrame, year: int, outdir: Path) -> None
         logger.warning("No comment_text_length column for plot")
         return
     
-    fig, ax = plt.subplots(figsize=(10, 6))
+    # Prepare data for plotnine
+    df_plot = df_found[["agency_decision", "comment_text_length"]].copy()
+    df_plot = df_plot[df_plot["comment_text_length"].notna() & (df_plot["comment_text_length"] > 0)]
     
-    # Create box plot
-    decision_order = ["accept", "reject", "uncertain"]
-    data_to_plot = []
-    labels_to_plot = []
-    for d in decision_order:
-        data = df_found[df_found["agency_decision"] == d]["comment_text_length"].dropna()
-        if len(data) > 0:
-            data_to_plot.append(data)
-            labels_to_plot.append(d)
+    # Filter out extreme outliers for better visualization (keep 95th percentile)
+    if len(df_plot) > 10:
+        max_length = df_plot["comment_text_length"].quantile(0.95)
+        df_plot = df_plot[df_plot["comment_text_length"] <= max_length]
     
-    if len(data_to_plot) == 0:
+    if len(df_plot) == 0:
         logger.warning("No valid data for length vs acceptance plot")
-        plt.close()
         return
     
-    bp = ax.boxplot(data_to_plot, labels=labels_to_plot, patch_artist=True)
+    # Ensure decision types are in order
+    decision_order = ["accept", "reject", "uncertain"]
+    df_plot["agency_decision"] = pd.Categorical(df_plot["agency_decision"], categories=decision_order, ordered=True)
+    df_plot = df_plot[df_plot["agency_decision"].notna()]
     
-    # Color boxes
-    colors = ["#6B7D6D", "#DDE3EA", "#9A8153"]
-    for i, patch in enumerate(bp["boxes"]):
-        patch.set_facecolor(colors[i % len(colors)])
+    if len(df_plot) == 0:
+        logger.warning("No valid decision data for length vs acceptance plot")
+        return
     
-    ax.set_ylabel("Comment Length (characters)", fontsize=FONT_LABEL)
-    ax.set_xlabel("Agency Decision", fontsize=FONT_LABEL)
-    ax.set_title(f"Comment Length by Decision Type - {year}", fontsize=FONT_TITLE, fontweight="bold")
-    ax.grid(axis="y", alpha=GRID_ALPHA, color=GRID_COLOR)
+    # Create plotnine plot
+    p = (
+        ggplot(df_plot, aes(x="comment_text_length", fill="agency_decision", color="agency_decision"))
+        + geom_density(alpha=0.6, size=1.2)
+        + facet_wrap("~agency_decision", ncol=3, scales="free_y")
+        + labs(
+            x="Comment Length (characters)",
+            y="Density",
+            title=f"Comment Length by Decision Type - {year}",
+            fill="Decision",
+            color="Decision"
+        )
+        + scale_fill_manual(values={"accept": "#6B7D6D", "reject": "#DDE3EA", "uncertain": "#9A8153"})
+        + scale_color_manual(values={"accept": "#6B7D6D", "reject": "#DDE3EA", "uncertain": "#9A8153"})
+        + theme_minimal()
+        + theme(
+            plot_title=element_text(size=18, weight="bold"),
+            axis_title=element_text(size=13),
+            axis_text=element_text(size=11),
+            legend_position="right",
+            legend_title=element_text(size=12),
+            legend_text=element_text(size=11),
+            panel_background=element_rect(fill="white"),
+            panel_grid_major=element_line(color="#CCCCCC", alpha=0.3),
+            panel_grid_minor=element_line(color="#CCCCCC", alpha=0.15),
+            strip_background=element_rect(fill="#F5F5F5", color="white"),
+            strip_text=element_text(size=12, weight="bold")
+        )
+        + guides(fill=False, color=False)  # Remove legend since it's in facet labels
+    )
     
-    plt.tight_layout()
-    plt.savefig(outdir / f"length_vs_acceptance_{year}.png", dpi=300, bbox_inches="tight")
-    plt.close()
+    # Save plot
+    p.save(
+        filename=str(outdir / f"length_vs_acceptance_{year}.png"),
+        width=14,
+        height=5,
+        dpi=300,
+        verbose=False
+    )
 
 
 def plot_response_length_by_type(df: pd.DataFrame, year: int, outdir: Path) -> None:
@@ -3591,6 +3705,163 @@ def plot_response_heatmap(df: pd.DataFrame, year: int, outdir: Path) -> None:
     
     plt.tight_layout()
     plt.savefig(outdir / f"response_heatmap_{year}.png", dpi=300, bbox_inches="tight")
+    plt.close()
+
+
+def plot_agency_response_acceptance(df: pd.DataFrame, year: int, outdir: Path) -> None:
+    """Clean scatter plot showing agency response rate vs acceptance rate"""
+    if len(df) == 0 or "agency" not in df.columns or "response_found" not in df.columns:
+        logger.warning("No data for agency response vs acceptance plot")
+        return
+    
+    # Calculate response rate by agency
+    agency_stats = df.groupby("agency").agg({
+        "response_found": lambda x: (x == "yes").sum() / len(x) * 100 if len(x) > 0 else 0,
+        "comment_id": "count"  # Total comments per agency
+    }).reset_index()
+    agency_stats.columns = ["agency", "response_rate", "total_comments"]
+    
+    # Filter to agencies with responses found
+    df_found = df[df["response_found"] == "yes"]
+    
+    if len(df_found) == 0:
+        logger.warning("No responses found for acceptance rate calculation")
+        return
+    
+    # Calculate acceptance rate by agency (only for agencies that responded)
+    acceptance_stats = df_found.groupby("agency").agg({
+        "agency_decision": lambda x: (x == "accept").sum() / len(x) * 100 if len(x) > 0 else 0
+    }).reset_index()
+    acceptance_stats.columns = ["agency", "acceptance_rate"]
+    
+    # Merge stats
+    agency_stats = agency_stats.merge(acceptance_stats, on="agency", how="left")
+    agency_stats["acceptance_rate"] = agency_stats["acceptance_rate"].fillna(0)
+    
+    # Filter to agencies with at least 10 comments for cleaner visualization
+    agency_stats = agency_stats[agency_stats["total_comments"] >= 10]
+    
+    if len(agency_stats) == 0:
+        logger.warning("No agencies with sufficient data for plot")
+        return
+    
+    # Sort by total comments and take top 30 for readability
+    agency_stats = agency_stats.nlargest(30, "total_comments")
+    
+    # Create figure with clean design
+    fig, ax = plt.subplots(figsize=(14, 10))
+    
+    # Normalize bubble sizes (scale between 50 and 500)
+    min_size = agency_stats["total_comments"].min()
+    max_size = agency_stats["total_comments"].max()
+    if max_size > min_size:
+        sizes = 50 + (agency_stats["total_comments"] - min_size) / (max_size - min_size) * 450
+    else:
+        sizes = 200
+    
+    # Create scatter plot
+    scatter = ax.scatter(
+        agency_stats["response_rate"],
+        agency_stats["acceptance_rate"],
+        s=sizes,
+        alpha=0.6,
+        c=agency_stats["total_comments"],
+        cmap="viridis",
+        edgecolors="white",
+        linewidths=1.5,
+        zorder=3
+    )
+    
+    # Add agency labels for top agencies
+    top_agencies = agency_stats.nlargest(10, "total_comments")
+    for _, row in top_agencies.iterrows():
+        # Shorten agency names for readability
+        agency_name = row["agency"]
+        if "," in agency_name:
+            agency_name = agency_name.split(",")[0]  # Take main agency name
+        ax.annotate(
+            agency_name,
+            (row["response_rate"], row["acceptance_rate"]),
+            xytext=(5, 5),
+            textcoords="offset points",
+            fontsize=9,
+            alpha=0.8,
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.7, edgecolor="none"),
+            zorder=4
+        )
+    
+    # Add quadrant lines
+    median_response = agency_stats["response_rate"].median()
+    median_acceptance = agency_stats["acceptance_rate"].median()
+    ax.axvline(median_response, color="#CCCCCC", linestyle="--", linewidth=1, alpha=0.5, zorder=1)
+    ax.axhline(median_acceptance, color="#CCCCCC", linestyle="--", linewidth=1, alpha=0.5, zorder=1)
+    
+    # Add quadrant labels
+    ax.text(
+        0.98, 0.98,
+        f"High Response\nHigh Acceptance",
+        transform=ax.transAxes,
+        fontsize=10,
+        ha="right",
+        va="top",
+        bbox=dict(boxstyle="round,pad=0.5", facecolor="#E8F5E9", alpha=0.7, edgecolor="none"),
+        zorder=2
+    )
+    ax.text(
+        0.02, 0.98,
+        f"Low Response\nHigh Acceptance",
+        transform=ax.transAxes,
+        fontsize=10,
+        ha="left",
+        va="top",
+        bbox=dict(boxstyle="round,pad=0.5", facecolor="#FFF3E0", alpha=0.7, edgecolor="none"),
+        zorder=2
+    )
+    ax.text(
+        0.98, 0.02,
+        f"High Response\nLow Acceptance",
+        transform=ax.transAxes,
+        fontsize=10,
+        ha="right",
+        va="bottom",
+        bbox=dict(boxstyle="round,pad=0.5", facecolor="#FFEBEE", alpha=0.7, edgecolor="none"),
+        zorder=2
+    )
+    ax.text(
+        0.02, 0.02,
+        f"Low Response\nLow Acceptance",
+        transform=ax.transAxes,
+        fontsize=10,
+        ha="left",
+        va="bottom",
+        bbox=dict(boxstyle="round,pad=0.5", facecolor="#F5F5F5", alpha=0.7, edgecolor="none"),
+        zorder=2
+    )
+    
+    # Labels and title
+    ax.set_xlabel("Response Rate (%)", fontsize=FONT_LABEL, fontweight="bold")
+    ax.set_ylabel("Acceptance Rate (%)", fontsize=FONT_LABEL, fontweight="bold")
+    ax.set_title(f"Agency Response Rate vs Acceptance Rate - {year}", fontsize=FONT_TITLE, fontweight="bold", pad=20)
+    
+    # Add colorbar
+    cbar = plt.colorbar(scatter, ax=ax, pad=0.02)
+    cbar.set_label("Total Comments", fontsize=FONT_LABEL)
+    
+    # Grid
+    ax.grid(alpha=GRID_ALPHA, color=GRID_COLOR, zorder=0)
+    ax.set_axisbelow(True)
+    
+    # Set axis limits with padding
+    ax.set_xlim(-2, min(102, agency_stats["response_rate"].max() * 1.1))
+    ax.set_ylim(-2, min(102, agency_stats["acceptance_rate"].max() * 1.1))
+    
+    # Clean up spines
+    for spine in ax.spines.values():
+        spine.set_edgecolor("#CCCCCC")
+        spine.set_linewidth(0.5)
+    
+    plt.tight_layout()
+    plt.savefig(outdir / f"agency_response_acceptance_{year}.png", dpi=300, bbox_inches="tight")
     plt.close()
 
 

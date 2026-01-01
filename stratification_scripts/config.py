@@ -355,7 +355,7 @@ class PipelineConfig:
     
     # Gemini API settings
     gemini_model: str = "gemini-3-flash-preview"
-    gemini_max_concurrency: int = 50
+    gemini_max_concurrency: int = 150
     enable_search_grounding: bool = True
     max_comment_pages: int = 30
     #gemini_thinking_level: Optional[str] = None  # "minimal"|"low"|"medium"|"high"

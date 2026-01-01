@@ -39,6 +39,7 @@ dependencies = [
     
     # Visualization
     "matplotlib>=3.7.0",
+    "plotnine>=0.12.0",
     
     # PDF extraction
     "pypdf>=3.0.0",
