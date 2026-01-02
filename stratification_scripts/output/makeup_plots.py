@@ -2449,14 +2449,39 @@ def generate_response_plots(
     
     Args:
         df_responses: DataFrame with response tracking data
-        df_makeup: DataFrame with makeup data (for joining commenter types)
+        df_makeup: DataFrame with makeup data (for joining commenter types and weights)
         plots_dir: Directory to save plots
         year: Year being analyzed
     """
     logger.info("Generating response tracking plots...")
     
     # Join responses with makeup data on comment_id
-    df = df_responses.merge(df_makeup[["comment_id", "category"]], on="comment_id", how="left")
+    # Preserve weights and other necessary columns from makeup data
+    # Note: df_responses already has "agency" column (from track_responses.py line 362)
+    # We don't merge agency from makeup - keep the one from df_responses
+    merge_cols = ["comment_id", "category"]
+    if "weight" in df_makeup.columns:
+        merge_cols.append("weight")
+    if "weight_doc" in df_makeup.columns:
+        merge_cols.append("weight_doc")
+    if "document_number" in df_makeup.columns:
+        merge_cols.append("document_number")
+    
+    # Merge without agency - df_responses already has it and we want to keep that one
+    df = df_responses.merge(df_makeup[merge_cols], on="comment_id", how="left")
+    
+    # Ensure agency exists (should already be there from df_responses)
+    # Fill any missing values with "Unknown"
+    if "agency" not in df.columns:
+        df["agency"] = "Unknown"
+    else:
+        df["agency"] = df["agency"].fillna("Unknown")
+    
+    # Ensure weights exist (default to 1.0 if missing)
+    if "weight" not in df.columns:
+        df["weight"] = 1.0
+    if "weight_doc" not in df.columns:
+        df["weight_doc"] = df.get("weight", 1.0)
     
     # Normalize categories
     df = normalize_categories(df)
@@ -2470,10 +2495,7 @@ def generate_response_plots(
     # 4. Accept/Reject by Commenter Type
     plot_decision_by_type(df, year, plots_dir)
     
-    # 5. Comment Length vs Response Probability
-    plot_length_vs_response(df, year, plots_dir)
-    
-    # 6. Comment Length vs Rejection (two plots)
+    # 5. Comment Length vs Rejection (two plots)
     plot_length_vs_rejection_binned(df, year, plots_dir)
     plot_length_vs_rejection_logistic(df, year, plots_dir)
     
@@ -2487,18 +2509,32 @@ def generate_response_plots(
 
 
 def plot_response_rate_by_agency(df: pd.DataFrame, year: int, outdir: Path) -> None:
-    """Bar chart showing % of comments responded to per agency"""
+    """Bar chart showing % of comments responded to per agency (weighted)"""
     if len(df) == 0 or "agency" not in df.columns:
         logger.warning("No data for response rate by agency plot")
         return
     
+    # Ensure weights exist
+    if "weight" not in df.columns:
+        df["weight"] = 1.0
+    
     fig, ax = plt.subplots(figsize=(12, 8))
     
-    # Calculate response rates by agency
-    agency_stats = df.groupby("agency").agg({
-        "response_found": lambda x: (x == "yes").sum() / len(x) * 100
-    }).reset_index()
-    agency_stats.columns = ["agency", "response_rate"]
+    # Calculate response rates by agency using WEIGHTED statistics
+    df["responded"] = (df["response_found"] == "yes").astype(int)
+    
+    # Calculate weighted response rates
+    agency_stats = []
+    for agency, group in df.groupby("agency"):
+        total_weight = group["weight"].sum()
+        if total_weight > 0:
+            responded_weight = group[group["responded"] == 1]["weight"].sum()
+            response_rate = (responded_weight / total_weight * 100) if total_weight > 0 else 0
+            agency_stats.append({
+                "agency": agency,
+                "response_rate": response_rate
+            })
+    agency_stats = pd.DataFrame(agency_stats)
     
     if len(agency_stats) == 0:
         logger.warning("No agency data for response rate plot")
@@ -2530,49 +2566,86 @@ def plot_response_rate_by_agency(df: pd.DataFrame, year: int, outdir: Path) -> N
 def write_decision_distribution_report(df: pd.DataFrame, year: int, outdir: Path) -> None:
     """
     Write a text report summarizing agency decision distribution.
+    Uses weighted statistics to account for sampling.
     
     Outputs tables:
-    1. Decision counts and proportions
+    1. Decision counts and proportions (weighted)
     2. Conditional probabilities (P(accept|response), P(reject|response))
-    3. Breakdown by commenter type
-    4. Notable asymmetries (agencies with extreme acceptance/rejection rates)
+    3. Breakdown by commenter type (weighted)
+    4. Notable asymmetries (agencies with extreme acceptance/rejection rates, weighted)
     """
     try:
+        # Ensure weights exist
+        if "weight" not in df.columns:
+            df["weight"] = 1.0
+        
         # Filter to responses that were found
-        df_found = df[df["response_found"] == "yes"]
+        df_found = df[df["response_found"] == "yes"].copy()
         
         if len(df_found) == 0:
             logger.warning("No responses found for decision distribution report")
             return
     
-        # Count decisions
-        decision_counts = df_found["agency_decision"].value_counts()
-        total_responses = len(df_found)
+        # Count decisions using WEIGHTED sums
+        decision_weighted = df_found.groupby("agency_decision")["weight"].sum()
+        total_responses_weighted = df_found["weight"].sum()
         
-        # Calculate proportions
-        decision_props = (decision_counts / total_responses * 100) if total_responses > 0 else pd.Series()
+        # Calculate proportions (weighted)
+        decision_props = (decision_weighted / total_responses_weighted * 100) if total_responses_weighted > 0 else pd.Series()
         
-        # Calculate conditional probabilities
-        p_accept_given_response = (decision_counts.get("accept", 0) / total_responses * 100) if total_responses > 0 else 0
-        p_reject_given_response = (decision_counts.get("reject", 0) / total_responses * 100) if total_responses > 0 else 0
-        p_uncertain_given_response = (decision_counts.get("uncertain", 0) / total_responses * 100) if total_responses > 0 else 0
+        # Calculate conditional probabilities (weighted)
+        accept_weighted = decision_weighted.get("accept", 0)
+        reject_weighted = decision_weighted.get("reject", 0)
+        uncertain_weighted = decision_weighted.get("uncertain", 0)
         
-        # Breakdown by commenter type
-        decision_by_type = df_found.groupby("category")["agency_decision"].value_counts(normalize=True).unstack(fill_value=0) * 100
+        p_accept_given_response = (accept_weighted / total_responses_weighted * 100) if total_responses_weighted > 0 else 0
+        p_reject_given_response = (reject_weighted / total_responses_weighted * 100) if total_responses_weighted > 0 else 0
+        p_uncertain_given_response = (uncertain_weighted / total_responses_weighted * 100) if total_responses_weighted > 0 else 0
         
-        # Agency-level asymmetries
-        agency_decisions = df_found.groupby("agency")["agency_decision"].value_counts(normalize=True).unstack(fill_value=0) * 100
-        agency_totals = df_found.groupby("agency").size()
+        # Breakdown by commenter type (weighted)
+        # Calculate weighted proportions for each category × decision combination
+        decision_by_type_weighted = {}
+        for cat in CATEGORY_ORDER:
+            cat_data = df_found[df_found["category"] == cat]
+            if len(cat_data) > 0:
+                cat_total_weighted = cat_data["weight"].sum()
+                if cat_total_weighted > 0:
+                    cat_decisions = {}
+                    for decision in ["accept", "reject", "uncertain"]:
+                        decision_data = cat_data[cat_data["agency_decision"] == decision]
+                        decision_weight = decision_data["weight"].sum()
+                        cat_decisions[decision] = (decision_weight / cat_total_weighted * 100) if cat_total_weighted > 0 else 0
+                    decision_by_type_weighted[cat] = cat_decisions
         
-        # Find agencies with extreme rates (top 10% acceptance or rejection)
-        if "accept" in agency_decisions.columns:
-            high_acceptance = agency_decisions.nlargest(max(1, int(len(agency_decisions) * 0.1)), "accept")
+        # Agency-level asymmetries (weighted)
+        # Calculate weighted acceptance/rejection rates by agency
+        agency_stats = []
+        for agency, agency_data in df_found.groupby("agency"):
+            agency_total_weighted = agency_data["weight"].sum()
+            if agency_total_weighted > 0:
+                accept_weight = agency_data[agency_data["agency_decision"] == "accept"]["weight"].sum()
+                reject_weight = agency_data[agency_data["agency_decision"] == "reject"]["weight"].sum()
+                uncertain_weight = agency_data[agency_data["agency_decision"] == "uncertain"]["weight"].sum()
+                
+                accept_pct = (accept_weight / agency_total_weighted * 100) if agency_total_weighted > 0 else 0
+                reject_pct = (reject_weight / agency_total_weighted * 100) if agency_total_weighted > 0 else 0
+                
+                agency_stats.append({
+                    "agency": agency,
+                    "accept_pct": accept_pct,
+                    "reject_pct": reject_pct,
+                    "total_weighted": agency_total_weighted
+                })
+        
+        agency_df = pd.DataFrame(agency_stats)
+        agency_totals = agency_df.set_index("agency")["total_weighted"]
+        
+        # Find agencies with >50% acceptance or rejection (clear threshold, not percentile)
+        if len(agency_df) > 0:
+            high_acceptance = agency_df[agency_df["accept_pct"] > 50].sort_values("accept_pct", ascending=False)
+            high_rejection = agency_df[agency_df["reject_pct"] > 50].sort_values("reject_pct", ascending=False)
         else:
             high_acceptance = pd.DataFrame()
-        
-        if "reject" in agency_decisions.columns:
-            high_rejection = agency_decisions.nlargest(max(1, int(len(agency_decisions) * 0.1)), "reject")
-        else:
             high_rejection = pd.DataFrame()
         
         # Create report
@@ -2588,12 +2661,12 @@ def write_decision_distribution_report(df: pd.DataFrame, year: int, outdir: Path
         report_lines.append("-" * 50)
         
         for decision in ["accept", "reject", "uncertain"]:
-            count = decision_counts.get(decision, 0)
+            count_weighted = decision_weighted.get(decision, 0)
             prop = decision_props.get(decision, 0)
-            report_lines.append(f"{decision.capitalize():<20} | {count:>10,} | {prop:>11.1f}%")
+            report_lines.append(f"{decision.capitalize():<20} | {count_weighted:>10,.0f} | {prop:>11.1f}%")
         
         report_lines.append("-" * 50)
-        report_lines.append(f"{'TOTAL':<20} | {total_responses:>10,} | {100.0:>11.1f}%")
+        report_lines.append(f"{'TOTAL':<20} | {total_responses_weighted:>10,.0f} | {100.0:>11.1f}%")
         report_lines.append("")
         report_lines.append("")
         
@@ -2615,11 +2688,11 @@ def write_decision_distribution_report(df: pd.DataFrame, year: int, outdir: Path
         report_lines.append("-" * 80)
         
         for cat in CATEGORY_ORDER:
-            if cat in decision_by_type.index:
-                cat_row = decision_by_type.loc[cat]
-                accept_pct = cat_row.get("accept", 0)
-                reject_pct = cat_row.get("reject", 0)
-                uncertain_pct = cat_row.get("uncertain", 0)
+            if cat in decision_by_type_weighted:
+                cat_decisions = decision_by_type_weighted[cat]
+                accept_pct = cat_decisions.get("accept", 0)
+                reject_pct = cat_decisions.get("reject", 0)
+                uncertain_pct = cat_decisions.get("uncertain", 0)
                 cat_display = CATEGORY_DISPLAY_NAMES.get(cat, cat)
                 report_lines.append(f"{cat_display:<45} | {accept_pct:>9.1f}% | {reject_pct:>9.1f}% | {uncertain_pct:>11.1f}%")
         
@@ -2627,40 +2700,41 @@ def write_decision_distribution_report(df: pd.DataFrame, year: int, outdir: Path
         report_lines.append("")
         report_lines.append("")
         
-        # Table 4: Notable asymmetries
-        report_lines.append("TABLE 4: AGENCIES WITH EXTREME DECISION RATES")
+        # Table 4: Agencies with >50% acceptance or rejection
+        report_lines.append("TABLE 4: AGENCIES BY DECISION RATE")
         report_lines.append("-" * 100)
         
         if len(high_acceptance) > 0:
-            report_lines.append("Top 10% by Acceptance Rate:")
+            report_lines.append("Agencies with >50% Acceptance Rate:")
             report_lines.append("-" * 100)
             header = f"{'Agency':<50} | {'Accept %':>10} | {'Total Responses':>15}"
             report_lines.append(header)
             report_lines.append("-" * 100)
-            for agency, row in high_acceptance.iterrows():
-                accept_pct = row.get("accept", 0)
-                total = agency_totals.get(agency, 0)
-                agency_display = str(agency)[:48]
-                report_lines.append(f"{agency_display:<50} | {accept_pct:>9.1f}% | {total:>15,}")
+            for _, row in high_acceptance.iterrows():
+                accept_pct = row["accept_pct"]
+                total = row["total_weighted"]
+                agency_display = str(row["agency"])[:48]
+                report_lines.append(f"{agency_display:<50} | {accept_pct:>9.1f}% | {total:>15,.0f}")
             report_lines.append("")
         
         if len(high_rejection) > 0:
-            report_lines.append("Top 10% by Rejection Rate:")
+            report_lines.append("Agencies with >50% Rejection Rate:")
             report_lines.append("-" * 100)
             header = f"{'Agency':<50} | {'Reject %':>10} | {'Total Responses':>15}"
             report_lines.append(header)
             report_lines.append("-" * 100)
-            for agency, row in high_rejection.iterrows():
-                reject_pct = row.get("reject", 0)
-                total = agency_totals.get(agency, 0)
-                agency_display = str(agency)[:48]
-                report_lines.append(f"{agency_display:<50} | {reject_pct:>9.1f}% | {total:>15,}")
+            for _, row in high_rejection.iterrows():
+                reject_pct = row["reject_pct"]
+                total = row["total_weighted"]
+                agency_display = str(row["agency"])[:48]
+                report_lines.append(f"{agency_display:<50} | {reject_pct:>9.1f}% | {total:>15,.0f}")
         
         report_lines.append("-" * 100)
         report_lines.append("")
         report_lines.append("Notes:")
         report_lines.append("- All percentages are conditional on response being found")
-        report_lines.append("- Extreme rates defined as top 10% of agencies by decision type")
+        report_lines.append("- All counts and percentages use WEIGHTED statistics to account for sampling")
+        report_lines.append("- Agencies shown have >50% acceptance or rejection rate")
         report_lines.append("- Only agencies with at least 1 response are included")
         
         # Write to file
@@ -2677,24 +2751,48 @@ def write_decision_distribution_report(df: pd.DataFrame, year: int, outdir: Path
 
 
 def plot_decision_by_type(df: pd.DataFrame, year: int, outdir: Path) -> None:
-    """Grouped bar chart of accept/reject by commenter type"""
+    """Grouped bar chart of accept/reject by commenter type (weighted)"""
     fig, ax = plt.subplots(figsize=(12, 6))
     
+    # Ensure weights exist
+    if "weight" not in df.columns:
+        df["weight"] = 1.0
+    
     # Filter to responses that were found
-    df_found = df[df["response_found"] == "yes"]
+    df_found = df[df["response_found"] == "yes"].copy()
     
     if len(df_found) == 0:
         logger.warning("No responses found for decision by type plot")
         return
     
-    # Calculate decision rates by category
-    decision_by_type = df_found.groupby("category")["agency_decision"].value_counts(normalize=True).unstack(fill_value=0) * 100
+    # Calculate decision rates by category using WEIGHTED statistics
+    decision_by_type = {}
+    for cat in CATEGORY_ORDER:
+        cat_data = df_found[df_found["category"] == cat]
+        if len(cat_data) > 0:
+            cat_total_weighted = cat_data["weight"].sum()
+            if cat_total_weighted > 0:
+                cat_decisions = {}
+                for decision in ["accept", "reject", "uncertain"]:
+                    decision_data = cat_data[cat_data["agency_decision"] == decision]
+                    decision_weight = decision_data["weight"].sum()
+                    cat_decisions[decision] = (decision_weight / cat_total_weighted * 100) if cat_total_weighted > 0 else 0
+                decision_by_type[cat] = cat_decisions
+    
+    # Convert to DataFrame for plotting
+    decision_df = pd.DataFrame(decision_by_type).T.fillna(0)
+    decision_df = decision_df.reindex(CATEGORY_ORDER, fill_value=0)
     
     # Rename index for display using global mapping
-    decision_by_type_display = decision_by_type.rename(index=CATEGORY_DISPLAY_NAMES)
+    decision_by_type_display = decision_df.rename(index=CATEGORY_DISPLAY_NAMES)
+    
+    # Ensure all decision columns exist
+    for decision in ["accept", "reject", "uncertain"]:
+        if decision not in decision_by_type_display.columns:
+            decision_by_type_display[decision] = 0
     
     # Plot grouped bar
-    decision_by_type_display.plot(kind="bar", ax=ax, color=["#6B7D6D", "#DDE3EA", "#9A8153"])
+    decision_by_type_display[["accept", "reject", "uncertain"]].plot(kind="bar", ax=ax, color=["#6B7D6D", "#DDE3EA", "#9A8153"])
     ax.set_ylabel("Percentage", fontsize=FONT_LABEL)
     ax.set_xlabel("Commenter Type", fontsize=FONT_LABEL)
     ax.set_title(f"Agency Decision by Commenter Type - {year}", fontsize=FONT_TITLE, fontweight="bold")
@@ -2708,102 +2806,18 @@ def plot_decision_by_type(df: pd.DataFrame, year: int, outdir: Path) -> None:
     plt.close()
 
 
-def plot_length_vs_response(df: pd.DataFrame, year: int, outdir: Path) -> None:
-    """Scatter plot of comment length vs response probability with refined binning and trend"""
-    if len(df) == 0 or "comment_text_length" not in df.columns or "response_found" not in df.columns:
-        logger.warning("No data for length vs response plot")
-        return
-    
-    fig, ax = plt.subplots(figsize=(10, 6))
-    
-    # Create binary response variable
-    df["responded"] = (df["response_found"] == "yes").astype(int)
-    
-    # Filter out invalid lengths
-    df_valid = df[df["comment_text_length"].notna() & (df["comment_text_length"] > 0)].copy()
-    
-    if len(df_valid) == 0:
-        logger.warning("No valid comment lengths for plot")
-        plt.close()
-        return
-    
-    # Cap at 95th percentile to handle long tail
-    max_length = df_valid["comment_text_length"].quantile(0.95)
-    df_valid = df_valid[df_valid["comment_text_length"] <= max_length]
-    
-    if len(df_valid) < 20:
-        logger.warning("Insufficient data for plot")
-        plt.close()
-        return
-    
-    # Use quantile-based binning (equal-count bins) with minimum bin size
-    min_bin_size = 10
-    n_bins = min(30, max(5, int(len(df_valid) / min_bin_size)))
-    
-    try:
-        df_valid["length_bin"] = pd.qcut(df_valid["comment_text_length"], q=n_bins, duplicates="drop")
-    except ValueError:
-        # Fallback to regular cut if qcut fails
-        df_valid["length_bin"] = pd.cut(df_valid["comment_text_length"], bins=n_bins)
-    
-    # Calculate response rate by length bin
-    length_stats = df_valid.groupby("length_bin").agg({
-        "responded": ["mean", "count"],
-        "comment_text_length": "mean"
-    }).reset_index()
-    length_stats.columns = ["length_bin", "response_rate", "count", "bin_center"]
-    
-    # Filter bins with minimum size
-    length_stats = length_stats[length_stats["count"] >= min_bin_size]
-    
-    if len(length_stats) == 0:
-        logger.warning("No bins with sufficient data for length vs response plot")
-        plt.close()
-        return
-    
-    # Plot with fixed small size (no volume encoding)
-    ax.scatter(length_stats["bin_center"], length_stats["response_rate"] * 100, 
-              s=20, alpha=0.6, color="#6B7D6D", label="Binned data")
-    
-    # Add smoothed trend line using UnivariateSpline
-    try:
-        from scipy.interpolate import UnivariateSpline
-        # Sort by bin_center for spline
-        length_stats_sorted = length_stats.sort_values("bin_center")
-        x_smooth = length_stats_sorted["bin_center"].values
-        y_smooth = length_stats_sorted["response_rate"].values * 100
-        
-        if len(x_smooth) >= 3:
-            spline = UnivariateSpline(x_smooth, y_smooth, s=len(x_smooth) * 0.1, k=min(3, len(x_smooth) - 1))
-            x_fit = np.linspace(x_smooth.min(), x_smooth.max(), 200)
-            y_fit = spline(x_fit)
-            ax.plot(x_fit, y_fit, color="#9A8153", linewidth=2.5, alpha=0.9, label="Smoothed trend")
-    except Exception as e:
-        logger.debug(f"Could not fit spline: {e}")
-    
-    # Use log scale for x-axis
-    ax.set_xscale("log")
-    ax.set_xlabel("Comment Length (characters, log scale)", fontsize=FONT_LABEL, fontweight="bold")
-    ax.set_ylabel("Response Rate (%)", fontsize=FONT_LABEL, fontweight="bold")
-    ax.set_title(f"Comment Length vs Response Probability - {year}", fontsize=FONT_TITLE, fontweight="bold")
-    ax.grid(alpha=GRID_ALPHA, color=GRID_COLOR)
-    ax.legend(fontsize=FONT_LEGEND - 1, frameon=True, loc="upper right", framealpha=0.9)
-    apply_clean_style(ax)
-    
-    plt.tight_layout()
-    plt.savefig(outdir / f"length_vs_response_{year}.png", dpi=300, bbox_inches="tight")
-    plt.close()
-    print(f"[OK] Saved: length_vs_response_{year}.png")
-
-
 def plot_length_vs_rejection_binned(df: pd.DataFrame, year: int, outdir: Path) -> None:
     """
-    Plot 1: Binned rejection probability by comment length.
+    Plot 1: Binned rejection probability by comment length (weighted).
     Shows P(reject | length bin) with smoothed trend line.
     """
     if len(df) == 0 or "response_found" not in df.columns:
         logger.warning("No data for length vs rejection binned plot")
         return
+    
+    # Ensure weights exist
+    if "weight" not in df.columns:
+        df["weight"] = 1.0
         
     # Filter to responses that were found and have valid decisions
     df_found = df[(df["response_found"] == "yes") & (df["agency_decision"].notna())].copy()
@@ -2826,8 +2840,8 @@ def plot_length_vs_rejection_binned(df: pd.DataFrame, year: int, outdir: Path) -
         logger.warning("No valid comment lengths for plot")
         return
         
-    # Cap at 95th percentile to handle long tail
-    max_length = df_valid["comment_text_length"].quantile(0.95)
+    # Cap at 95th percentile to handle long tail (use weighted quantile)
+    max_length = weighted_quantile(df_valid["comment_text_length"].values, df_valid["weight"].values, 0.95)
     df_valid = df_valid[df_valid["comment_text_length"] <= max_length]
     
     if len(df_valid) < 20:
@@ -2842,12 +2856,19 @@ def plot_length_vs_rejection_binned(df: pd.DataFrame, year: int, outdir: Path) -
         # Fallback to regular cut if qcut fails
         df_valid["length_bin"] = pd.cut(df_valid["comment_text_length"], bins=n_bins)
     
-    # Calculate rejection probability by bin
-    bin_stats = df_valid.groupby("length_bin").agg({
-        "reject": ["mean", "count"],
-        "comment_text_length": "mean"
-    }).reset_index()
-    bin_stats.columns = ["length_bin", "reject_prob", "count", "bin_center"]
+    # Calculate rejection probability by bin using WEIGHTED statistics
+    bin_stats = []
+    for bin_label, group in df_valid.groupby("length_bin", observed=True):
+        total_weight = group["weight"].sum()
+        reject_weight = group[group["reject"] == 1]["weight"].sum()
+        reject_prob = (reject_weight / total_weight) if total_weight > 0 else 0
+        bin_stats.append({
+            "length_bin": bin_label,
+            "reject_prob": reject_prob,
+            "count": len(group),
+            "bin_center": group["comment_text_length"].mean()
+        })
+    bin_stats = pd.DataFrame(bin_stats)
     
     # Filter bins with minimum size (at least 5 comments)
     min_bin_size = 5
@@ -2894,12 +2915,21 @@ def plot_length_vs_rejection_binned(df: pd.DataFrame, year: int, outdir: Path) -
 
 def plot_length_vs_rejection_logistic(df: pd.DataFrame, year: int, outdir: Path) -> None:
     """
-    Plot 2: Logistic regression of rejection probability vs comment length.
-    Shows predicted probability with confidence interval.
+    Statistical plot: Association between comment length and rejection probability (weighted).
+    
+    Shows:
+    - Binned empirical rejection rates with confidence intervals (weighted)
+    - Logistic regression curve with 95% CI (weighted)
+    - Rug plot showing data distribution
+    - Uses log(length) for proper modeling
     """
     if len(df) == 0 or "response_found" not in df.columns:
         logger.warning("No data for length vs rejection logistic plot")
         return
+    
+    # Ensure weights exist
+    if "weight" not in df.columns:
+        df["weight"] = 1.0
     
     # Filter to responses that were found and have valid decisions
     df_found = df[(df["response_found"] == "yes") & (df["agency_decision"].notna())].copy()
@@ -2922,81 +2952,194 @@ def plot_length_vs_rejection_logistic(df: pd.DataFrame, year: int, outdir: Path)
         logger.warning("Insufficient data for logistic regression")
         return
     
-    # Cap at 95th percentile
-    max_length = df_valid["comment_text_length"].quantile(0.95)
-    df_valid = df_valid[df_valid["comment_text_length"] <= max_length]
+    # Use log1p(length) for modeling (handles zeros naturally)
+    df_valid["log_length"] = np.log1p(df_valid["comment_text_length"])
     
-    # Log-transform length for better fit
-    df_valid["log_length"] = np.log10(df_valid["comment_text_length"] + 1)
-    
-    # Fit logistic regression
+    # Check for statsmodels availability
     try:
-        from sklearn.linear_model import LogisticRegression
+        import statsmodels.api as sm
         from scipy import stats
-        
+    except ImportError:
+        logger.warning("statsmodels not available, skipping logistic regression plot")
+        return
+    
+    # Fit weighted logistic regression with proper uncertainty estimation
+    try:
         X = df_valid[["log_length"]].values
         y = df_valid["reject"].values
+        weights = df_valid["weight"].values
         
-        # Fit model
-        model = LogisticRegression()
-        model.fit(X, y)
+        # Add intercept for statsmodels
+        X_with_const = sm.add_constant(X)
         
-        # Generate prediction range
-        x_range = np.linspace(df_valid["log_length"].min(), df_valid["log_length"].max(), 200)
-        x_range_reshaped = x_range.reshape(-1, 1)
+        # Fit weighted logistic regression
+        model = sm.Logit(y, X_with_const, weights=weights).fit(disp=0)
         
-        # Get predicted probabilities
-        y_pred = model.predict_proba(x_range_reshaped)[:, 1] * 100
+        # Generate prediction range (in log space)
+        log_length_min = df_valid["log_length"].min()
+        log_length_max = df_valid["log_length"].max()
+        x_range_log = np.linspace(log_length_min, log_length_max, 200)
+        x_range_log_const = sm.add_constant(x_range_log)
+        
+        # Get predicted probabilities and confidence intervals
+        y_pred = model.predict(x_range_log_const) * 100
+        
+        # Get 95% confidence intervals
+        pred_ci = model.get_prediction(x_range_log_const).conf_int(alpha=0.05)
+        y_pred_lower = pred_ci[:, 0] * 100
+        y_pred_upper = pred_ci[:, 1] * 100
         
         # Convert back to original scale for plotting
-        x_range_original = 10 ** x_range - 1
+        x_range_original = np.expm1(x_range_log)
         
-        fig, ax = plt.subplots(figsize=(10, 6))
+        # Calculate binned empirical rates for comparison (weighted)
+        # Use equal-count bins (quantile-based)
+        n_bins = min(20, max(5, int(len(df_valid) / 50)))
+        try:
+            df_valid["length_bin"] = pd.qcut(df_valid["log_length"], q=n_bins, duplicates="drop")
+        except ValueError:
+            df_valid["length_bin"] = pd.cut(df_valid["log_length"], bins=n_bins)
         
-        # Plot data points (sample for visibility)
-        if len(df_valid) > 1000:
-            df_sample = df_valid.sample(1000)
-        else:
-            df_sample = df_valid
+        # Calculate weighted empirical rejection rates with Wilson confidence intervals
+        bin_stats = []
+        for bin_label, group in df_valid.groupby("length_bin", observed=True):
+            total_weight = group["weight"].sum()
+            if total_weight > 0 and len(group) >= 10:  # Minimum bin size
+                reject_weight = group[group["reject"] == 1]["weight"].sum()
+                p_weighted = reject_weight / total_weight
+                
+                # Effective sample size for CI calculation (using Kish's effective sample size)
+                n_eff = (total_weight ** 2) / (group["weight"] ** 2).sum() if len(group) > 0 else len(group)
+                n_eff = max(1, int(n_eff))
+                
+                # Wilson confidence interval (using effective sample size)
+                z = 1.96  # 95% CI
+                denominator = 1 + (z**2 / n_eff)
+                center = (p_weighted + (z**2 / (2 * n_eff))) / denominator
+                margin = (z / denominator) * np.sqrt((p_weighted * (1 - p_weighted) / n_eff) + (z**2 / (4 * n_eff**2)))
+                
+                bin_stats.append({
+                    "log_length": group["log_length"].mean(),
+                    "length": group["comment_text_length"].mean(),
+                    "reject_rate": p_weighted * 100,
+                    "ci_lower": max(0, (center - margin) * 100),
+                    "ci_upper": min(100, (center + margin) * 100),
+                    "n": len(group),
+                    "n_eff": n_eff
+                })
         
-        ax.scatter(df_sample["comment_text_length"], df_sample["reject"] * 100,
-                  alpha=0.2, s=10, color="#6B7D6D", label="Data points")
+        bin_df = pd.DataFrame(bin_stats)
         
-        # Plot predicted probability
-        ax.plot(x_range_original, y_pred, color="#9A8153", linewidth=2.5, 
-               alpha=0.9, label="Logistic regression")
+        # Create figure with two panels: main plot and rug
+        fig = plt.figure(figsize=(12, 8))
+        gs = fig.add_gridspec(2, 1, height_ratios=[4, 1], hspace=0.1)
+        ax_main = fig.add_subplot(gs[0])
+        ax_rug = fig.add_subplot(gs[1])
         
-        ax.set_xlabel("Comment Length (characters)", fontsize=FONT_LABEL, fontweight="bold")
-        ax.set_ylabel("P(Reject) (%)", fontsize=FONT_LABEL, fontweight="bold")
-        ax.set_title(f"Logistic Regression: Rejection Probability vs Length ({year})", 
+        # Main plot: binned empirical rates with CI
+        if len(bin_df) > 0:
+            # Scale point size by effective sample size (or bin count if n_eff not available)
+            size_col = "n_eff" if "n_eff" in bin_df.columns else "n"
+            sizes = np.clip(bin_df[size_col] / bin_df[size_col].max() * 200, 20, 200)
+            
+            ax_main.scatter(bin_df["length"], bin_df["reject_rate"],
+                          s=sizes, alpha=0.7, color="#6B7D6D", 
+                          edgecolors="white", linewidths=1.5, zorder=3,
+                          label="Binned empirical rates")
+            
+            # Add error bars for confidence intervals
+            ax_main.errorbar(bin_df["length"], bin_df["reject_rate"],
+                           yerr=[bin_df["reject_rate"] - bin_df["ci_lower"],
+                                 bin_df["ci_upper"] - bin_df["reject_rate"]],
+                           fmt='none', color="#6B7D6D", alpha=0.4, linewidth=1, zorder=2)
+        
+        # Plot logistic regression curve with CI band
+        ax_main.plot(x_range_original, y_pred, color="#9A8153", linewidth=2.5,
+                    alpha=0.9, label="Logistic regression", zorder=4)
+        ax_main.fill_between(x_range_original, y_pred_lower, y_pred_upper,
+                            color="#9A8153", alpha=0.2, zorder=1,
+                            label="95% confidence interval")
+        
+        # Add model statistics annotation
+        coef = model.params[1]  # Coefficient for log_length
+        pvalue = model.pvalues[1]
+        sign = "decreases" if coef < 0 else "increases"
+        sig_level = "***" if pvalue < 0.001 else "**" if pvalue < 0.01 else "*" if pvalue < 0.05 else "ns"
+        
+        stats_text = f"β = {coef:.3f} ({sign} rejection with length)\np = {pvalue:.4f} {sig_level}"
+        ax_main.text(0.02, 0.98, stats_text, transform=ax_main.transAxes,
+                    fontsize=9, verticalalignment='top',
+                    bbox=dict(boxstyle="round,pad=0.5", facecolor="white", alpha=0.8))
+        
+        # Styling
+        ax_main.set_xscale("log")
+        ax_main.set_xlabel("Comment Length (characters, log scale)", fontsize=FONT_LABEL, fontweight="bold")
+        ax_main.set_ylabel("P(Reject) (%)", fontsize=FONT_LABEL, fontweight="bold")
+        ax_main.set_title(f"Association between Comment Length and Rejection Probability ({year})\nWeighted logistic model", 
                     fontsize=FONT_TITLE, fontweight="bold")
-        ax.grid(alpha=GRID_ALPHA, color=GRID_COLOR)
-        ax.legend(fontsize=FONT_LEGEND - 1, frameon=True, loc="upper right", framealpha=0.9)
-        apply_clean_style(ax)
+        ax_main.set_ylim(-2, 102)
+        ax_main.grid(alpha=GRID_ALPHA, color=GRID_COLOR)
+        ax_main.legend(fontsize=FONT_LEGEND - 1, frameon=True, loc="upper right", framealpha=0.9)
+        apply_clean_style(ax_main)
+        
+        # Rug plot: show data distribution
+        sample_size = min(5000, len(df_valid))
+        df_rug = df_valid.sample(sample_size) if len(df_valid) > sample_size else df_valid
+        ax_rug.scatter(df_rug["comment_text_length"], np.ones(len(df_rug)),
+                      alpha=0.1, s=1, color="#5C6670", marker="|")
+        ax_rug.set_xscale("log")
+        ax_rug.set_xlabel("Comment Length Distribution", fontsize=FONT_LABEL - 2, fontweight="bold")
+        ax_rug.set_ylabel("", fontsize=1)
+        ax_rug.set_yticks([])
+        ax_rug.spines["top"].set_visible(False)
+        ax_rug.spines["right"].set_visible(False)
+        ax_rug.spines["left"].set_visible(False)
+        ax_rug.spines["bottom"].set_color(GRID_COLOR)
+        ax_rug.tick_params(labelsize=FONT_LABEL - 2, colors="#5C6670")
         
         plt.tight_layout()
         plt.savefig(outdir / f"length_vs_rejection_logistic_{year}.png", dpi=300, bbox_inches="tight")
         plt.close()
         print(f"[OK] Saved: length_vs_rejection_logistic_{year}.png")
         
-    except ImportError:
-        logger.warning("sklearn not available, skipping logistic regression plot")
     except Exception as e:
         logger.warning(f"Error fitting logistic regression: {e}")
+        import traceback
+        traceback.print_exc()
 
 
 def plot_response_heatmap(df: pd.DataFrame, year: int, outdir: Path) -> None:
-    """Heatmap of response rates by agency × commenter type"""
+    """Heatmap of response rates by agency × commenter type (weighted)"""
     if len(df) == 0 or "agency" not in df.columns or "category" not in df.columns:
         logger.warning("No data for response heatmap plot")
         return
     
-    # Calculate response rates
+    # Ensure weights exist
+    if "weight" not in df.columns:
+        df["weight"] = 1.0
+    
+    # Calculate response rates using WEIGHTED statistics
     df["responded"] = (df["response_found"] == "yes").astype(int)
     
-    # Create pivot table
+    # Create pivot table with weighted means
     try:
-        heatmap_data = df.groupby(["agency", "category"])["responded"].mean().unstack(fill_value=0) * 100
+        # Calculate weighted response rates for each agency × category combination
+        heatmap_dict = {}
+        for (agency, category), group in df.groupby(["agency", "category"]):
+            total_weight = group["weight"].sum()
+            responded_weight = group[group["responded"] == 1]["weight"].sum()
+            response_rate = (responded_weight / total_weight * 100) if total_weight > 0 else 0
+            if agency not in heatmap_dict:
+                heatmap_dict[agency] = {}
+            heatmap_dict[agency][category] = response_rate
+        
+        # Convert to DataFrame
+        heatmap_data = pd.DataFrame(heatmap_dict).T.fillna(0)
+        # Ensure all categories are present
+        for cat in CATEGORY_ORDER:
+            if cat not in heatmap_data.columns:
+                heatmap_data[cat] = 0
+        heatmap_data = heatmap_data[CATEGORY_ORDER]
     except Exception as e:
         logger.warning(f"Could not create heatmap pivot table: {e}")
         return
@@ -3005,9 +3148,10 @@ def plot_response_heatmap(df: pd.DataFrame, year: int, outdir: Path) -> None:
         logger.warning("No data for heatmap after pivot")
         return
     
-    # Take top 15 agencies by total comments
+    # Take top 15 agencies by total weighted comments
     try:
-        top_agencies = df["agency"].value_counts().head(15).index
+        agency_totals_weighted = df.groupby("agency")["weight"].sum().sort_values(ascending=False)
+        top_agencies = agency_totals_weighted.head(15).index
         heatmap_data = heatmap_data.loc[heatmap_data.index.isin(top_agencies)]
     except Exception:
         pass
@@ -3050,39 +3194,56 @@ def plot_response_heatmap(df: pd.DataFrame, year: int, outdir: Path) -> None:
 
 def plot_agency_response_acceptance(df: pd.DataFrame, year: int, outdir: Path) -> None:
     """
-    Small multiples by agency: Comment volume vs acceptance rate.
-    Color encodes response-rate bucket (low/medium/high tertiles).
+    Single scatterplot: Agency-level acceptance rates vs comment volume (weighted).
+    
+    Shows relationship between agency workload (total weighted comments) and acceptance rate,
+    with color encoding response rate bucket.
     """
     if len(df) == 0 or "agency" not in df.columns or "response_found" not in df.columns:
         logger.warning("No data for agency response vs acceptance plot")
         return
     
-    # Calculate response rate by agency
+    # Ensure weights exist
+    if "weight" not in df.columns:
+        df["weight"] = 1.0
+    
+    # Calculate response rate by agency using WEIGHTED statistics
+    df["responded"] = (df["response_found"] == "yes").astype(int)
     agency_stats = df.groupby("agency").agg({
-        "response_found": lambda x: (x == "yes").sum() / len(x) * 100 if len(x) > 0 else 0,
-        "comment_id": "count"  # Total comments per agency
+        "responded": lambda x: (df.loc[x.index, "responded"] * df.loc[x.index, "weight"]).sum() / df.loc[x.index, "weight"].sum() * 100 if df.loc[x.index, "weight"].sum() > 0 else 0,
+        "weight": "sum"  # Total weighted comments per agency
     }).reset_index()
     agency_stats.columns = ["agency", "response_rate", "total_comments"]
     
     # Filter to agencies with responses found
-    df_found = df[df["response_found"] == "yes"]
+    df_found = df[df["response_found"] == "yes"].copy()
     
     if len(df_found) == 0:
         logger.warning("No responses found for acceptance rate calculation")
         return
     
-    # Calculate acceptance rate by agency (only for agencies that responded)
-    acceptance_stats = df_found.groupby("agency").agg({
-        "agency_decision": lambda x: (x == "accept").sum() / len(x) * 100 if len(x) > 0 else 0
-    }).reset_index()
-    acceptance_stats.columns = ["agency", "acceptance_rate"]
+    # Calculate acceptance rate by agency using WEIGHTED statistics
+    acceptance_stats = []
+    for agency, agency_data in df_found.groupby("agency"):
+        total_weight = agency_data["weight"].sum()
+        if total_weight > 0:
+            accept_weight = agency_data[agency_data["agency_decision"] == "accept"]["weight"].sum()
+            acceptance_rate = (accept_weight / total_weight * 100) if total_weight > 0 else 0
+            acceptance_stats.append({
+                "agency": agency,
+                "acceptance_rate": acceptance_rate
+            })
+    acceptance_stats = pd.DataFrame(acceptance_stats)
     
     # Merge stats
     agency_stats = agency_stats.merge(acceptance_stats, on="agency", how="left")
     agency_stats["acceptance_rate"] = agency_stats["acceptance_rate"].fillna(0)
     
-    # Filter to agencies with at least 10 comments
-    agency_stats = agency_stats[agency_stats["total_comments"] >= 10]
+    # Filter to agencies with at least 10 comments and at least 1 response
+    agency_stats = agency_stats[
+        (agency_stats["total_comments"] >= 10) & 
+        (agency_stats["response_rate"] > 0)
+    ]
     
     if len(agency_stats) == 0:
         logger.warning("No agencies with sufficient data for plot")
@@ -3103,21 +3264,6 @@ def plot_agency_response_acceptance(df: pd.DataFrame, year: int, outdir: Path) -
     
     agency_stats["response_bucket"] = agency_stats["response_rate"].apply(get_response_bucket)
     
-    # Sort by total comments and take top N agencies (e.g., 12 or 16 for nice grid)
-    top_n = 12  # 3x4 or 4x3 grid
-    agency_stats = agency_stats.nlargest(top_n, "total_comments")
-    
-    # Prepare data for small multiples: need comment-level data per agency
-    # For each agency, we need comment volume and acceptance rate
-    agency_list = agency_stats["agency"].tolist()
-    
-    # Create small multiples grid
-    n_cols = 4
-    n_rows = int(np.ceil(len(agency_list) / n_cols))
-    
-    fig, axes = plt.subplots(n_rows, n_cols, figsize=(16, 4 * n_rows))
-    axes = axes.flatten() if n_rows > 1 else [axes] if n_cols == 1 else axes
-    
     # Color mapping for response buckets
     bucket_colors = {
         "Low": "#DDE3EA",
@@ -3125,60 +3271,74 @@ def plot_agency_response_acceptance(df: pd.DataFrame, year: int, outdir: Path) -
         "High": "#6B7D6D"
     }
     
-    for idx, (_, agency_row) in enumerate(agency_stats.iterrows()):
-        if idx >= len(axes):
-            break
-        
-        ax = axes[idx]
-        agency = agency_row["agency"]
-        response_bucket = agency_row["response_bucket"]
-        acceptance_rate = agency_row["acceptance_rate"]
-        total_comments = agency_row["total_comments"]
-        
-        # Plot acceptance rate as a point/horizontal line
-        # X-axis: comment volume (log scale), Y-axis: acceptance rate
-        ax.scatter([total_comments], [acceptance_rate], 
-                  s=100, alpha=0.8, color=bucket_colors[response_bucket], 
-                  edgecolors="white", linewidths=1.5, zorder=3)
-        
-        # Add horizontal reference line at acceptance rate
-        ax.axhline(acceptance_rate, color=bucket_colors[response_bucket], 
-                  linewidth=1.5, linestyle="--", alpha=0.5, zorder=1)
-        
-        # Agency name (shortened)
-        agency_display = str(agency)
-        if "," in agency_display:
-            agency_display = agency_display.split(",")[0]
-        agency_display = agency_display[:25]  # Truncate if too long
-        
-        ax.set_title(f"{agency_display}\n(resp={agency_row['response_rate']:.0f}%)", 
-                    fontsize=9, fontweight="bold")
-        ax.set_xlabel("Comment Volume", fontsize=8)
-        ax.set_ylabel("Acceptance Rate (%)", fontsize=8)
-        ax.set_xscale("log")
-        ax.set_ylim(-5, 105)
-        ax.grid(alpha=GRID_ALPHA, color=GRID_COLOR)
-        apply_clean_style(ax)
-        ax.tick_params(labelsize=7)
+    fig, ax = plt.subplots(figsize=(12, 8))
     
-    # Hide unused subplots
-    for idx in range(len(agency_stats), len(axes)):
-        axes[idx].axis("off")
+    # Plot all agencies as scatter points
+    for bucket in ["Low", "Medium", "High"]:
+        bucket_data = agency_stats[agency_stats["response_bucket"] == bucket]
+        if len(bucket_data) > 0:
+            ax.scatter(bucket_data["total_comments"], bucket_data["acceptance_rate"],
+                      s=80, alpha=0.6, color=bucket_colors[bucket],
+                      edgecolors="white", linewidths=1, zorder=3,
+                      label=f"{bucket} Response Rate")
     
-    # Add overall title and legend
-    fig.suptitle(f"Agency Acceptance Rates by Comment Volume ({year})\nColor = Response Rate Bucket", 
-                fontsize=FONT_TITLE, fontweight="bold", y=0.995)
+    # Label top agencies by comment volume (top 10-15)
+    top_agencies = agency_stats.nlargest(15, "total_comments")
     
-    # Create legend for response buckets
-    from matplotlib.patches import Patch
-    legend_elements = [
-        Patch(facecolor=bucket_colors["Low"], label="Low Response Rate"),
-        Patch(facecolor=bucket_colors["Medium"], label="Medium Response Rate"),
-        Patch(facecolor=bucket_colors["High"], label="High Response Rate")
-    ]
-    fig.legend(handles=legend_elements, loc="lower center", ncol=3, fontsize=FONT_LEGEND - 1, frameon=True)
+    try:
+        from adjustText import adjust_text
+        texts = []
+        for _, row in top_agencies.iterrows():
+            agency_name = str(row["agency"])
+            # Shorten agency names
+            if "," in agency_name:
+                agency_name = agency_name.split(",")[0]
+            agency_name = agency_name[:30]
+            
+            text = ax.text(row["total_comments"], row["acceptance_rate"],
+                          agency_name, fontsize=8, alpha=0.8,
+                          ha="left", va="bottom",
+                          path_effects=[withStroke(linewidth=2, foreground="white")])
+            texts.append(text)
+        
+        adjust_text(texts, ax=ax, arrowprops=dict(arrowstyle='-', color='gray', lw=0.5, alpha=0.3),
+                   expand_points=(1.2, 1.3), force_text=(0.3, 0.5))
+    except ImportError:
+        # Fallback: simple labels without adjustment
+        for _, row in top_agencies.head(10).iterrows():
+            agency_name = str(row["agency"])
+            if "," in agency_name:
+                agency_name = agency_name.split(",")[0]
+            agency_name = agency_name[:25]
+            ax.annotate(agency_name, 
+                       (row["total_comments"], row["acceptance_rate"]),
+                       xytext=(5, 5), textcoords="offset points",
+                       fontsize=8, alpha=0.7,
+                       path_effects=[withStroke(linewidth=2, foreground="white")])
     
-    plt.tight_layout(rect=[0, 0.03, 1, 0.98])
+    # Add reference lines (weighted mean)
+    if len(agency_stats) > 0:
+        # Calculate weighted mean acceptance rate
+        total_weight_all = agency_stats.merge(df_found.groupby("agency")["weight"].sum().reset_index(), on="agency", how="left")["weight"].sum()
+        accept_weight_all = df_found[df_found["agency_decision"] == "accept"]["weight"].sum()
+        overall_acceptance = (accept_weight_all / total_weight_all * 100) if total_weight_all > 0 else 0
+    else:
+        overall_acceptance = 0
+    ax.axhline(overall_acceptance, color="#5C6670", linestyle="--", 
+              linewidth=1, alpha=0.5, zorder=1, label=f"Overall mean ({overall_acceptance:.1f}%)")
+    
+    # Styling
+    ax.set_xscale("log")
+    ax.set_xlabel("Total Comments by Agency (log scale)", fontsize=FONT_LABEL, fontweight="bold")
+    ax.set_ylabel("Acceptance Rate (%)", fontsize=FONT_LABEL, fontweight="bold")
+    ax.set_title(f"Agency Acceptance Rates by Comment Volume ({year})", 
+                fontsize=FONT_TITLE, fontweight="bold")
+    ax.set_ylim(-2, 102)
+    ax.grid(alpha=GRID_ALPHA, color=GRID_COLOR)
+    ax.legend(fontsize=FONT_LEGEND - 1, frameon=True, loc="upper right", framealpha=0.9)
+    apply_clean_style(ax)
+    
+    plt.tight_layout()
     plt.savefig(outdir / f"agency_response_acceptance_{year}.png", dpi=300, bbox_inches="tight")
     plt.close()
     print(f"[OK] Saved: agency_response_acceptance_{year}.png")

@@ -5,61 +5,115 @@ TABLE 1: DECISION COUNTS AND PROPORTIONS
 --------------------------------------------------
 Decision             |      Count |   Proportion
 --------------------------------------------------
-Accept               |      3,507 |        36.8%
-Reject               |      5,760 |        60.5%
-Uncertain            |        256 |         2.7%
+Accept               |    310,513 |        14.0%
+Reject               |  1,734,976 |        78.0%
+Uncertain            |    178,692 |         8.0%
 --------------------------------------------------
-TOTAL                |      9,523 |       100.0%
+TOTAL                |  2,224,181 |       100.0%
 
 
 TABLE 2: CONDITIONAL PROBABILITIES
 --------------------------------------------------
 Given that a response was found:
-  P(accept | response) = 36.8%
-  P(reject | response) = 60.5%
-  P(uncertain | response) = 2.7%
+  P(accept | response) = 14.0%
+  P(reject | response) = 78.0%
+  P(uncertain | response) = 8.0%
 
 
 TABLE 3: DECISION RATES BY COMMENTER TYPE
 --------------------------------------------------------------------------------
 Commenter Type                                |   Accept % |   Reject % |  Uncertain %
 --------------------------------------------------------------------------------
-Undecided/Anonymous                           |      29.3% |      56.1% |        14.6%
-Ordinary Citizen                              |      26.8% |      72.2% |         1.0%
-Large Organization/Corporation                |      53.0% |      43.5% |         3.4%
-Academic/Industry/Expert                      |      47.9% |      49.2% |         2.9%
-Political Consultant/Lobbyist                 |      32.6% |      41.8% |        25.7%
+Undecided/Anonymous                           |       6.7% |      85.2% |         8.1%
+Ordinary Citizen                              |       5.8% |      94.0% |         0.2%
+Large Organization/Corporation                |      60.1% |      37.3% |         2.6%
+Academic/Industry/Expert                      |      37.1% |      57.4% |         5.5%
+Political Consultant/Lobbyist                 |       3.7% |       6.0% |        90.3%
 --------------------------------------------------------------------------------
 
 
-TABLE 4: AGENCIES WITH EXTREME DECISION RATES
+TABLE 4: AGENCIES BY DECISION RATE
 ----------------------------------------------------------------------------------------------------
-Top 10% by Acceptance Rate:
+Agencies with >50% Acceptance Rate:
 ----------------------------------------------------------------------------------------------------
 Agency                                             |   Accept % | Total Responses
 ----------------------------------------------------------------------------------------------------
-Interior Department, Surface Mining Reclamation    |     100.0% |               1
-Management and Budget Office                       |     100.0% |              31
-Election Assistance Commission                     |      95.6% |             203
-Library of Congress, Copyright Office, Library o   |      94.6% |             373
-Science and Technology Policy Office               |      93.9% |              49
-Labor Department, Mine Safety and Health Adminis   |      91.7% |              12
-Agriculture Department, Agricultural Marketing S   |      84.5% |             284
+Management and Budget Office                       |     100.0% |             908
+Interior Department, Surface Mining Reclamation    |     100.0% |               3
+Library of Congress, Copyright Office, Library o   |      94.6% |          12,372
+Science and Technology Policy Office               |      93.9% |             166
+Defense Department                                 |      89.2% |           9,107
+National Aeronautics and Space Administration      |      83.4% |             654
+Agriculture Department, Agricultural Marketing S   |      83.0% |           8,709
+Labor Department, Mine Safety and Health Adminis   |      82.1% |              33
+Labor Department, Occupational Safety and Health   |      78.7% |              99
+Social Security Administration                     |      76.9% |              45
+Transportation Department                          |      74.7% |             710
+Justice Department, Drug Enforcement Administrat   |      73.8% |           3,222
+Federal Maritime Commission                        |      72.7% |              13
+Trade Representative, Office of United States      |      72.3% |              67
+Agriculture Department, Animal and Plant Health    |      72.1% |          15,718
+Export-Import Bank                                 |      70.5% |              44
+Interior Department, Geological Survey             |      68.7% |             243
+Management and Budget Office, Federal Procuremen   |      66.7% |               6
+Agriculture Department, Farm Service Agency        |      66.7% |               4
+Interior Department, Fish and Wildlife Service     |      60.2% |             548
+Agriculture Department, Natural Resources Conser   |      59.8% |              16
+National Credit Union Administration               |      58.8% |              33
+Commerce Department, International Trade Adminis   |      56.8% |              21
+Commerce Department, Patent and Trademark Office   |      54.1% |             110
+Consumer Product Safety Commission                 |      53.7% |              51
+Interior Department                                |      53.5% |          17,291
+Small Business Administration                      |      51.5% |               8
+Federal Trade Commission                           |      50.1% |             474
 
-Top 10% by Rejection Rate:
+Agencies with >50% Rejection Rate:
 ----------------------------------------------------------------------------------------------------
 Agency                                             |   Reject % | Total Responses
 ----------------------------------------------------------------------------------------------------
 Agriculture Department, Federal Crop Insurance C   |     100.0% |               1
-Agriculture Department, Rural Utilities Service    |     100.0% |               2
+Agriculture Department, Rural Utilities Service    |     100.0% |              17
 Defense Department, Defense Acquisition Regulati   |     100.0% |               1
-Homeland Security Department, U.S. Customs and B   |     100.0% |               1
-Interior Department, Fish and Wildlife Service,    |     100.0% |               5
-Interior Department, Land Management Bureau        |     100.0% |             191
+Labor Department, Employment and Training Admini   |     100.0% |               8
+Labor Department, Wage and Hour Division           |     100.0% |             120
+Interior Department, Land Management Bureau        |     100.0% |         202,746
 Justice Department                                 |     100.0% |               1
+Interior Department, Fish and Wildlife Service,    |     100.0% |           4,670
+Homeland Security Department, U.S. Customs and B   |     100.0% |               1
+Interior Department, Ocean Energy Management Bur   |      98.7% |         162,477
+Agriculture Department                             |      98.6% |             326
+Health and Human Services Department               |      96.6% |         295,665
+Health and Human Services Department, Health Res   |      96.2% |             334
+Environmental Protection Agency                    |      93.6% |         246,759
+Defense Department, Engineers Corps, Environment   |      93.4% |          35,045
+Homeland Security Department, U.S. Citizenship a   |      92.4% |           1,434
+Homeland Security Department, U.S. Immigration a   |      91.7% |             158
+Homeland Security Department                       |      90.7% |          17,157
+Labor Department                                   |      86.5% |             105
+Energy Department                                  |      86.4% |           7,245
+State Department                                   |      83.2% |             214
+Education Department                               |      80.7% |          42,231
+Interior Department, National Park Service         |      78.8% |              32
+Commerce Department, National Oceanic and Atmosp   |      78.7% |           3,460
+Election Assistance Commission                     |      78.4% |           6,755
+Homeland Security Department, U.S. Customs and B   |      75.0% |              25
+Health and Human Services Department, Food and D   |      73.6% |          41,250
+Commerce Department, Industry and Security Burea   |      73.5% |          80,375
+Defense Department, General Services Administrat   |      72.9% |              32
+Homeland Security Department, Coast Guard          |      72.6% |              80
+Nuclear Regulatory Commission                      |      66.8% |             100
+Personnel Management Office                        |      65.5% |          18,950
+Defense Department, Engineers Corps                |      65.1% |              68
+Health and Human Services Department, Centers fo   |      64.3% |         970,840
+Health and Human Services Department, Centers fo   |      63.0% |          14,428
+Federal Retirement Thrift Investment Board         |      61.7% |              27
+General Services Administration                    |      60.0% |              11
+Labor Department, Federal Contract Compliance Pr   |      59.5% |              11
+Housing and Urban Development Department           |      58.0% |              53
 ----------------------------------------------------------------------------------------------------
 
 Notes:
 - All percentages are conditional on response being found
-- Extreme rates defined as top 10% of agencies by decision type
+- All counts and percentages use WEIGHTED statistics to account for sampling
+- Agencies shown have >50% acceptance or rejection rate
 - Only agencies with at least 1 response are included
