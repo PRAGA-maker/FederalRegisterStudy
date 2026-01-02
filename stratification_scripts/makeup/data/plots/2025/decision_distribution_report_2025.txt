@@ -1,0 +1,65 @@
+Agency Decision Distribution Report (2025)
+================================================================================
+
+TABLE 1: DECISION COUNTS AND PROPORTIONS
+--------------------------------------------------
+Decision             |      Count |   Proportion
+--------------------------------------------------
+Accept               |      3,507 |        36.8%
+Reject               |      5,760 |        60.5%
+Uncertain            |        256 |         2.7%
+--------------------------------------------------
+TOTAL                |      9,523 |       100.0%
+
+
+TABLE 2: CONDITIONAL PROBABILITIES
+--------------------------------------------------
+Given that a response was found:
+  P(accept | response) = 36.8%
+  P(reject | response) = 60.5%
+  P(uncertain | response) = 2.7%
+
+
+TABLE 3: DECISION RATES BY COMMENTER TYPE
+--------------------------------------------------------------------------------
+Commenter Type                                |   Accept % |   Reject % |  Uncertain %
+--------------------------------------------------------------------------------
+Undecided/Anonymous                           |      29.3% |      56.1% |        14.6%
+Ordinary Citizen                              |      26.8% |      72.2% |         1.0%
+Large Organization/Corporation                |      53.0% |      43.5% |         3.4%
+Academic/Industry/Expert                      |      47.9% |      49.2% |         2.9%
+Political Consultant/Lobbyist                 |      32.6% |      41.8% |        25.7%
+--------------------------------------------------------------------------------
+
+
+TABLE 4: AGENCIES WITH EXTREME DECISION RATES
+----------------------------------------------------------------------------------------------------
+Top 10% by Acceptance Rate:
+----------------------------------------------------------------------------------------------------
+Agency                                             |   Accept % | Total Responses
+----------------------------------------------------------------------------------------------------
+Interior Department, Surface Mining Reclamation    |     100.0% |               1
+Management and Budget Office                       |     100.0% |              31
+Election Assistance Commission                     |      95.6% |             203
+Library of Congress, Copyright Office, Library o   |      94.6% |             373
+Science and Technology Policy Office               |      93.9% |              49
+Labor Department, Mine Safety and Health Adminis   |      91.7% |              12
+Agriculture Department, Agricultural Marketing S   |      84.5% |             284
+
+Top 10% by Rejection Rate:
+----------------------------------------------------------------------------------------------------
+Agency                                             |   Reject % | Total Responses
+----------------------------------------------------------------------------------------------------
+Agriculture Department, Federal Crop Insurance C   |     100.0% |               1
+Agriculture Department, Rural Utilities Service    |     100.0% |               2
+Defense Department, Defense Acquisition Regulati   |     100.0% |               1
+Homeland Security Department, U.S. Customs and B   |     100.0% |               1
+Interior Department, Fish and Wildlife Service,    |     100.0% |               5
+Interior Department, Land Management Bureau        |     100.0% |             191
+Justice Department                                 |     100.0% |               1
+----------------------------------------------------------------------------------------------------
+
+Notes:
+- All percentages are conditional on response being found
+- Extreme rates defined as top 10% of agencies by decision type
+- Only agencies with at least 1 response are included
