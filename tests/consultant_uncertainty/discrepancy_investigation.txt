@@ -1,0 +1,77 @@
+================================================================================
+DISCREPANCY INVESTIGATION: Plot vs Analysis
+================================================================================
+
+The plot only shows comments where response_found == 'yes'
+Our analysis shows ALL comments (including no response cases)
+
+================================================================================
+1. ALL COMMENTS (what our analysis shows)
+================================================================================
+
+CONSULTANTS (all comments):
+  Accept: 116 (9.9%)
+  Reject: 145 (12.4%)
+  Uncertain: 872 (74.5%)
+
+OTHERS (all comments):
+  Accept: 3,899 (10.1%)
+  Reject: 6,145 (15.9%)
+  Uncertain: 24,683 (63.8%)
+
+================================================================================
+2. ONLY COMMENTS WITH RESPONSES FOUND (what the plot shows)
+================================================================================
+
+CONSULTANTS (with responses found):
+  Accept: 116 (35.4%)
+  Reject: 145 (44.2%)
+  Uncertain: 67 (20.4%)
+
+OTHERS (with responses found):
+  Accept: 3,899 (38.0%)
+  Reject: 6,145 (60.0%)
+  Uncertain: 205 (2.0%)
+
+================================================================================
+3. WEIRD CASES INVESTIGATION
+================================================================================
+
+Consultants: No response + Uncertain decision: 805
+Others: No response + Accept decision: 0
+Consultants: No response + Accept decision: 0
+Others: No response + Uncertain decision: 24,474
+
+Consultants: Response found + Uncertain decision: 67
+Others: Response found + Uncertain decision: 205
+
+================================================================================
+4. WEIGHTED ANALYSIS (like the plot)
+================================================================================
+
+CONSULTANTS (weighted, with responses found):
+  Accept: 35.4%
+  Reject: 44.2%
+  Uncertain: 20.4%
+
+OTHERS (weighted, with responses found):
+  Accept: 38.0%
+  Reject: 60.0%
+  Uncertain: 2.0%
+
+================================================================================
+5. KEY INSIGHT
+================================================================================
+
+The plot shows ONLY comments where response_found == 'yes'
+Among those comments:
+  - Consultants have 20.4% uncertain (if weighted: 20.4%)
+  - Others have 2.0% uncertain (if weighted: 2.0%)
+
+But consultants have:
+  - 28.0% response rate
+  - 68.8% no response + uncertain
+
+While others have:
+  - 26.5% response rate
+  - 63.3% no response + uncertain

@@ -1,0 +1,36 @@
+Loading data...
+Responses: 30,337
+Makeup: 33,981
+After join: 32,704
+response_found value counts:
+  no: 22,575
+  uncertain: 4
+  yes: 10,125
+
+response_found nulls: 0
+agency_decision nulls: 0
+
+After filtering to response_found == 'yes': 10,125
+
+Consultants with response_found == 'yes': 292
+Consultant decision breakdown:
+  accept: 100
+  reject: 125
+  uncertain: 67
+
+
+================================================================================
+IF WE DON'T FILTER (all comments):
+================================================================================
+All consultants: 1,027
+Consultant decision breakdown (all):
+  accept: 100
+  reject: 125
+  uncertain: 802
+
+Consultant response_found distribution:
+  no: 735
+  yes: 292
+
+
+Consultants with NULL response_found: 0

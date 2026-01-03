@@ -1,0 +1,338 @@
+================================================================================
+POLITICAL CONSULTANT/LOBBYIST UNCERTAINTY ANALYSIS
+================================================================================
+
+BASIC COUNTS
+--------------------------------------------------------------------------------
+Total Consultants/Lobbyists: 1,170
+Total Other Commenters: 38,679
+
+RESPONSE FOUND RATES
+--------------------------------------------------------------------------------
+Consultants:
+  Yes: 328 (28.0%)
+  No: 805 (68.8%)
+  Uncertain: 0 (0.0%)
+Others:
+  Yes: 10,249 (26.5%)
+  No: 24,474 (63.3%)
+  Uncertain: 4 (0.0%)
+
+AGENCY DECISION RATES (for comments with responses found)
+--------------------------------------------------------------------------------
+Consultants:
+  Accept: 116 (35.4%)
+  Reject: 145 (44.2%)
+  Uncertain: 67 (20.4%)
+Others:
+  Accept: 3,899 (38.0%)
+  Reject: 6,145 (60.0%)
+  Uncertain: 205 (2.0%)
+
+OVERALL DECISION RATES (all comments)
+--------------------------------------------------------------------------------
+Consultants:
+  Accept: 116 (9.9%)
+  Reject: 145 (12.4%)
+  Uncertain: 872 (74.5%)
+Others:
+  Accept: 3,899 (10.1%)
+  Reject: 6,145 (15.9%)
+  Uncertain: 24,683 (63.8%)
+
+COMMENT CHARACTERISTICS
+--------------------------------------------------------------------------------
+Consultants - Avg Length: 2035 chars
+Consultants - Median Length: 2110 chars
+Others - Avg Length: 1055 chars
+Others - Median Length: 579 chars
+
+Consultants - With Attachments: 370 (31.6%)
+Others - With Attachments: 10,581 (27.4%)
+
+DISTRIBUTION
+--------------------------------------------------------------------------------
+Consultants - Unique Agencies: 73
+Others - Unique Agencies: 111
+Consultants - Unique Documents: 198
+Others - Unique Documents: 751
+
+
+================================================================================
+SAMPLE COMMENTS BY CATEGORY
+================================================================================
+
+--------------------------------------------------------------------------------
+CATEGORY: Yes Response + Accept
+Total in category: 10
+--------------------------------------------------------------------------------
+
+Sample 1:
+  Comment ID: DOI-2025-0005-0280
+  Document: 2025-11587
+  Agency: Interior Department
+  Response Found: yes
+  Agency Decision: accept
+  Comment Text: Office of Personnel Management (OPM)<br/>1900 E Street NW<br/>Washington, DC 20415-1000<br/><br/>Re: RIN 3206-AO84, &ldquo;Suitability and Fitness&rdquo;<br/><br/>Dear OPM,<br/><br/>RISE Stronger writes today to request a 30-day extension of the comment period for OPM&rsquo;s &ldquo;Suitability and Fitness&rdquo; Notice of Proposed Rulemaking (NPRM), which is currently scheduled to expire on July 3. See 90 FR 23467. For context, RISE Stronger is a citizen watchdog organization of nearly 30,000 ... [truncated]
+  Response Text: On June 3, 2025, the Office of Personnel Management (OPM) published in the Federal Register a notice of proposed rulemaking titled 'Suitability and Fitness' (see 90 FR 23467). The comment period on this proposed rule was originally scheduled to close July 3, 2025. OPM has received requests for additional time to review and comment on this proposed rule. OPM will be extending the comment period by 15 days. The public comment period will now end on July 18, 2025.
+
+Sample 2:
+  Comment ID: EPA-R05-OAR-2021-0963-0068
+  Document: 2025-11259
+  Agency: Environmental Protection Agency
+  Response Found: yes
+  Agency Decision: accept
+  Comment Text: Please see attached comment period extension request. 
+  Response Text: The Environmental Protection Agency (EPA) is extending the comment period for a proposed rule published on June 18, 2025. The current comment period for the proposed rule was scheduled to close on July 18, 2025. EPA is extending the comment period for the proposed action by 30 days to August 18, 2025. ... EPA is extending the comment period for an additional 30 days.
+
+Sample 3:
+  Comment ID: NRC-2024-0076-0117
+  Document: 2025-01997
+  Agency: Nuclear Regulatory Commission
+  Response Found: yes
+  Agency Decision: accept
+  Comment Text: To whom it may concern,<br/><br/>My name is A.J. Conte, a graduate student attending Georgetown University pursuing a Master&rsquo;s in Public Policy and serve as my school&rsquo;s campus representative for Collegians for a Constructive Tomorrow (CFACT). I am writing to you to express my strong support for the renewal of power operations at Palisades Nuclear Power Plant. As the demand for affordable, clean, and dependable electricity is expected to increase in the long term, Palisades should be ... [truncated]
+  Response Text: The Nuclear Regulatory Commission (NRC) addressed comments expressing support for the restart of the Palisades Nuclear Power Plant in its Final Environmental Assessment (EA) and Finding of No Significant Impact (FONSI). In the response to comments section (typically Appendix A), the NRC staff acknowledged the supportive feedback, stating: 'The NRC staff acknowledges these comments. The environmental impacts of the proposed action, including socioeconomic impacts and impacts on air quality, are d... [truncated]
+
+Sample 4:
+  Comment ID: DOI-2025-0005-0280
+  Document: 2025-08931
+  Agency: Interior Department
+  Response Found: yes
+  Agency Decision: accept
+  Comment Text: Office of Personnel Management (OPM)<br/>1900 E Street NW<br/>Washington, DC 20415-1000<br/><br/>Re: RIN 3206-AO84, &ldquo;Suitability and Fitness&rdquo;<br/><br/>Dear OPM,<br/><br/>RISE Stronger writes today to request a 30-day extension of the comment period for OPM&rsquo;s &ldquo;Suitability and Fitness&rdquo; Notice of Proposed Rulemaking (NPRM), which is currently scheduled to expire on July 3. See 90 FR 23467. For context, RISE Stronger is a citizen watchdog organization of nearly 30,000 ... [truncated]
+  Response Text: On June 3, 2025, the Office of Personnel Management (OPM) published in the Federal Register a notice of proposed rulemaking titled “Suitability and Fitness” (see 90 FR 23467). The comment period on this proposed rule was originally scheduled to close July 3, 2025. OPM has received requests for additional time to review and comment on this proposed rule. OPM will be extending the comment period by 15 days. The public comment period will now end on July 18, 2025. ... In response to requests for an... [truncated]
+
+Sample 5:
+  Comment ID: DOI-2025-0005-0280
+  Document: 2025-11587
+  Agency: Interior Department
+  Response Found: yes
+  Agency Decision: accept
+  Comment Text: Office of Personnel Management (OPM)<br/>1900 E Street NW<br/>Washington, DC 20415-1000<br/><br/>Re: RIN 3206-AO84, &ldquo;Suitability and Fitness&rdquo;<br/><br/>Dear OPM,<br/><br/>RISE Stronger writes today to request a 30-day extension of the comment period for OPM&rsquo;s &ldquo;Suitability and Fitness&rdquo; Notice of Proposed Rulemaking (NPRM), which is currently scheduled to expire on July 3. See 90 FR 23467. For context, RISE Stronger is a citizen watchdog organization of nearly 30,000 ... [truncated]
+  Response Text: In response to requests for an extension of the comment period, OPM is extending the comment period to Friday, July 18, 2025. ... OPM has received requests for additional time to review and comment on this proposed rule. OPM will be extending the comment period by 15 days. The public comment period will now end on July 18, 2025. Information about submitting comments is in the ADDRESSES section of this notice.
+
+Sample 6:
+  Comment ID: DOI-2025-0005-0566
+  Document: 2025-11587
+  Agency: Interior Department
+  Response Found: yes
+  Agency Decision: accept
+  Comment Text: See Attached
+  Response Text: In line with President Donald J. Trump's Energy Dominance agenda, the Department of the Interior is ending preferential treatment for unreliable, subsidy-dependent wind and solar energy. The move follows the signing of Executive Order 14315, Ending Market Distorting Subsidies for Unreliable, Foreign-Controlled Energy Sources, and implementation of the One Big Beautiful Bill Act. As part of this effort, the Department will address provisions in the One Big Beautiful Bill Act to eliminate longstan... [truncated]
+
+Sample 7:
+  Comment ID: DOD-2025-OS-0018-0034
+  Document: 2025-12756
+  Agency: Defense Department
+  Response Found: yes
+  Agency Decision: accept
+  Comment Text: I support expanding the proven Vets First Contracting Preference &ndash; already successful at the VA - into the Department of Defense. Veteran-owned businesses bring mission focus and operational awareness&mdash;qualities essential to strengthening the defense industrial base. This policy secures U.S.-based supply chains, lowers costs through real competition, and creates over 50,000 new SDVOSBs and 250,000 veteran jobs. Veterans know the mission, and they deliver for the warfighter.
+  Response Text: The Department of Defense (referred to as the Department of War in late 2025 policy documents) accepted the recommendation to expand the 'Vets First' contracting preference. Following a public comment period on Executive Order 14265 (Docket DOD-2025-OS-0018), the agency released the 'Acquisition Transformation Strategy' and the 'Warfighting Acquisition System (WAS)' memorandum on November 7, 2025. These documents, signed by Secretary Pete Hegseth, initiated a systemic overhaul of defense procure... [truncated]
+
+Sample 8:
+  Comment ID: DOI-2025-0005-0280
+  Document: 2025-08931
+  Agency: Interior Department
+  Response Found: yes
+  Agency Decision: accept
+  Comment Text: Office of Personnel Management (OPM)<br/>1900 E Street NW<br/>Washington, DC 20415-1000<br/><br/>Re: RIN 3206-AO84, &ldquo;Suitability and Fitness&rdquo;<br/><br/>Dear OPM,<br/><br/>RISE Stronger writes today to request a 30-day extension of the comment period for OPM&rsquo;s &ldquo;Suitability and Fitness&rdquo; Notice of Proposed Rulemaking (NPRM), which is currently scheduled to expire on July 3. See 90 FR 23467. For context, RISE Stronger is a citizen watchdog organization of nearly 30,000 ... [truncated]
+  Response Text: In response to requests for an extension of the comment period, OPM is extending the comment period to Friday, July 18, 2025. ... OPM has received requests for additional time to review and comment on this proposed rule. OPM will be extending the comment period by 15 days. The public comment period will now end on July 18, 2025. Information about submitting comments is in the ADDRESSES section of this notice.
+
+Sample 9:
+  Comment ID: DOD-2025-OS-0020-0054
+  Document: 2025-10961
+  Agency: Defense Department
+  Response Found: yes
+  Agency Decision: accept
+  Comment Text: See attached file(s)
+  Response Text: Operationalize Advance Enrollment. The DoD acknowledges the importance of clear advance enrollment procedures for military children and has recently designated Education Policy Implementation and Information Enhancements as a DoD State Policy Priority beginning in 2026. ... The DoD recognizes the importance of systematically identifying and supporting military-connected students and designated Advance Enrollment as a DoD State Policy Priority in 2019, the Purple Star Schools Program in 2021, and... [truncated]
+
+Sample 10:
+  Comment ID: OSTP-TECH-2025-0067-0231
+  Document: 2025-18737
+  Agency: Science and Technology Policy Office
+  Response Found: yes
+  Agency Decision: accept
+  Comment Text: See attached file(s)
+  Response Text: On December 11, 2025, the White House issued an Executive Order titled 'Ensuring a National Policy Framework for Artificial Intelligence.' The Order explicitly addresses the 'patchwork of state laws' and 'onerous and excessive requirements' identified by commenters as barriers to innovation. It establishes a federal policy to 'sustain and enhance the United States' global dominance through a minimally burdensome national policy framework for AI.' Key provisions include the creation of an AI Liti... [truncated]
+
+--------------------------------------------------------------------------------
+CATEGORY: Yes Response + Reject
+Total in category: 10
+--------------------------------------------------------------------------------
+
+Sample 1:
+  Comment ID: DOI-2025-0005-0280
+  Document: 2025-08931
+  Agency: Interior Department
+  Response Found: yes
+  Agency Decision: reject
+  Comment Text: Office of Personnel Management (OPM)<br/>1900 E Street NW<br/>Washington, DC 20415-1000<br/><br/>Re: RIN 3206-AO84, &ldquo;Suitability and Fitness&rdquo;<br/><br/>Dear OPM,<br/><br/>RISE Stronger writes today to request a 30-day extension of the comment period for OPM&rsquo;s &ldquo;Suitability and Fitness&rdquo; Notice of Proposed Rulemaking (NPRM), which is currently scheduled to expire on July 3. See 90 FR 23467. For context, RISE Stronger is a citizen watchdog organization of nearly 30,000 ... [truncated]
+  Response Text: On July 3, 2025, the Office of Personnel Management (OPM) published a notice in the Federal Register (90 FR 29512) titled "Suitability and Fitness; Proposed rule; extension of comment period." The notice stated: "In response to requests for an extension of the comment period, OPM is extending the comment period to Friday, July 18, 2025." It further noted that "OPM has received requests for additional time to review and comment on this proposed rule." This action extended the original 30-day comm... [truncated]
+
+Sample 2:
+  Comment ID: CMS-2025-0306-0318
+  Document: 2025-13360
+  Agency: Health and Human Services Department, Centers for Medicare & Medicaid Services
+  Response Found: yes
+  Agency Decision: reject
+  Comment Text: Dear Administrator Oz, <br/>I am writing to you today as a former state senator with 30 years of service, and as a citizen of the state of Indiana.  As an elected official, I pushed legislation to address what I could see was the coming epidemic of opioid abuse.   It ravaged our state from the smallest farming community to the largest city.  No place was immune.  As a citizen, I have continued to be an advocate for those addressing substance use disorders--many of whom are Medicare beneficiaries... [truncated]
+  Response Text: In the CY 2026 OPPS/ASC Final Rule, CMS addressed comments regarding the implementation of the NOPAIN Act and the qualifying criteria for non-opioid treatments. Commenters, including James W. Merritt, Jr., urged CMS to broaden the coverage criteria to include all FDA-approved pain treatments routinely used after surgery, specifically those with 'acute pain' labels rather than only those with 'postoperative' or 'postsurgical' indications. CMS declined to act on these suggestions, maintaining that... [truncated]
+
+Sample 3:
+  Comment ID: FMCSA-2025-0125-0019
+  Document: 2025-12204
+  Agency: Transportation Department, Federal Motor Carrier Safety Administration
+  Response Found: yes
+  Agency Decision: reject
+  Comment Text: As a member of the propane industry, I would support the exemption for the Hours of Service.  The industry faces many challenges during the year but especially the critical winter months when customers are depending on heat.  The exemption would allow retail companies and transport companies to better plan and get ahead of an upcoming incident than having to wait for the government being federal or state to declare an emergency.
+  Response Text: FMCSA announces its decision to deny the National Propane Gas Association's (NPGA) application for an exemption from various hours-of-service (HOS) requirements between December 15 and March 15 each year. FMCSA analyzed the application and public comments and determined that the exemption would not achieve a level of safety that is equivalent to, or greater than, the level that would be achieved absent such exemption. The Agency noted that 'Given the hazardous nature of the material being transp... [truncated]
+
+Sample 4:
+  Comment ID: DOI-2025-0005-0280
+  Document: 2025-08931
+  Agency: Interior Department
+  Response Found: yes
+  Agency Decision: reject
+  Comment Text: Office of Personnel Management (OPM)<br/>1900 E Street NW<br/>Washington, DC 20415-1000<br/><br/>Re: RIN 3206-AO84, &ldquo;Suitability and Fitness&rdquo;<br/><br/>Dear OPM,<br/><br/>RISE Stronger writes today to request a 30-day extension of the comment period for OPM&rsquo;s &ldquo;Suitability and Fitness&rdquo; Notice of Proposed Rulemaking (NPRM), which is currently scheduled to expire on July 3. See 90 FR 23467. For context, RISE Stronger is a citizen watchdog organization of nearly 30,000 ... [truncated]
+  Response Text: On June 3, 2025, the Office of Personnel Management (OPM) published in the Federal Register a notice of proposed rulemaking titled ‘Suitability and Fitness’ (see 90 FR 23467). The comment period on this proposed rule was originally scheduled to close July 3, 2025. OPM has received requests for additional time to review and comment on this proposed rule. OPM will be extending the comment period by 15 days. The public comment period will now end on July 18, 2025.
+
+Sample 5:
+  Comment ID: DOI-2025-0005-0280
+  Document: 2025-08931
+  Agency: Interior Department
+  Response Found: yes
+  Agency Decision: reject
+  Comment Text: Office of Personnel Management (OPM)<br/>1900 E Street NW<br/>Washington, DC 20415-1000<br/><br/>Re: RIN 3206-AO84, &ldquo;Suitability and Fitness&rdquo;<br/><br/>Dear OPM,<br/><br/>RISE Stronger writes today to request a 30-day extension of the comment period for OPM&rsquo;s &ldquo;Suitability and Fitness&rdquo; Notice of Proposed Rulemaking (NPRM), which is currently scheduled to expire on July 3. See 90 FR 23467. For context, RISE Stronger is a citizen watchdog organization of nearly 30,000 ... [truncated]
+  Response Text: On June 3, 2025, the Office of Personnel Management (OPM) published in the Federal Register a notice of proposed rulemaking titled 'Suitability and Fitness' (see 90 FR 23467). The comment period on this proposed rule was originally scheduled to close July 3, 2025. OPM has received requests for additional time to review and comment on this proposed rule. OPM will be extending the comment period by 15 days. The public comment period will now end on July 18, 2025.
+
+Sample 6:
+  Comment ID: USCIS-2025-0002-0176
+  Document: 2025-03436
+  Agency: Homeland Security Department, U.S. Citizenship and Immigration Services
+  Response Found: yes
+  Agency Decision: reject
+  Comment Text: Ms. Samantha Deshommes<br/>Chief, Regulatory Coordination Division, Office of Policy and Strategy<br/>U.S. Citizenship and Immigration Services<br/>Department of Homeland Security<br/>Camp Springs, MD 20746<br/>May 2, 2025<br/> <br/>Re: Proposed Information Collection Requests with OMB Control Number 1615-NEW, Docket IDs USCIS-2025-0002 and USCIS-2025-0003<br/> <br/>Ms. Deshommes:<br/>My name is Sarah Catherine Howell, and I am a Department of Justice (DOJ) Accredited Representative and Co-Execu... [truncated]
+  Response Text: In the 30-day notice published in the Federal Register on September 3, 2025 (90 FR 51833), USCIS acknowledged receiving 135 comments in connection with the 60-day notice for the new information collection (Docket ID USCIS-2025-0002). The agency stated: 'USCIS received 135 comments in connection with the 60-day notice. You may access the information collection instrument with instructions, or additional information by visiting the Federal eRulemaking Portal site at: http://www.regulations.gov and... [truncated]
+
+Sample 7:
+  Comment ID: ED-2025-OPE-0016-8267
+  Document: 2025-15665
+  Agency: Education Department
+  Response Found: yes
+  Agency Decision: reject
+  Comment Text: Ms. Nancy K D Lemon<br/>Berkeley, CA<br/><br/>Subject: Public Comment Opposing Proposed PSLF Rule ((Docket ID ED-2025-OPE-0016), RIN 1801-AA28)<br/><br/>Dear Ms. Abernathy,<br/><br/>I write to oppose the Department&rsquo;s proposed changes to the William D. Ford Federal Direct Loan Program regarding Public Service Loan Forgiveness (PSLF). <br/>As a founder, former Legal Director, and former Board member of a nonprofit legal organization serving survivors of domestic violence, I have seen firstha... [truncated]
+  Response Text: In the final rule published on October 31, 2025, the Department of Education addressed concerns regarding the potential impact on legal aid organizations and those serving undocumented individuals, which were central to the commenter's opposition. The Department stated: "Federal law does not prohibit individuals from advocating for illegal immigrants or representing them in Federal immigration court. Organizations that do not aid or abet in criminal activity will not be disqualified from partici... [truncated]
+
+Sample 8:
+  Comment ID: ICEB-2018-0003-0052
+  Document: 2025-04770
+  Agency: Homeland Security Department, U.S. Immigration and Customs Enforcement
+  Response Found: yes
+  Agency Decision: reject
+  Comment Text: RE: Comment on Proposed Revisions to Form I-983 -- OMB Control Number 1653-0054, U.S. Immigration and Customs Enforcement, Department of Homeland Security, Docket ID ICEB-2018-0003-0001<br/><br/>To Whom It May Concern,<br/><br/>The Institute for Sound Public Policy (IfSPP) is a nonprofit, nonpartisan policy advocacy and civic engagement organization, established in 2008. We advocate for American workers in the areas of jobs, trade, and immigration policy. One key area of policy interest for our ... [truncated]
+  Response Text: ICE agrees with commenters that the minor changes to the Form I-983 will allow SEVP to better capture designated school official contact information and to analyze compensation data for STEM OPT students to ensure compliance with STEM OPT requirements, including the requirement that the STEM OPT opportunity be commensurate with that of a similarly situated U.S. worker in duties, hours, and compensation. However, ICE believes that collecting IRS information to verify a student's compensation is a... [truncated]
+
+Sample 9:
+  Comment ID: HHS-OASH-2024-0019-0149
+  Document: 2025-00416
+  Agency: Health and Human Services Department
+  Response Found: yes
+  Agency Decision: reject
+  Comment Text: ICCPUD&rsquo;s Alcohol Intake and Health Report, compiled by the top scientists in the field, is the most credible review of the scientific literature to date. The report identifies clear risks of alcohol consumption up to and including the daily alcohol consumption limit recommended by current dietary guidelines. The report identifies clear alcohol related risks at different levels of consumption to demonstrate a harmful dose response relationship between alcohol consumption and cancer, injury,... [truncated]
+  Response Text: In August and September 2025, the U.S. Department of Health and Human Services (HHS) and the Trump administration decided to withdraw and not publish the final version of the ICCPUD Alcohol Intake and Health Report, which the commenter had urged the agency to consider. According to reports from Vox and Just Drinks, the administration indicated that the Interagency Coordinating Committee on the Prevention of Underage Drinking (ICCPUD) had been used 'improperly' to carry out activities related to ... [truncated]
+
+Sample 10:
+  Comment ID: NASA_FRDOC_0001-0998
+  Document: 2025-06869
+  Agency: National Aeronautics and Space Administration
+  Response Found: yes
+  Agency Decision: reject
+  Comment Text: We strongly support the comment submitted by AICA, Studio City for Quiet Skies and Uproar LA.
+  Response Text: NASA provided a detailed response to the comments in a document titled '30 day Comment_Responses.docx' submitted to the Office of Management and Budget (OMB) as part of the Information Collection Request (ICR). Regarding the recommendation to use N-Above and N-Above-Ambient metrics, NASA stated that testing the effectiveness of these metrics would require community noise surveys and additional resources that are not available for the VANGARD test. Regarding the request to use L90 for ambient noi... [truncated]
+
+--------------------------------------------------------------------------------
+CATEGORY: No Response + Uncertain
+Total in category: 10
+--------------------------------------------------------------------------------
+
+Sample 1:
+  Comment ID: OFCCP-2025-0001-0361
+  Document: 2025-12276
+  Agency: Labor Department
+  Response Found: no
+  Agency Decision: uncertain
+  Comment Text: Lori Chavez-DeRemer, Secretary <br/>U.S. Department of Labor <br/>200 Constitution Avenue NW <br/>Washington, DC 20210 <br/><br/>RE: Recission of Executive Order 11246 Implementing Regulations, Docket Number OFCCP-2025-0001 <br/><br/>To Whom it May Concern: <br/><br/>I am submitting this comment opposing the proposed rule, &quot;Recission of Executive Order 11246 Implementing Regulations.&quot; This proposed rule would rescind regulations that for six decades have guided the Office of Federal Co... [truncated]
+
+Sample 2:
+  Comment ID: AHRQ-2025-0002-1146
+  Document: 2025-13118
+  Agency: Health and Human Services Department
+  Response Found: no
+  Agency Decision: uncertain
+  Comment Text: The notice issued [Docket No: AHRQ-2025-0002] will have a severe and negative impact on the children, families, and communities served by Head Start programs. When Congress passed PRWORA almost thirty years ago, it excluded non-postsecondary education programs like Head Start from the definition of &ldquo;federal public benefit.&rdquo; Because Head Start is not a &ldquo;federal public benefit,&rdquo; Head Start providers have never had to verify whether children and families meet PRWORA&rsquo;s ... [truncated]
+
+Sample 3:
+  Comment ID: FAA-2025-0638-0284
+  Document: 2025-05738
+  Agency: Transportation Department, Federal Aviation Administration
+  Response Found: no
+  Agency Decision: uncertain
+  Comment Text: I strongly support the comment submitted by Leech Tishman Nelson Hardiman, Inc. on behalf of its client concerned with aviation safety, accountability, and public trust, in response to Federal Register Document ID:  FAA-2025-0638-0191.<br/><br/>
+
+Sample 4:
+  Comment ID: BLM-2025-0001-1931
+  Document: 2025-17537
+  Agency: Interior Department, Land Management Bureau
+  Response Found: no
+  Agency Decision: uncertain
+  Comment Text: Please think about the long term, some things cannot be reversed. <br/><br/>I am writing today in strong opposition to the Department of the Interior&rsquo;s proposal to rescind the Public Lands Rule, which directs the Bureau of Land Management to place conservation on equal footing with commercial land uses. While the proposal names public concern as a motive for this recission, a Center for Western Priorities analysis shows that 92% of public comments during initial rulemaking were in support ... [truncated]
+
+Sample 5:
+  Comment ID: OFCCP-2025-0001-0341
+  Document: 2025-12276
+  Agency: Labor Department
+  Response Found: no
+  Agency Decision: uncertain
+  Comment Text: Lori Chavez-DeRemer, Secretary <br/>U.S. Department of Labor <br/>200 Constitution Avenue NW <br/>Washington, DC 20210 <br/><br/>RE: Recission of Executive Order 11246 Implementing Regulations, Docket Number OFCCP-2025-0001 <br/><br/>To Whom it May Concern: <br/><br/>I am submitting this comment opposing the proposed rule, &quot;Recission of Executive Order 11246 Implementing Regulations.&quot; This proposed rule would rescind regulations that for six decades have guided the Office of Federal Co... [truncated]
+
+Sample 6:
+  Comment ID: DOI-2025-0005-0386
+  Document: 2025-08931
+  Agency: Interior Department
+  Response Found: no
+  Agency Decision: uncertain
+  Comment Text: See Attached
+
+Sample 7:
+  Comment ID: EPA-HQ-OPPT-2025-0260-0569
+  Document: 2025-18431
+  Agency: Environmental Protection Agency
+  Response Found: no
+  Agency Decision: uncertain
+  Comment Text: EPA - Please continue to evaluate each and every condition of use and all exposure routes and pathways for priority chemicals. The EPA must continue to evaluate the aggregate impact of chemicals under TSCA in order to protect the health of American children. We (your organization) ask you not to change the framework rule for TSCA.<br/>or:<br/>I am strongly against the proposed changes to the TSCA framework rule. The proposed rule puts the health of all Americans, and especially children, at risk... [truncated]
+
+Sample 8:
+  Comment ID: DOI-2025-0005-0386
+  Document: 2025-08931
+  Agency: Interior Department
+  Response Found: no
+  Agency Decision: uncertain
+  Comment Text: See Attached
+
+Sample 9:
+  Comment ID: AHRQ-2025-0002-3731
+  Document: 2025-13118
+  Agency: Health and Human Services Department
+  Response Found: no
+  Agency Decision: uncertain
+  Comment Text: The notice issued [Docket No: AHRQ-2025-0002] will have a severe and negative impact on the children, families, and communities served by Head Start programs. When Congress passed PRWORA almost thirty years ago, it excluded non-postsecondary education programs like Head Start from the definition of &ldquo;federal public benefit.&rdquo; Because Head Start is not a &ldquo;federal public benefit,&rdquo; Head Start providers have never had to verify whether children and families meet PRWORA&rsquo;s ... [truncated]
+
+Sample 10:
+  Comment ID: DOS-2025-0203-0052
+  Document: 2025-15025
+  Agency: State Department
+  Response Found: no
+  Agency Decision: uncertain
+  Comment Text: Dear Prof. Jones and Cultural Property Advisory Committee Members:<br/><br/>I am writing to express my deep concern regarding the inclusion of Jewish communal and ceremonial objects within the categories of cultural property designated under the United States Turkey Memorandum of Understanding (MOU) on cultural patrimony.<br/><br/>While I believe in the importance of protecting archaeological heritage from illicit trafficking, I believe that Jewish ceremonial and communal objects are the cultura... [truncated]

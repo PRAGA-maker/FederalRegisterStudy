@@ -1,0 +1,93 @@
+================================================================================
+FINAL ANALYSIS: Why Consultants Show High Uncertainty in Plot
+================================================================================
+
+KEY FINDING: The plot filters to response_found == "yes", but consultants still
+show ~88% uncertain. This suggests either:
+1. The plot is not filtering correctly, OR
+2. There's a weighting issue, OR  
+3. The plot is showing all comments (not just those with responses)
+
+================================================================================
+EVIDENCE FROM DATA:
+================================================================================
+
+1. WHEN FILTERING TO response_found == "yes" (what plot SHOULD show):
+   - Consultants: 67 uncertain out of 292 = 22.9% uncertain
+   - Others: 205 uncertain out of 10,249 = 2.0% uncertain
+   
+   This matches our weighted analysis showing:
+   - Consultants: 20.4% uncertain (weighted)
+   - Others: 2.0% uncertain (weighted)
+
+2. WHEN NOT FILTERING (all comments):
+   - Consultants: 802 uncertain out of 1,027 = 78.1% uncertain
+   - Others: 24,683 uncertain out of 38,679 = 63.8% uncertain
+   
+   This is CLOSER to the plot showing ~88% for consultants!
+
+3. THE DISCREPANCY:
+   - Plot shows: Consultants ~88% uncertain
+   - Our filtered data: Consultants 22.9% uncertain (when response_found == "yes")
+   - Our unfiltered data: Consultants 78.1% uncertain (all comments)
+   
+   The plot's 88% is closer to the unfiltered 78.1% than the filtered 22.9%!
+
+================================================================================
+POSSIBLE EXPLANATIONS:
+================================================================================
+
+1. THE PLOT MIGHT NOT BE FILTERING CORRECTLY
+   - The code says it filters to response_found == "yes" (line 2762)
+   - But the results suggest it's showing all comments
+   - Could be a bug in the filtering logic or data handling
+
+2. WEIGHTING ARTIFACT
+   - Maybe consultants with no response have very high weights?
+   - This could inflate the uncertain percentage in the plot
+   - Need to check if weights differ between consultants with/without responses
+
+3. DATA JOIN ISSUE
+   - The join might be including comments that don't have responses
+   - If response_found is null for some consultants, they might be included
+   - But we found 0 nulls in response_found, so this is unlikely
+
+4. THE PLOT IS SHOWING ALL COMMENTS (not just those with responses)
+   - This would explain why it matches the unfiltered data (78.1%)
+   - The 88% vs 78.1% difference could be due to weighting
+
+================================================================================
+KEY INSIGHT ABOUT CONSULTANTS:
+================================================================================
+
+Consultants have:
+- 28.0% response rate (vs 26.5% for others - similar!)
+- BUT: When responses ARE found, consultants have 20.4% uncertain decisions
+- While others have only 2.0% uncertain decisions when responses are found
+
+This is the REAL signal: Even when agencies DO respond to consultant comments,
+they're much more likely to give an "uncertain" decision (20.4% vs 2.0%).
+
+The high overall uncertainty (74.5%) is driven by:
+1. Low response rate (28%) - most consultant comments get no response
+2. High uncertain rate when responses ARE found (20.4%) - even when agencies
+   respond, they're often uncertain about the decision
+
+================================================================================
+RECOMMENDATION:
+================================================================================
+
+The plot likely has a bug - it should be filtering to response_found == "yes"
+but appears to be showing all comments. The real story is:
+
+1. Consultants get similar response rates to others (~28%)
+2. BUT when responses ARE found, consultants get uncertain decisions 10x more
+   often than others (20.4% vs 2.0%)
+3. This suggests agencies are less decisive about consultant comments even
+   when they do respond
+
+This could indicate:
+- Consultant comments are more complex/ambiguous
+- Agencies are more cautious about consultant comments
+- Consultant comments might be harder to categorize as accept/reject
+
