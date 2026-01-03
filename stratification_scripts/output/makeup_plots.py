@@ -3206,7 +3206,7 @@ def plot_response_heatmap(df: pd.DataFrame, year: int, outdir: Path) -> None:
         for (agency, category), group in df.groupby(["agency", "category"]):
             total_weight = group["weight_doc"].sum()
             responded_weight = group[group["responded"] == 1]["weight_doc"].sum()
-            response_rate = (responded_weight / total_weight * 100) if total_weight > 0 else 0
+            response_rate = (responded_weight / total_weight * 100) if total_weight > 0 else np.nan
             if agency not in heatmap_dict:
                 heatmap_dict[agency] = {}
                 agency_totals[agency] = 0
@@ -3214,11 +3214,11 @@ def plot_response_heatmap(df: pd.DataFrame, year: int, outdir: Path) -> None:
             agency_totals[agency] += total_weight
         
         # Convert to DataFrame
-        heatmap_data = pd.DataFrame(heatmap_dict).T.fillna(0)
+        heatmap_data = pd.DataFrame(heatmap_dict).T
         # Ensure all categories are present
         for cat in CATEGORY_ORDER:
             if cat not in heatmap_data.columns:
-                heatmap_data[cat] = 0
+                heatmap_data[cat] = np.nan
         heatmap_data = heatmap_data[CATEGORY_ORDER]
         
         # Filter to agencies with at least 10 comments total (to avoid sparse data)
@@ -3259,8 +3259,12 @@ def plot_response_heatmap(df: pd.DataFrame, year: int, outdir: Path) -> None:
     
     fig, ax = plt.subplots(figsize=(fig_width, fig_height))
     
+    # Configure colormap to show NaN as grey (0 volume)
+    cmap = plt.get_cmap("YlGn").copy()
+    cmap.set_bad("#DDE3EA")  # Use "Paper" light grey for zero-volume cells
+    
     # Plot heatmap with better colormap range
-    im = ax.imshow(heatmap_data.values, cmap="YlGn", aspect="auto", vmin=0, vmax=100)
+    im = ax.imshow(heatmap_data.values, cmap=cmap, aspect="auto", vmin=0, vmax=100)
     
     # Apply display name mapping to category labels
     heatmap_data_display = heatmap_data.copy()
@@ -3291,6 +3295,8 @@ def plot_response_heatmap(df: pd.DataFrame, year: int, outdir: Path) -> None:
     for i in range(len(heatmap_data_display.index)):
         for j in range(len(heatmap_data_display.columns)):
             value = heatmap_data_display.values[i, j]
+            if np.isnan(value):
+                continue
             # Use dark text on light backgrounds (low values), light text on dark backgrounds (high values)
             # Threshold at 50% for color switching
             text_color = "black" if value < 50 else "white"
