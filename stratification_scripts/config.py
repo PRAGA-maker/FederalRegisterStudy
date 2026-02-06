@@ -279,14 +279,29 @@ def get_makeup_data_path(year: int) -> Path:
 def get_agency_responses_path(year: int) -> Path:
     """
     Get path to agency responses CSV for a year.
-    
+
     Args:
         year: Year to get CSV path for.
-    
+
     Returns:
         Path to agency_responses_{year}.csv
     """
     return get_data_dir() / f"agency_responses_{year}.csv"
+
+
+def get_lifecycle_csv_path(year: int) -> Path:
+    """
+    Get path to RIN lifecycle summary CSV for a year.
+
+    This CSV contains aggregated lifecycle data keyed by RIN.
+
+    Args:
+        year: Year to get CSV path for.
+
+    Returns:
+        Path to rin_lifecycle_{year}.csv
+    """
+    return get_data_dir() / f"rin_lifecycle_{year}.csv"
 
 
 @dataclass
@@ -360,7 +375,13 @@ class PipelineConfig:
     max_comment_pages: int = 30
     #gemini_thinking_level: Optional[str] = None  # "minimal"|"low"|"medium"|"high"
     gemini_thinking_level: Optional[str] = "medium"
-    
+
+    # Lifecycle tracking settings
+    enable_lifecycle_tracking: bool = True
+    unified_agenda_timeout: float = 30.0
+    unified_agenda_sleep: float = 1.0
+    lifecycle_cache_days: int = 7  # Cache Unified Agenda (updates twice yearly)
+
     # Derived paths (computed on access)
     _output_dir: Optional[Path] = field(default=None, repr=False)
     _data_dir: Optional[Path] = field(default=None, repr=False)

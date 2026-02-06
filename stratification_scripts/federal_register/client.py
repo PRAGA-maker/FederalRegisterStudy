@@ -18,7 +18,7 @@ Example:
 from __future__ import annotations
 
 import time
-from typing import Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 import pandas as pd
 import requests
@@ -26,6 +26,120 @@ import requests
 from stratification_scripts.logging_utils import get_logger
 
 logger = get_logger(__name__)
+
+
+def extract_rin(details: dict) -> Optional[str]:
+    """
+    Extract primary RIN from FR API document details.
+
+    Checks multiple fields where RIN might be stored:
+    - regulation_id_numbers (array)
+    - rin (legacy string field)
+    - regulation_id_number_info.rin
+
+    Args:
+        details: Full document details dict from FR API
+
+    Returns:
+        Primary RIN string (e.g., "0648-AU02") or None if not found.
+    """
+    if not details:
+        return None
+
+    # Try regulation_id_numbers array (most common)
+    rins = details.get("regulation_id_numbers")
+    if rins and isinstance(rins, list) and len(rins) > 0:
+        first_rin = rins[0]
+        if isinstance(first_rin, str) and first_rin.strip():
+            return first_rin.strip().upper()
+
+    # Try rin field (legacy)
+    rin = details.get("rin")
+    if isinstance(rin, str) and rin.strip():
+        return rin.strip().upper()
+
+    # Try regulation_id_number_info
+    rin_info = details.get("regulation_id_number_info")
+    if isinstance(rin_info, dict):
+        rin = rin_info.get("rin")
+        if isinstance(rin, str) and rin.strip():
+            return rin.strip().upper()
+
+    return None
+
+
+def extract_all_rins(details: dict) -> List[str]:
+    """
+    Extract all RINs from FR API document details.
+
+    Used for joint rulemakings where a document may have multiple RINs.
+
+    Args:
+        details: Full document details dict from FR API
+
+    Returns:
+        List of RIN strings, empty list if none found.
+    """
+    if not details:
+        return []
+
+    rins = []
+
+    # Get from regulation_id_numbers array
+    rin_list = details.get("regulation_id_numbers")
+    if rin_list and isinstance(rin_list, list):
+        for r in rin_list:
+            if isinstance(r, str) and r.strip():
+                rins.append(r.strip().upper())
+
+    # Add from other sources if not already present
+    for rin in [details.get("rin"), (details.get("regulation_id_number_info") or {}).get("rin")]:
+        if isinstance(rin, str) and rin.strip():
+            rin_upper = rin.strip().upper()
+            if rin_upper not in rins:
+                rins.append(rin_upper)
+
+    return rins
+
+
+def extract_docket_id(details: dict) -> Optional[str]:
+    """
+    Extract primary docket ID from FR API document details.
+
+    Checks multiple fields where docket ID might be stored:
+    - docket_ids (array)
+    - docket_id (string)
+    - regulations_dot_gov_info.docket_id
+
+    Args:
+        details: Full document details dict from FR API
+
+    Returns:
+        Primary docket ID string or None if not found.
+    """
+    if not details:
+        return None
+
+    # Try docket_ids array
+    docket_ids = details.get("docket_ids")
+    if docket_ids and isinstance(docket_ids, list) and len(docket_ids) > 0:
+        first_id = docket_ids[0]
+        if isinstance(first_id, str) and first_id.strip():
+            return first_id.strip()
+
+    # Try docket_id field
+    docket_id = details.get("docket_id")
+    if isinstance(docket_id, str) and docket_id.strip():
+        return docket_id.strip()
+
+    # Try regulations_dot_gov_info
+    regs_info = details.get("regulations_dot_gov_info")
+    if isinstance(regs_info, dict):
+        docket_id = regs_info.get("docket_id")
+        if isinstance(docket_id, str) and docket_id.strip():
+            return docket_id.strip()
+
+    return None
 
 # API Endpoints
 FR_DOCS_URL = "https://www.federalregister.gov/api/v1/documents.json"
@@ -94,34 +208,43 @@ class FederalRegisterClient:
     def fetch_document_details(
         self,
         document_number: str,
+        enrich_identifiers: bool = True,
     ) -> Optional[dict]:
         """
         Fetch detailed information for a Federal Register document.
-        
+
         This fetches the full document record including:
         - comment_url
         - comments_close_on
         - regulations_dot_gov_info (with document_id and comments_count)
-        
+        - rin (Regulation Identifier Number, extracted)
+        - rin_all (all RINs for joint rulemakings)
+        - docket_id (extracted from various fields)
+
         Args:
             document_number: The FR document number (e.g., "2024-12345")
-        
+            enrich_identifiers: If True, extract and add rin/docket_id fields
+
         Returns:
             Document data dict or None if fetch failed.
-        
+            When enrich_identifiers=True, adds:
+                - rin: Primary RIN string or None
+                - rin_all: List of all RINs (for joint rulemakings)
+                - docket_id: Primary docket ID or None
+
         Side Effects:
             Sleeps for self.sleep_between seconds before making request.
         """
         if not document_number:
             return None
-        
+
         # Rate limit
         if self.sleep_between > 0:
             time.sleep(self.sleep_between)
-        
+
         backoff = 1.0
         url = FR_DOC_DETAIL_URL.format(document_number=document_number)
-        
+
         for attempt in range(self.max_retries):
             try:
                 r = self.session.get(url, timeout=30)
@@ -131,10 +254,18 @@ class FederalRegisterClient:
                 time.sleep(backoff)
                 backoff = min(backoff * 2, 16)
                 continue
-            
+
             if r.status_code == 200:
-                return r.json()
-            
+                data = r.json()
+
+                # Enrich with extracted identifiers
+                if enrich_identifiers and data:
+                    data["rin"] = extract_rin(data)
+                    data["rin_all"] = extract_all_rins(data)
+                    data["docket_id"] = extract_docket_id(data)
+
+                return data
+
             # Handle rate limiting and server errors
             if r.status_code in (403, 429, 500, 502, 503, 504):
                 if attempt == self.max_retries - 1:
@@ -145,12 +276,12 @@ class FederalRegisterClient:
                 time.sleep(backoff)
                 backoff = min(backoff * 2, 16)
                 continue
-            
+
             # Non-retriable error
             if attempt == self.max_retries - 1:
                 logger.debug(f"FR API HTTP {r.status_code} for {document_number}")
             return None
-        
+
         return None
 
     def iter_documents_by_day(

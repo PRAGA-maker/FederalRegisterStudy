@@ -25,8 +25,10 @@ Example:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -42,6 +44,9 @@ from stratification_scripts.config import (
 from stratification_scripts.federal_register.client import (
     FederalRegisterClient,
     classify_submission_channel,
+    extract_rin,
+    extract_all_rins,
+    extract_docket_id,
 )
 from stratification_scripts.logging_utils import (
     get_logger,
@@ -59,17 +64,17 @@ def enrich_fr_detail(
 ) -> Optional[dict]:
     """
     Stage 1: Enrich document with FR detail data.
-    
-    Fetches FR detail and extracts metadata. For regs.gov docs, comment_count
-    will be a preliminary value updated in Stage 2.
-    
+
+    Fetches FR detail and extracts metadata including RIN and docket_id.
+    For regs.gov docs, comment_count will be a preliminary value updated in Stage 2.
+
     Args:
         rec: FR document record from list API
         fr_client: FederalRegisterClient instance
-    
+
     Returns:
         Enriched record dict, or None if doc is ineligible for comments.
-    
+
     Side Effects:
         Makes HTTP request to FR API.
     """
@@ -79,7 +84,13 @@ def enrich_fr_detail(
     regs_document_id = None
     count_source = "unknown"
     comment_count: Optional[int] = None
-    
+
+    # RIN and docket_id extraction
+    rin: Optional[str] = None
+    rin_all: List[str] = []
+    docket_id: Optional[str] = None
+    doc_type: Optional[str] = rec.get("type")
+
     if doc_number:
         details = fr_client.fetch_document_details(doc_number)
         if details:
@@ -88,13 +99,22 @@ def enrich_fr_detail(
             fr_info = details.get("regulations_dot_gov_info", {})
             if isinstance(fr_info, dict):
                 regs_document_id = fr_info.get("document_id")
-                
+
                 # For regs.gov docs, use FR embedded count as temporary value
                 if regs_document_id:
                     cc_fr = fr_info.get("comments_count")
                     if isinstance(cc_fr, int) and cc_fr >= 0:
                         comment_count = cc_fr
                         count_source = "federalregister"
+
+            # Extract RIN and docket_id (already done by fetch_document_details)
+            rin = details.get("rin")
+            rin_all = details.get("rin_all", [])
+            docket_id = details.get("docket_id")
+
+            # Also extract from regs_info if not found
+            if not docket_id and isinstance(fr_info, dict):
+                docket_id = fr_info.get("docket_id")
         else:
             logger.debug(f"FR API failed for {doc_number}")
 
@@ -108,12 +128,12 @@ def enrich_fr_detail(
     is_prorule = rec.get("type") == "Proposed Rule"
     has_comment_mechanism = bool(comment_url or comments_close_on or regs_document_id)
     eligibility_reason = None
-    
+
     if is_prorule:
         eligibility_reason = "prorule"
     elif has_comment_mechanism:
         eligibility_reason = "notice-with-comment-period"
-    
+
     submission_channel = classify_submission_channel(
         comment_url, regs_document_id
     ) if eligibility_reason else None
@@ -133,6 +153,11 @@ def enrich_fr_detail(
         "count_source": count_source,
         "eligibility_reason": eligibility_reason,
         "submission_channel": submission_channel,
+        # New lifecycle tracking fields
+        "rin": rin,
+        "rin_all": ",".join(rin_all) if len(rin_all) > 1 else None,
+        "docket_id": docket_id,
+        "doc_type": doc_type,
     }
 
 
@@ -321,24 +346,144 @@ def fetch_and_enrich_documents(
     
     # Add non-regs.gov docs
     rows.extend(non_regs_docs)
-    
+
     if not rows:
         logger.warning("No data collected - check API parameters")
         return pd.DataFrame()
-    
+
+    # Stage 3: Lifecycle Enrichment (if enabled)
+    if getattr(config, "enable_lifecycle_tracking", True):
+        rows = _enrich_lifecycle_stage(rows, config)
+
     df = pd.DataFrame(rows)
-    
+
     if not config.quiet:
         logger.info(f"Filtered to {len(rows)} comment-eligible documents")
-        
+
         # Log breakdowns
-        for col in ["eligibility_reason", "count_source", "submission_channel"]:
+        for col in ["eligibility_reason", "count_source", "submission_channel", "lifecycle_stage"]:
             if col in df.columns:
-                logger.info(f"\n{col} breakdown:")
-                for val, count in df[col].value_counts().items():
-                    logger.info(f"  {val}: {count}")
-    
+                non_null = df[col].dropna()
+                if len(non_null) > 0:
+                    logger.info(f"\n{col} breakdown:")
+                    for val, count in non_null.value_counts().items():
+                        logger.info(f"  {val}: {count}")
+
     return df
+
+
+def _enrich_lifecycle_stage(
+    rows: List[dict],
+    config: PipelineConfig,
+) -> List[dict]:
+    """
+    Stage 3: Enrich documents with lifecycle stage from Unified Agenda.
+
+    Fetches Unified Agenda data for each unique RIN and determines the
+    lifecycle stage based on agenda stage + document metadata.
+
+    Args:
+        rows: List of document records from Stages 1 & 2
+        config: Pipeline configuration
+
+    Returns:
+        Updated rows with lifecycle_stage, unified_agenda_stage, rin_timetable fields.
+    """
+    # Import here to avoid circular imports and allow module to work without reginfo
+    try:
+        from stratification_scripts.reginfo.client import RegInfoClient
+    except ImportError:
+        logger.warning("RegInfo client not available - skipping lifecycle enrichment")
+        for rec in rows:
+            rec["lifecycle_stage"] = "UNKNOWN"
+            rec["unified_agenda_stage"] = None
+            rec["rin_timetable"] = None
+        return rows
+
+    log_banner(logger, "STAGE 3: LIFECYCLE ENRICHMENT")
+
+    # Collect unique RINs
+    rins = set()
+    for rec in rows:
+        rin = rec.get("rin")
+        if rin:
+            rins.add(rin)
+
+    logger.info(f"Found {len(rins)} unique RINs to enrich")
+
+    if not rins:
+        logger.info("No RINs found - setting all lifecycle stages to NO_RIN")
+        for rec in rows:
+            rec["lifecycle_stage"] = "NO_RIN"
+            rec["unified_agenda_stage"] = None
+            rec["rin_timetable"] = None
+        return rows
+
+    # Fetch Unified Agenda data for each RIN
+    reginfo_client = RegInfoClient(
+        sleep_between=getattr(config, "unified_agenda_sleep", 1.0),
+        timeout=getattr(config, "unified_agenda_timeout", 30.0),
+    )
+
+    agenda_cache: Dict[str, dict] = {}
+    failed_rins = 0
+
+    for rin in tqdm(rins, desc="Fetching lifecycle stages", unit="rin"):
+        try:
+            agenda = reginfo_client.fetch_unified_agenda(rin)
+            if agenda:
+                agenda_cache[rin] = agenda
+            else:
+                failed_rins += 1
+        except Exception as e:
+            logger.debug(f"Error fetching agenda for {rin}: {e}")
+            failed_rins += 1
+
+    reginfo_client.close()
+
+    logger.info(f"Fetched agenda data for {len(agenda_cache)}/{len(rins)} RINs")
+    if failed_rins > 0:
+        logger.warning(f"{failed_rins} RINs not found in Unified Agenda")
+
+    # Enrich documents with lifecycle stage
+    for rec in rows:
+        rin = rec.get("rin")
+
+        if not rin:
+            rec["lifecycle_stage"] = "NO_RIN"
+            rec["unified_agenda_stage"] = None
+            rec["rin_timetable"] = None
+            continue
+
+        agenda = agenda_cache.get(rin)
+
+        if not agenda:
+            rec["lifecycle_stage"] = "AGENDA_NOT_FOUND"
+            rec["unified_agenda_stage"] = None
+            rec["rin_timetable"] = None
+            continue
+
+        # Determine lifecycle stage
+        doc_type = rec.get("doc_type") or rec.get("eligibility_reason", "")
+        has_open_comments = bool(rec.get("comment_url"))
+
+        lifecycle_stage = reginfo_client.determine_lifecycle_stage(
+            agenda_data=agenda,
+            doc_type=doc_type,
+            has_open_comments=has_open_comments,
+        )
+
+        rec["lifecycle_stage"] = lifecycle_stage
+        rec["unified_agenda_stage"] = agenda.get("stage_raw") or agenda.get("stage")
+        rec["rin_timetable"] = json.dumps(agenda.get("timetable", []))
+
+    # Log lifecycle stage distribution
+    stage_counts = Counter(rec.get("lifecycle_stage") for rec in rows)
+    logger.info("\nLifecycle stage breakdown:")
+    for stage, count in stage_counts.most_common():
+        logger.info(f"  {stage}: {count}")
+
+    return rows
 
 
 def save_documents(

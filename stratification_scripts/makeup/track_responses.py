@@ -340,6 +340,9 @@ async def process_responses_async(
                 "agency": str(comment.get("agency", "N/A")),
                 "commenter_type": str(comment.get("category", "N/A")),
                 "submission_date": str(comment.get("posted_date", "N/A")),
+                # Lifecycle tracking fields
+                "lifecycle_stage": str(comment.get("lifecycle_stage", "UNKNOWN")),
+                "rin": str(comment.get("rin", "N/A")),
             }
             
             gemini_batch.append((full_text, metadata))
@@ -369,6 +372,9 @@ async def process_responses_async(
                 "model": tracker.model,
                 "comment_text_length": len(extract_full_comment_text(original_comment)),
                 "has_attachment": bool(original_comment.get("attachment_text")),
+                # Lifecycle tracking fields
+                "lifecycle_stage": original_comment.get("lifecycle_stage", "UNKNOWN"),
+                "rin": original_comment.get("rin", "N/A"),
             })
         
         # Save incrementally (with duplicate propagation if df_comments provided)
@@ -431,16 +437,27 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
     df_joined = df_makeup.join(df_raw, on="comment_id", how="left")
     logger.info(f"Joined data: {len(df_joined)} comments")
     
-    # Join with FR data to get agency info if not already present
-    if "agency" not in df_joined.columns and fr_csv.exists():
+    # Join with FR data to get agency info and lifecycle stage if not already present
+    if fr_csv.exists():
         logger.info(f"Loading FR data from: {fr_csv}")
         df_fr = pl.read_csv(str(fr_csv))
-        if "agency" in df_fr.columns and "document_number" in df_fr.columns:
+
+        # Determine which columns to join
+        join_cols = ["document_number"]
+        if "agency" not in df_joined.columns and "agency" in df_fr.columns:
+            join_cols.append("agency")
+        if "lifecycle_stage" not in df_joined.columns and "lifecycle_stage" in df_fr.columns:
+            join_cols.append("lifecycle_stage")
+        if "rin" not in df_joined.columns and "rin" in df_fr.columns:
+            join_cols.append("rin")
+
+        if len(join_cols) > 1:  # Have columns beyond document_number
             df_joined = df_joined.join(
-                df_fr.select(["document_number", "agency"]),
+                df_fr.select(join_cols),
                 on="document_number",
                 how="left",
             )
+            logger.info(f"Joined FR data columns: {join_cols[1:]}")
     
     # Load existing responses
     processed_ids = load_existing_responses(responses_csv)
@@ -534,6 +551,42 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
                     count = responses_found.filter(pl.col("agency_decision") == value).shape[0]
                     pct = 100.0 * count / len(responses_found)
                     logger.info(f"  {value}: {count} ({pct:.1f}%)")
+
+            # Lifecycle-stratified response metrics
+            if "lifecycle_stage" in df_responses.columns:
+                log_banner(logger, "RESPONSE RATES BY LIFECYCLE STAGE")
+
+                # Get unique stages, excluding N/A and UNKNOWN
+                all_stages = df_responses["lifecycle_stage"].unique().to_list()
+                stages = [s for s in all_stages if s and s not in ("N/A", "UNKNOWN", "None", None)]
+
+                if stages:
+                    for stage in sorted(stages):
+                        stage_data = df_responses.filter(pl.col("lifecycle_stage") == stage)
+                        stage_total = len(stage_data)
+
+                        if stage_total == 0:
+                            continue
+
+                        # Response found rate
+                        found_yes = stage_data.filter(pl.col("response_found") == "yes").shape[0]
+                        found_no = stage_data.filter(pl.col("response_found") == "no").shape[0]
+                        found_rate = 100.0 * found_yes / stage_total
+
+                        # Decision rates (for found responses)
+                        stage_found = stage_data.filter(pl.col("response_found") == "yes")
+                        accept = stage_found.filter(pl.col("agency_decision") == "accept").shape[0] if len(stage_found) > 0 else 0
+                        reject = stage_found.filter(pl.col("agency_decision") == "reject").shape[0] if len(stage_found) > 0 else 0
+
+                        logger.info(f"\n{stage}:")
+                        logger.info(f"  Total comments: {stage_total}")
+                        logger.info(f"  Response found: {found_yes} ({found_rate:.1f}%)")
+                        if len(stage_found) > 0:
+                            accept_rate = 100.0 * accept / len(stage_found)
+                            reject_rate = 100.0 * reject / len(stage_found)
+                            logger.info(f"  Accept: {accept} ({accept_rate:.1f}%) | Reject: {reject} ({reject_rate:.1f}%)")
+                else:
+                    logger.info("No lifecycle stage data found for stratification")
 
 
 # ============================================================================
