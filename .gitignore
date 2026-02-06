@@ -36,3 +36,6 @@ Thumbs.db
 #PRD context for dev
 /prd
 
+#claude
+/.claude
+
