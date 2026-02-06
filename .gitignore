@@ -33,3 +33,6 @@ Thumbs.db
 # *.csv
 # *.json
 
+#PRD context for dev
+/prd
+
