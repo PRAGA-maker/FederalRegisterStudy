@@ -116,6 +116,7 @@ class RegInfoClient:
         max_retries: int = 3,
         timeout: float = 30.0,
         cache_enabled: bool = True,
+        failed_log_path: Optional[Path] = None,
     ) -> None:
         """
         Initialize the RegInfo client.
@@ -125,6 +126,7 @@ class RegInfoClient:
             max_retries: Maximum retry attempts for failed requests.
             timeout: Request timeout in seconds.
             cache_enabled: Whether to cache agenda data in memory.
+            failed_log_path: Path to write failed RINs for manual review.
         """
         self.session = requests.Session()
         self.session.headers.update({
@@ -135,6 +137,8 @@ class RegInfoClient:
         self.max_retries = max(1, max_retries)
         self.timeout = timeout
         self._cache: Dict[str, dict] = {} if cache_enabled else None
+        self._failed_log_path = failed_log_path
+        self._failed_rins: List[str] = []
 
         logger.debug(
             f"Initialized RegInfoClient with "
@@ -204,6 +208,9 @@ class RegInfoClient:
         # Try fetching from reginfo.gov
         result = self._fetch_from_reginfo(rin)
 
+        if not result:
+            self._failed_rins.append(rin)
+
         # Cache result
         if result and self._cache is not None:
             self._cache[rin] = result
@@ -242,18 +249,44 @@ class RegInfoClient:
                     latest_pub_id = max(pub_ids)
                     logger.debug(f"Found {len(pub_ids)} agendas for RIN {rin}, using latest: {latest_pub_id}")
 
-                    # Fetch the specific agenda entry
+                    # Fetch the specific agenda entry (with retry + backoff)
                     specific_url = f"{UNIFIED_AGENDA_XML_URL}?pubId={latest_pub_id}&RIN={rin}"
-                    time.sleep(0.5)  # Rate limit
+                    specific_backoff = 1.0
 
-                    try:
-                        r2 = self.session.get(specific_url, timeout=self.timeout)
+                    for specific_attempt in range(self.max_retries):
+                        time.sleep(0.5 if specific_attempt == 0 else specific_backoff)
+
+                        try:
+                            r2 = self.session.get(specific_url, timeout=self.timeout)
+                        except requests.RequestException as e:
+                            logger.debug(
+                                f"Retry {specific_attempt + 1}/{self.max_retries} "
+                                f"for specific agenda RIN {rin}: {type(e).__name__}"
+                            )
+                            specific_backoff = min(specific_backoff * 2, 16)
+                            continue
+
                         if r2.status_code == 200:
                             result = self._parse_html_response(r2.text, rin)
                             if result:
                                 return result
-                    except requests.RequestException as e:
-                        logger.debug(f"Failed to fetch specific agenda: {e}")
+                            # 200 but no parseable data — not retriable
+                            break
+
+                        if r2.status_code in (429, 500, 502, 503, 504):
+                            logger.debug(
+                                f"Retry {specific_attempt + 1}/{self.max_retries} "
+                                f"for specific agenda RIN {rin}: HTTP {r2.status_code}"
+                            )
+                            specific_backoff = min(specific_backoff * 2, 16)
+                            continue
+
+                        # Non-retriable status (e.g. 404, 403)
+                        logger.debug(
+                            f"Non-retriable HTTP {r2.status_code} "
+                            f"for specific agenda RIN {rin}"
+                        )
+                        break
 
                 # Try parsing the original page in case it has inline data
                 result = self._parse_html_response(r.text, rin)
@@ -343,6 +376,9 @@ class RegInfoClient:
             elif "prerule stage" in html_lower:
                 result["stage"] = "PRERULE"
                 result["stage_raw"] = "Prerule Stage"
+            elif "long-term actions" in html_lower or "long term actions" in html_lower:
+                result["stage"] = "LONG_TERM"
+                result["stage_raw"] = "Long-Term Actions"
 
         # Extract title
         title_patterns = [
@@ -366,7 +402,7 @@ class RegInfoClient:
             result["abstract"] = re.sub(r'<[^>]+>', '', abstract_match.group(1)).strip()
 
         # Extract timetable entries
-        # Look for patterns like: NPRM | 08/24/2016 | 81 FR 57854
+        # Pattern 1: inline format like "NPRM 08/24/2016 81 FR 57854"
         timetable_pattern = r'(ANPRM|NPRM|Final (?:Rule|Action)|Interim Final|Withdrawn|Direct Final)[^\d]*(\d{1,2}/\d{1,2}/\d{4})[^\d]*(\d+ FR \d+)?'
 
         for match in re.finditer(timetable_pattern, html, re.IGNORECASE):
@@ -386,6 +422,47 @@ class RegInfoClient:
                 "date": date_iso,
                 "citation": citation,
             })
+
+        # Pattern 2: HTML table rows — <td>Action</td><td>Date</td><td>Citation</td>
+        # This catches entries the inline regex misses (e.g. "Withdrawn" in separate <td>)
+        td_pattern = r"<td[^>]*>\s*([\w][^<]*?)\s*(?:&nbsp;)?\s*</td>\s*<td[^>]*>\s*(\d{1,2}/\d{1,2}/\d{4})\s*(?:&nbsp;)?\s*</td>"
+        known_actions = {"anprm", "nprm", "final rule", "final action", "interim final",
+                         "withdrawn", "direct final", "nprm comment period reopened",
+                         "nprm comment period end"}
+        existing_entries = {(e["action"], e["date"]) for e in result["timetable"]}
+
+        for match in re.finditer(td_pattern, html, re.IGNORECASE | re.DOTALL):
+            raw_action = re.sub(r'<[^>]+>', '', match.group(1)).strip()
+            date_str = match.group(2).strip()
+
+            if not raw_action or raw_action.lower() not in known_actions:
+                continue
+
+            try:
+                date_obj = datetime.strptime(date_str, "%m/%d/%Y")
+                date_iso = date_obj.strftime("%Y-%m-%d")
+            except ValueError:
+                date_iso = date_str
+
+            key = (raw_action.upper(), date_iso)
+            if key not in existing_entries:
+                # Extract citation from the next <td> if present
+                remainder = html[match.end():]
+                cite_match = re.search(r'<td[^>]*>(.*?)</td>', remainder, re.DOTALL)
+                citation = ""
+                if cite_match:
+                    cite_text = re.sub(r'<[^>]+>', '', cite_match.group(1)).strip()
+                    cite_text = cite_text.replace('&nbsp;', '').strip()
+                    fr_match = re.search(r'(\d+ FR \d+)', cite_text)
+                    if fr_match:
+                        citation = fr_match.group(1)
+
+                existing_entries.add(key)
+                result["timetable"].append({
+                    "action": raw_action.upper(),
+                    "date": date_iso,
+                    "citation": citation,
+                })
 
         # Check for withdrawal
         if "withdrawn" in html.lower():
@@ -556,6 +633,9 @@ class RegInfoClient:
             # If COMPLETED but not withdrawn, it's finalized
             if stage == "COMPLETED":
                 return "FINAL_EFFECTIVE"
+            # withdrawn=True but no timetable entry matched — still treat as withdrawn
+            if withdrawn:
+                return "WITHDRAWN"
 
         # Pre-rule stages
         if stage == "PRERULE":
@@ -636,3 +716,37 @@ class RegInfoClient:
         if self._cache is not None:
             self._cache.clear()
             logger.debug("RegInfo cache cleared")
+
+    def flush_failed_rins(self) -> None:
+        """Write accumulated failed RINs to log file, then clear the list."""
+        if not self._failed_rins:
+            return
+
+        if self._failed_log_path is None:
+            logger.warning(
+                f"{len(self._failed_rins)} RINs failed but no failed_log_path configured"
+            )
+            return
+
+        self._failed_log_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # Deduplicate while preserving order
+        seen = set()
+        unique_rins = []
+        for rin in self._failed_rins:
+            if rin not in seen:
+                seen.add(rin)
+                unique_rins.append(rin)
+
+        # Write mode (not append) — each run produces a clean file
+        from datetime import datetime as _dt
+        with open(self._failed_log_path, "w", encoding="utf-8") as f:
+            f.write(f"# Failed RINs — {_dt.now().isoformat()}\n")
+            for rin in unique_rins:
+                f.write(rin + "\n")
+
+        logger.info(
+            f"Wrote {len(unique_rins)} unique failed RINs "
+            f"(from {len(self._failed_rins)} total) to {self._failed_log_path}"
+        )
+        self._failed_rins.clear()

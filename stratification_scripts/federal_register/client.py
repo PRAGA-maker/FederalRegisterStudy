@@ -311,7 +311,7 @@ class FederalRegisterClient:
             publication_date to avoid wrong-year data from API edge cases.
         """
         if document_types is None:
-            document_types = ["PRORULE", "NOTICE"]
+            document_types = ["PRORULE", "NOTICE", "RULE"]
         
         yielded = 0
         dates = pd.date_range(

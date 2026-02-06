@@ -38,6 +38,7 @@ from tqdm import tqdm
 
 from stratification_scripts.config import (
     PipelineConfig,
+    get_data_dir,
     get_regs_api_keys,
     get_fr_csv_path,
 )
@@ -125,6 +126,8 @@ def enrich_fr_detail(
     ])
 
     # Eligibility and channel
+    # Comment-eligible first: only admit docs with a comment mechanism.
+    # RIN is used for lifecycle enrichment later, NOT as standalone eligibility.
     is_prorule = rec.get("type") == "Proposed Rule"
     has_comment_mechanism = bool(comment_url or comments_close_on or regs_document_id)
     eligibility_reason = None
@@ -136,7 +139,7 @@ def enrich_fr_detail(
 
     submission_channel = classify_submission_channel(
         comment_url, regs_document_id
-    ) if eligibility_reason else None
+    ) if (is_prorule or has_comment_mechanism) else None
 
     if not eligibility_reason:
         return None
@@ -264,18 +267,21 @@ def fetch_and_enrich_documents(
         sleep_between=config.fr_detail_sleep,
     )
     
+    document_types = ["PRORULE", "NOTICE", "RULE"]
+
     all_results: List[dict] = list(tqdm(
         fr_client.iter_documents_by_day(
             year,
             fr_sleep=config.fr_sleep,
             limit=config.limit_docs,
+            document_types=document_types,
         ),
         desc="FR days",
         unit="doc",
     ))
-    
+
     if not config.quiet:
-        logger.info(f"Total {year} docs fetched (PRORULE + NOTICE): {len(all_results)}")
+        logger.info(f"Total {year} docs fetched (PRORULE + NOTICE + RULE): {len(all_results)}")
 
     # Stage 1: FR detail enrichment
     log_banner(logger, "STAGE 1: FR DETAIL ENRICHMENT")
@@ -423,6 +429,7 @@ def _enrich_lifecycle_stage(
     reginfo_client = RegInfoClient(
         sleep_between=getattr(config, "unified_agenda_sleep", 1.0),
         timeout=getattr(config, "unified_agenda_timeout", 30.0),
+        failed_log_path=get_data_dir() / f"failed_rins_{config.year}.txt",
     )
 
     agenda_cache: Dict[str, dict] = {}
@@ -440,6 +447,7 @@ def _enrich_lifecycle_stage(
             failed_rins += 1
 
     reginfo_client.close()
+    reginfo_client.flush_failed_rins()
 
     logger.info(f"Fetched agenda data for {len(agenda_cache)}/{len(rins)} RINs")
     if failed_rins > 0:
