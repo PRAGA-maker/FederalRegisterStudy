@@ -17,8 +17,10 @@ Example:
 
 from __future__ import annotations
 
+import math
+import re
 import time
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import pandas as pd
 import requests
@@ -140,6 +142,50 @@ def extract_docket_id(details: dict) -> Optional[str]:
             return docket_id.strip()
 
     return None
+
+
+_FR_CITATION_RE = re.compile(r"(\d+)\s+FR\s+(\d+)")
+
+
+def parse_fr_citation(citation: str) -> Optional[Tuple[int, int]]:
+    """
+    Parse a Federal Register citation string into (volume, page).
+
+    Args:
+        citation: String like "80 FR 69589" or "81 FR 57854".
+
+    Returns:
+        Tuple of (volume, page) as integers, or None if parsing fails.
+
+    Examples:
+        >>> parse_fr_citation("80 FR 69589")
+        (80, 69589)
+        >>> parse_fr_citation("")
+        None
+    """
+    if not citation:
+        return None
+    m = _FR_CITATION_RE.search(citation)
+    if not m:
+        return None
+    return int(m.group(1)), int(m.group(2))
+
+
+def fr_volume_to_year(volume: int) -> int:
+    """
+    Convert Federal Register volume number to calendar year.
+
+    The Federal Register began in 1936 as Volume 1.
+    Each calendar year gets a new volume number.
+
+    Examples:
+        >>> fr_volume_to_year(80)
+        2015
+        >>> fr_volume_to_year(89)
+        2024
+    """
+    return volume + 1935
+
 
 # API Endpoints
 FR_DOCS_URL = "https://www.federalregister.gov/api/v1/documents.json"
@@ -281,6 +327,127 @@ class FederalRegisterClient:
             if attempt == self.max_retries - 1:
                 logger.debug(f"FR API HTTP {r.status_code} for {document_number}")
             return None
+
+        return None
+
+    def lookup_document_by_citation(
+        self,
+        citation: str,
+        publication_date: Optional[str] = None,
+    ) -> Optional[dict]:
+        """
+        Look up a Federal Register document by its FR citation.
+
+        Parses the citation (e.g., "81 FR 57854") into volume and page,
+        then queries the FR API to find the matching document.
+
+        When publication_date is provided (from a timetable entry), queries
+        that exact day for efficiency. Otherwise, estimates the month from
+        volume/page and searches within a window.
+
+        Args:
+            citation: FR citation string (e.g., "81 FR 57854").
+            publication_date: Optional ISO date string (e.g., "2016-08-24")
+                from the timetable entry. Greatly improves lookup efficiency.
+
+        Returns:
+            Dict with document_number, title, type, publication_date, citation
+            for the matched document, or None if not found.
+        """
+        parsed = parse_fr_citation(citation)
+        if not parsed:
+            logger.warning(f"Cannot parse FR citation: {citation!r}")
+            return None
+
+        volume, page = parsed
+        year = fr_volume_to_year(volume)
+
+        # Rate limit
+        if self.sleep_between > 0:
+            time.sleep(self.sleep_between)
+
+        fields = [
+            "document_number", "title", "type", "start_page",
+            "end_page", "citation", "volume", "publication_date",
+        ]
+
+        if publication_date:
+            # Exact day query — most efficient
+            date_windows = [(publication_date, publication_date)]
+        else:
+            # Estimate month from page number (FR pages increase through year)
+            # Typical volume has ~80000 pages; estimate month proportionally
+            est_month = max(1, min(12, math.ceil(page / 80000 * 12)))
+            # Search a 60-day window centered on the estimated month
+            mid_day = min(28, 15)  # middle of month
+            from datetime import datetime, timedelta
+            center = datetime(year, est_month, mid_day)
+            start = (center - timedelta(days=30)).strftime("%Y-%m-%d")
+            end = (center + timedelta(days=30)).strftime("%Y-%m-%d")
+            date_windows = [(start, end)]
+
+        for date_start, date_end in date_windows:
+            params: Dict[str, Any] = {"per_page": 1000, "page": 1}
+            for f in fields:
+                params[f"fields[]"] = fields  # requests lib handles list
+                break
+            params["fields[]"] = fields
+
+            if date_start == date_end:
+                params["conditions[publication_date][is]"] = date_start
+            else:
+                params["conditions[publication_date][gte]"] = date_start
+                params["conditions[publication_date][lte]"] = date_end
+
+            backoff = 1.0
+            for attempt in range(self.max_retries):
+                try:
+                    r = self.session.get(FR_DOCS_URL, params=params, timeout=30)
+                except requests.RequestException as e:
+                    if attempt == self.max_retries - 1:
+                        logger.warning(f"FR API error looking up {citation}: {e}")
+                        return None
+                    time.sleep(backoff)
+                    backoff = min(backoff * 2, 16)
+                    continue
+
+                if r.status_code == 200:
+                    break
+                if r.status_code in (403, 429, 500, 502, 503, 504):
+                    if attempt == self.max_retries - 1:
+                        logger.warning(
+                            f"FR API HTTP {r.status_code} looking up {citation} "
+                            f"after {self.max_retries} retries"
+                        )
+                        return None
+                    time.sleep(backoff)
+                    backoff = min(backoff * 2, 16)
+                    continue
+                logger.warning(f"FR API HTTP {r.status_code} looking up {citation}")
+                return None
+            else:
+                return None  # exhausted retries without break
+
+            data = r.json()
+            results = data.get("results", [])
+
+            # Scan for matching start_page
+            for doc in results:
+                if doc.get("start_page") == page or str(doc.get("start_page")) == str(page):
+                    return {
+                        "document_number": doc.get("document_number"),
+                        "title": doc.get("title"),
+                        "type": doc.get("type"),
+                        "publication_date": doc.get("publication_date"),
+                        "citation": doc.get("citation"),
+                    }
+
+            # If exact-day query returned no match, something is off
+            if publication_date:
+                logger.info(
+                    f"Citation {citation} not found on date {publication_date} "
+                    f"({len(results)} docs checked)"
+                )
 
         return None
 

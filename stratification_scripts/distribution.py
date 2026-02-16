@@ -29,6 +29,7 @@ import json
 import os
 import sys
 from collections import Counter
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -461,6 +462,7 @@ def _enrich_lifecycle_stage(
             rec["lifecycle_stage"] = "NO_RIN"
             rec["unified_agenda_stage"] = None
             rec["rin_timetable"] = None
+            rec.update(RegInfoClient._empty_timeline_columns())
             continue
 
         agenda = agenda_cache.get(rin)
@@ -469,6 +471,7 @@ def _enrich_lifecycle_stage(
             rec["lifecycle_stage"] = "AGENDA_NOT_FOUND"
             rec["unified_agenda_stage"] = None
             rec["rin_timetable"] = None
+            rec.update(RegInfoClient._empty_timeline_columns())
             continue
 
         # Determine lifecycle stage
@@ -484,6 +487,65 @@ def _enrich_lifecycle_stage(
         rec["lifecycle_stage"] = lifecycle_stage
         rec["unified_agenda_stage"] = agenda.get("stage_raw") or agenda.get("stage")
         rec["rin_timetable"] = json.dumps(agenda.get("timetable", []))
+        timeline = RegInfoClient.extract_structured_timeline(agenda.get("timetable", []))
+        # UA stage gives us a lifecycle label even when timetable is empty;
+        # upgrade from "none" to "label_only" for these docs.
+        if timeline["timeline_confidence"] == "none":
+            timeline["timeline_confidence"] = "label_only"
+        rec.update(timeline)
+
+    # Compute comment_period_days from FR metadata (all docs, not just RIN-bearing)
+    for rec in rows:
+        close_str = rec.get("comments_close_on")
+        pub_str = rec.get("publication_date")
+        if close_str and pub_str:
+            try:
+                close_dt = datetime.fromisoformat(str(close_str)[:10])
+                pub_dt = datetime.fromisoformat(str(pub_str)[:10])
+                rec["comment_period_days"] = (close_dt - pub_dt).days
+            except (ValueError, TypeError):
+                rec["comment_period_days"] = None
+        else:
+            rec["comment_period_days"] = None
+
+    # Docket ID fallback: recover lifecycle data for NO_RIN docs that share
+    # a docket_id with an enriched doc that has a RIN.
+    docket_to_rin = {}
+    for rec in rows:
+        if rec.get("rin") and rec.get("docket_id") and rec["lifecycle_stage"] not in ("NO_RIN", "AGENDA_NOT_FOUND"):
+            docket_to_rin.setdefault(rec["docket_id"], rec["rin"])
+
+    no_rin_rows = [r for r in rows if r.get("lifecycle_stage") == "NO_RIN" and r.get("docket_id")]
+    recovered = 0
+    for rec in no_rin_rows:
+        matched_rin = docket_to_rin.get(rec["docket_id"])
+        if matched_rin and matched_rin in agenda_cache:
+            agenda = agenda_cache[matched_rin]
+            doc_type = rec.get("doc_type") or rec.get("eligibility_reason", "")
+            has_open_comments = bool(rec.get("comment_url"))
+            rec["lifecycle_stage"] = reginfo_client.determine_lifecycle_stage(
+                agenda_data=agenda,
+                doc_type=doc_type,
+                has_open_comments=has_open_comments,
+            )
+            rec["unified_agenda_stage"] = agenda.get("stage_raw") or agenda.get("stage")
+            rec["rin_timetable"] = json.dumps(agenda.get("timetable", []))
+            timeline = RegInfoClient.extract_structured_timeline(agenda.get("timetable", []))
+            if timeline["timeline_confidence"] == "none":
+                timeline["timeline_confidence"] = "label_only"
+            rec.update(timeline)
+            rec["rin"] = matched_rin  # Inherit the RIN
+            recovered += 1
+            logger.info(
+                f"Recovered {rec.get('document_number')}: "
+                f"docket {rec['docket_id']} -> RIN {matched_rin} ({rec['lifecycle_stage']})"
+            )
+
+    if no_rin_rows:
+        logger.info(
+            f"Docket ID fallback: {recovered}/{len(no_rin_rows)} NO_RIN docs "
+            f"recovered via shared docket_id ({len(docket_to_rin)} docket-to-RIN mappings available)"
+        )
 
     # Log lifecycle stage distribution
     stage_counts = Counter(rec.get("lifecycle_stage") for rec in rows)

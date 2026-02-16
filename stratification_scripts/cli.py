@@ -80,7 +80,7 @@ def parse_steps(steps_str: str) -> List[str]:
     Returns:
         List of valid step names.
     """
-    valid_steps = {"fetch", "mine", "classify", "plot"}
+    valid_steps = {"fetch", "mine", "deduplicate", "classify", "track_responses", "plot"}
     steps = []
     
     for step in steps_str.split(","):
@@ -154,11 +154,17 @@ Examples:
         help="OpenAI model for classification. Default: gpt-4o-mini",
     )
     parser.add_argument(
+        "--test",
+        action="store_true",
+        help="Test mode: limit to 50 documents, same business logic",
+    )
+    parser.add_argument(
         "--fetch-strategy",
         type=str,
-        default="stratified",
-        choices=["stratified", "smart", "all", "sample"],
-        help="Comment sampling strategy. Default: stratified",
+        default="all",
+        choices=["all", "stratified"],
+        help="Comment sampling strategy. 'all' processes all docs (samples comments only). "
+             "'stratified' samples both docs and comments. Default: all",
     )
     
     # Logging
@@ -207,9 +213,16 @@ Examples:
     
     steps = parse_steps(args.steps) if args.steps else None
     
+    # --test sets default limit of 50; --limit can override
+    if args.test and args.limit is None:
+        limit_docs = 50
+    else:
+        limit_docs = args.limit
+
     # Create base config
     config = PipelineConfig(
-        limit_docs=args.limit,
+        limit_docs=limit_docs,
+        test_mode=args.test,
         concurrent_workers=args.concurrent_workers,
         openai_model=args.model,
         fetch_strategy=args.fetch_strategy,

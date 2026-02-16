@@ -341,6 +341,7 @@ class PipelineConfig:
     # General settings
     year: int = 2024
     limit_docs: Optional[int] = None
+    test_mode: bool = False
     verbose: bool = False
     quiet: bool = False
     
@@ -349,7 +350,7 @@ class PipelineConfig:
     retries: int = 10
     
     # Comment mining settings
-    fetch_strategy: str = "stratified"
+    fetch_strategy: str = "all"
     max_comments_per_doc: Optional[int] = None
     
     # Classification settings

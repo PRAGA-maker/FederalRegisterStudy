@@ -10,9 +10,15 @@ Example:
     >>> doc = client.fetch_document_details("2024-12345")
 """
 
-from stratification_scripts.federal_register.client import FederalRegisterClient
+from stratification_scripts.federal_register.client import (
+    FederalRegisterClient,
+    parse_fr_citation,
+    fr_volume_to_year,
+)
 
 __all__ = [
     "FederalRegisterClient",
+    "parse_fr_citation",
+    "fr_volume_to_year",
 ]
 

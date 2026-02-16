@@ -195,6 +195,7 @@ def run_many(
         year_config = PipelineConfig(
             year=year,
             limit_docs=config.limit_docs,
+            test_mode=config.test_mode,
             concurrent_workers=config.concurrent_workers,
             retries=config.retries,
             fetch_strategy=config.fetch_strategy,

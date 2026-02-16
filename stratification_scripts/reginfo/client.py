@@ -471,6 +471,26 @@ class RegInfoClient:
                     result["withdrawn"] = True
                     break
 
+        # For Long-Term Actions with empty timetable, check for "Next Action
+        # Undetermined" text. These RINs have real data on reginfo.gov but the
+        # timetable regex can't match them because there's no parseable date.
+        # Store a synthetic entry so timetable_action_count > 0.
+        if result["stage"] == "LONG_TERM" and not result["timetable"]:
+            if re.search(r"next\s+action\s+undetermined", html, re.IGNORECASE):
+                result["timetable"].append({
+                    "action": "NEXT ACTION UNDETERMINED",
+                    "date": "",
+                    "citation": "",
+                })
+                logger.debug(f"RIN {rin}: Long-Term Actions with 'Next Action Undetermined' — stored synthetic entry")
+            elif re.search(r"to\s+be\s+determined", html, re.IGNORECASE):
+                result["timetable"].append({
+                    "action": "NEXT ACTION UNDETERMINED",
+                    "date": "",
+                    "citation": "",
+                })
+                logger.debug(f"RIN {rin}: Long-Term Actions with 'To Be Determined' — stored synthetic entry")
+
         # Extract CFR citations
         cfr_match = re.search(r'CFR Citation[:\s]*</td>\s*<td[^>]*>([^<]+)', html, re.IGNORECASE)
         if cfr_match:
@@ -710,6 +730,224 @@ class RegInfoClient:
             (entry.get("action", ""), entry.get("date", ""), entry.get("citation", ""))
             for entry in sorted_entries
         ]
+
+    # Map verbose timetable actions to condensed sequence tokens
+    _ACTION_CONDENSED = {
+        "ANPRM": "ANPRM",
+        "NPRM": "NPRM",
+        "NPRM COMMENT PERIOD REOPENED": "NPRM_REOPENED",
+        "NPRM COMMENT PERIOD END": "NPRM_CLOSED",
+        "FINAL ACTION": "FINAL",
+        "FINAL RULE": "FINAL",
+        "INTERIM FINAL": "INTERIM_FINAL",
+        "DIRECT FINAL": "DIRECT_FINAL",
+        "WITHDRAWN": "WITHDRAWN",
+        "NEXT ACTION UNDETERMINED": "UNDETERMINED",
+    }
+
+    @staticmethod
+    def _empty_timeline_columns() -> dict:
+        """Return a dict of structured timeline columns with empty defaults."""
+        return {
+            "nprm_date": None,
+            "nprm_citation": None,
+            "final_action_date": None,
+            "final_action_citation": None,
+            "withdrawal_date": None,
+            "nprm_to_final_days": None,
+            "timetable_action_count": 0,
+            "has_reopened_comment": False,
+            "anprm_date": None,
+            "anprm_citation": None,
+            "interim_final_date": None,
+            "interim_final_citation": None,
+            "direct_final_date": None,
+            "comment_reopened_date": None,
+            "anprm_to_nprm_days": None,
+            "anprm_to_final_days": None,
+            "timetable_sequence": None,
+            "timeline_confidence": "none",
+        }
+
+    @staticmethod
+    def _safe_days_between(date_a: Optional[str], date_b: Optional[str]) -> Optional[int]:
+        """Compute (date_b - date_a) in days, or None if either is missing/malformed."""
+        if not date_a or not date_b:
+            return None
+        try:
+            return (datetime.fromisoformat(date_b) - datetime.fromisoformat(date_a)).days
+        except ValueError:
+            return None
+
+    @staticmethod
+    def extract_structured_timeline(timetable: List[dict]) -> dict:
+        """
+        Extract structured timeline columns from a timetable action list.
+
+        Given a list of timetable entries (each with action, date, citation),
+        extracts key milestones into flat columns suitable for CSV output.
+
+        Args:
+            timetable: List of dicts with keys "action", "date", "citation".
+                       Expected to be the value from agenda["timetable"].
+
+        Returns:
+            Dict with milestone dates/citations, duration metrics,
+            and a condensed timetable_sequence string.
+        """
+        result = RegInfoClient._empty_timeline_columns()
+
+        if not timetable:
+            return result
+
+        # Count only entries with a parseable date — placeholders like
+        # "NEXT ACTION UNDETERMINED" (no date) should not inflate the count.
+        result["timetable_action_count"] = sum(
+            1 for e in timetable if e.get("date", "").strip()
+        )
+
+        # Sort chronologically (same pattern as get_timetable_summary)
+        sorted_entries = sorted(
+            timetable,
+            key=lambda x: x.get("date", "9999-99-99")
+        )
+
+        # Track candidates for each milestone
+        anprm_entry = None         # First ANPRM (earliest)
+        nprm_entry = None          # First NPRM (earliest)
+        final_entry = None         # Latest FINAL-type action
+        final_citation_backup = None  # Citation from any FINAL entry (fallback)
+        interim_final_entry = None # First INTERIM FINAL
+        direct_final_entry = None  # First DIRECT FINAL
+        withdrawal_entry = None    # First WITHDRAWN
+        reopened_entry = None      # First REOPENED
+
+        sequence_tokens = []
+
+        for entry in sorted_entries:
+            action = entry.get("action", "")
+            action_upper = action.upper()
+            date_str = entry.get("date", "")
+            citation = entry.get("citation", "") or None  # "" → None
+
+            # Build sequence token
+            token = RegInfoClient._ACTION_CONDENSED.get(action_upper, action_upper)
+            sequence_tokens.append(token)
+
+            # ANPRM
+            if action_upper == "ANPRM":
+                if anprm_entry is None:
+                    anprm_entry = {"date": date_str, "citation": citation}
+
+            # NPRM: starts with "NPRM" but NOT "NPRM COMMENT PERIOD"
+            # Excludes "NPRM Comment Period Reopened" and "NPRM Comment Period End"
+            if action_upper.startswith("NPRM") and "COMMENT PERIOD" not in action_upper:
+                if nprm_entry is None:  # Take earliest
+                    nprm_entry = {"date": date_str, "citation": citation}
+
+            # FINAL: any action containing "FINAL" — matches "Final Action",
+            # "Final Rule", "Interim Final", "Direct Final".
+            # If only "Interim Final" exists, it's captured as the final action —
+            # correct for our purposes (we want the latest final-type milestone).
+            if "FINAL" in action_upper:
+                # Always overwrite → keeps latest by date (entries are sorted)
+                final_entry = {"date": date_str, "citation": citation}
+                if citation:
+                    final_citation_backup = citation
+
+            # INTERIM FINAL (specifically)
+            if "INTERIM" in action_upper and "FINAL" in action_upper:
+                if interim_final_entry is None:
+                    interim_final_entry = {"date": date_str, "citation": citation}
+
+            # DIRECT FINAL
+            if "DIRECT" in action_upper and "FINAL" in action_upper:
+                if direct_final_entry is None:
+                    direct_final_entry = {"date": date_str}
+
+            # WITHDRAWN
+            if "WITHDRAWN" in action_upper:
+                if withdrawal_entry is None:
+                    withdrawal_entry = {"date": date_str}
+
+            # REOPENED
+            if "REOPENED" in action_upper:
+                result["has_reopened_comment"] = True
+                if reopened_entry is None:
+                    reopened_entry = {"date": date_str}
+
+        # --- Extract milestone fields ---
+
+        if anprm_entry:
+            result["anprm_date"] = anprm_entry["date"] or None
+            result["anprm_citation"] = anprm_entry["citation"]
+
+        if nprm_entry:
+            result["nprm_date"] = nprm_entry["date"] or None
+            result["nprm_citation"] = nprm_entry["citation"]
+
+        if final_entry:
+            result["final_action_date"] = final_entry["date"] or None
+            result["final_action_citation"] = final_entry["citation"] or final_citation_backup
+
+        if interim_final_entry:
+            result["interim_final_date"] = interim_final_entry["date"] or None
+            result["interim_final_citation"] = interim_final_entry["citation"]
+
+        if direct_final_entry:
+            result["direct_final_date"] = direct_final_entry["date"] or None
+
+        if withdrawal_entry:
+            result["withdrawal_date"] = withdrawal_entry["date"] or None
+
+        if reopened_entry:
+            result["comment_reopened_date"] = reopened_entry["date"] or None
+
+        # --- Compute durations ---
+
+        result["nprm_to_final_days"] = RegInfoClient._safe_days_between(
+            result["nprm_date"], result["final_action_date"]
+        )
+        result["anprm_to_nprm_days"] = RegInfoClient._safe_days_between(
+            result["anprm_date"], result["nprm_date"]
+        )
+        result["anprm_to_final_days"] = RegInfoClient._safe_days_between(
+            result["anprm_date"], result["final_action_date"]
+        )
+
+        if (result["nprm_date"] and result["final_action_date"]
+                and result["nprm_to_final_days"] is None):
+            logger.warning(
+                f"Malformed date in timetable — cannot compute durations: "
+                f"nprm_date={result['nprm_date']!r}, "
+                f"final_action_date={result['final_action_date']!r}"
+            )
+
+        # --- Build timetable_sequence ---
+        if sequence_tokens:
+            result["timetable_sequence"] = "->".join(sequence_tokens)
+
+        # --- Derive timeline_confidence ---
+        # "full": both NPRM and Final dates present
+        # "partial": at least one milestone date (nprm, final, or withdrawal)
+        # "label_only": timetable was provided but no milestone dates extracted
+        has_nprm = bool(result["nprm_date"])
+        has_final = bool(result["final_action_date"])
+        has_withdrawal = bool(result["withdrawal_date"])
+
+        if has_nprm and (has_final or has_withdrawal):
+            result["timeline_confidence"] = "full"
+        elif has_nprm or has_final or has_withdrawal:
+            result["timeline_confidence"] = "partial"
+        elif result["timetable_action_count"] > 0:
+            result["timeline_confidence"] = "partial"
+        else:
+            # Timetable was provided but empty/placeholder-only.
+            # Caller (distribution.py) upgrades to "label_only" when
+            # lifecycle_stage is set from UA stage metadata.
+            result["timeline_confidence"] = "label_only"
+
+        return result
 
     def clear_cache(self) -> None:
         """Clear the in-memory agenda cache."""

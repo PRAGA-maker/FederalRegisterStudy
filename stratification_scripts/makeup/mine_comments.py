@@ -485,20 +485,24 @@ def build_two_stage_sample_plan(
     existing_ids: Set[str],
     retries: int,
     max_comments_per_doc: Optional[int],
+    sample_docs: bool = True,
 ) -> Tuple[Dict[str, List[str]], Dict[str, dict], pl.DataFrame]:
     """
     Build two-stage stratified sampling plan.
-    
+
     Stage 1: Sample documents within each stratum (agency × comment_bin)
+              When sample_docs=False, ALL documents are used (no sqrt(n) sampling).
     Stage 2: Sample comments within each sampled document
-    
+
     Args:
         df_docs: DataFrame with document metadata
         client: RegsGovClient instance
         existing_ids: Already-fetched comment IDs
         retries: Max retries
         max_comments_per_doc: Skip documents with more comments
-    
+        sample_docs: If True, use sqrt(n) doc sampling per stratum.
+                     If False, process all documents (sample comments only).
+
     Returns:
         Tuple of:
         - Dict mapping doc_number to sampled comment IDs
@@ -540,13 +544,14 @@ def build_two_stage_sample_plan(
     
     # Stage 1: Sample documents
     log_banner(logger, "STAGE 1: SAMPLING DOCUMENTS", width=60)
-    
+    logger.info(f"Doc sampling: {'sqrt(n) per stratum' if sample_docs else 'ALL docs (comments only)'}")
+
     doc_to_comment_ids: Dict[str, List[str]] = {}
     comment_id_to_payload: Dict[str, dict] = {}
     total_ids_collected = 0
-    
+
     doc_rows = {row["document_number"]: row for row in df_docs.iter_rows(named=True)}
-    
+
     for row in tqdm(strata.iter_rows(named=True), total=len(strata), desc="Sampling strata", unit="stratum"):
         agency = row["agency"]
         comment_bin = row["comment_bin"]
@@ -554,9 +559,12 @@ def build_two_stage_sample_plan(
         target_comments = row["target_comments"]
         total_comments = row["total_comments"]
         num_docs = row["num_docs"]
-        
-        # Small strata: sample ALL
-        if num_docs <= 10 or total_comments <= 25:
+
+        if not sample_docs:
+            # All-docs mode: process every document
+            docs_to_sample = doc_numbers
+        elif num_docs <= 10 or total_comments <= 25:
+            # Small strata: sample ALL
             docs_to_sample = doc_numbers
         else:
             # Two-stage: sample documents then comments
@@ -632,10 +640,11 @@ def run_stratified_pipeline(
     retries: int,
     max_comments_per_doc: Optional[int],
     concurrent_workers: int = 10,
+    sample_docs: bool = True,
 ) -> List[Dict[str, Any]]:
     """
     Run two-stage stratified sampling pipeline with concurrent fetching.
-    
+
     Args:
         df_docs: Document DataFrame
         client: RegsGovClient
@@ -643,18 +652,30 @@ def run_stratified_pipeline(
         retries: Max retries
         max_comments_per_doc: Skip large documents
         concurrent_workers: Number of concurrent workers
-    
+        sample_docs: If True, use sqrt(n) doc sampling. If False, all docs.
+
     Returns:
         List of comment records.
     """
     sampled_doc_to_ids, comment_payloads, strata = build_two_stage_sample_plan(
-        df_docs, client, existing_ids, retries, max_comments_per_doc
+        df_docs, client, existing_ids, retries, max_comments_per_doc,
+        sample_docs=sample_docs,
     )
     
     if not sampled_doc_to_ids:
         logger.info("No comments selected for fetching")
         return []
-    
+
+    # Build doc metadata lookup for lifecycle propagation
+    doc_meta: Dict[str, Dict[str, Any]] = {}
+    for row in df_docs.iter_rows(named=True):
+        dn = row.get("document_number")
+        if dn:
+            doc_meta[dn] = {
+                "lifecycle_stage": row.get("lifecycle_stage"),
+                "rin": row.get("rin"),
+            }
+
     # Stage 3: Fetch details
     log_banner(logger, "STAGE 3: FETCHING COMMENT DETAILS", width=60)
     
@@ -699,7 +720,11 @@ def run_stratified_pipeline(
                 "duplicate_comments": None,
                 "page_count": None,
             }
-            
+
+            meta = doc_meta.get(doc_number, {})
+            fields["lifecycle_stage"] = meta.get("lifecycle_stage")
+            fields["rin"] = meta.get("rin")
+
             existing_ids.add(comment_id)
             return fields
         else:
@@ -714,6 +739,11 @@ def run_stratified_pipeline(
             
             existing_ids.add(comment_id)
             fields["document_number"] = doc_number
+
+            meta = doc_meta.get(doc_number, {})
+            fields["lifecycle_stage"] = meta.get("lifecycle_stage")
+            fields["rin"] = meta.get("rin")
+
             return fields
     
     logger.info(f"Using {concurrent_workers} concurrent workers")
@@ -754,6 +784,7 @@ def write_comment_output(
         "gov_agency", "gov_agency_type",
         "has_attachments", "attachment_count", "attachment_formats", "attachment_text",
         "duplicate_comments", "page_count",
+        "lifecycle_stage", "rin",
     ]
 
     existing_columns = [c for c in column_order if c in df_new.columns]
@@ -816,6 +847,13 @@ def mine_comments_for_year(config: PipelineConfig) -> None:
     logger.info(f"Mining comments from {len(df_docs)} documents...")
     logger.info(f"Fetch strategy: {config.fetch_strategy}")
 
+    if config.fetch_strategy == "stratified":
+        sample_docs = True
+    elif config.fetch_strategy == "all":
+        sample_docs = False
+    else:
+        raise ValueError(f"Invalid fetch_strategy: {config.fetch_strategy!r}")
+
     existing_ids = load_existing_comment_ids(output_csv)
 
     # Determine concurrent workers
@@ -827,7 +865,8 @@ def mine_comments_for_year(config: PipelineConfig) -> None:
     with RegsGovClient(api_keys, retries=config.retries) as client:
         all_comments = run_stratified_pipeline(
             df_docs, client, existing_ids, config.retries,
-            config.max_comments_per_doc, concurrent_workers
+            config.max_comments_per_doc, concurrent_workers,
+            sample_docs=sample_docs,
         )
 
     write_comment_output(all_comments, output_csv)
@@ -847,19 +886,28 @@ def main() -> int:
                         help="Max retries for API calls")
     parser.add_argument("--concurrent-workers", type=int, default=None,
                         help="Number of concurrent workers")
-    parser.add_argument("--fetch-strategy", type=str, default="stratified",
-                        choices=["all", "sample", "smart", "stratified"],
-                        help="Sampling strategy")
+    parser.add_argument("--test", action="store_true",
+                        help="Test mode: limit to 50 documents")
+    parser.add_argument("--fetch-strategy", type=str, default="all",
+                        choices=["all", "stratified"],
+                        help="Sampling strategy. Default: all")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--quiet", action="store_true")
-    
+
     args = parser.parse_args()
-    
+
     setup_logging(verbose=args.verbose, quiet=args.quiet, year=args.year)
-    
+
+    # --test sets default limit of 50; --limit can override
+    if args.test and args.limit is None:
+        limit_docs = 50
+    else:
+        limit_docs = args.limit
+
     config = PipelineConfig(
         year=args.year,
-        limit_docs=args.limit,
+        limit_docs=limit_docs,
+        test_mode=args.test,
         max_comments_per_doc=args.max_comments_per_doc,
         retries=args.retries,
         concurrent_workers=args.concurrent_workers,

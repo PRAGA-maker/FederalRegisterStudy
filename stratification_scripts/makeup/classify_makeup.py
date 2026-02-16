@@ -311,7 +311,11 @@ def join_and_write_output(
     cols = ["document_number", "comment_id", "category"]
     if "agency" in df_joined.columns:
         cols.append("agency")
-    
+    if "lifecycle_stage" in df_joined.columns:
+        cols.append("lifecycle_stage")
+    if "rin" in df_joined.columns:
+        cols.append("rin")
+
     df_output = df_joined.select(cols).filter(pl.col("category").is_not_null())
     
     output_csv.parent.mkdir(parents=True, exist_ok=True)

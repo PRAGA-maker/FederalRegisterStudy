@@ -266,7 +266,25 @@ def calculate_weights(df: pd.DataFrame, fr_csv_path: Optional[Path]) -> pd.DataF
         # This reconstructs the document exactly, without inflating for missing neighbor documents
         # NOTE: Duplicates are counted separately - each duplicate comment gets the same weight as if unique
         df["weight_doc"] = df["comment_count"] / df["n_sample_doc"]
-        
+
+        # Detect if all documents are present (no doc-level sampling)
+        # fr_df is already filtered to comment_count > 0, so this excludes
+        # comment-eligible docs that received 0 comments (no sample rows either)
+        fr_doc_count = fr_df["document_number"].nunique()
+        sample_doc_count = df["document_number"].nunique()
+
+        if sample_doc_count >= fr_doc_count * 0.95:
+            print(
+                f"All-docs mode detected ({sample_doc_count}/{fr_doc_count} docs present). "
+                f"Using document-level weights only (no cross-doc expansion)."
+            )
+            df["weight"] = df["weight_doc"]
+        else:
+            print(
+                f"Doc-sampling mode detected ({sample_doc_count}/{fr_doc_count} docs). "
+                f"Using stratum weights for cross-doc expansion."
+            )
+
         # Fill missing weights and provide diagnostics
         missing_weights = df["weight"].isna().sum()
         if missing_weights > 0:
