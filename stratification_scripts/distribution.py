@@ -210,6 +210,7 @@ def enrich_regs_count(
     
     # Ensure we have a valid count
     if not isinstance(comment_count, int) or comment_count < 0:
+        logger.warning(f"Comment count fallback to 0 for {regs_document_id} (was {comment_count!r})")
         comment_count = 0
     
     base_rec["comment_count"] = comment_count
@@ -289,14 +290,15 @@ def fetch_and_enrich_documents(
     logger.info(f"Using {workers_stage1} workers with {config.fr_detail_sleep}s rate limit")
     
     stage1_results = []
-    failed_count = 0
-    
+    ineligible_count = 0
+    error_count = 0
+
     with ThreadPoolExecutor(max_workers=workers_stage1) as executor:
         futures = {
             executor.submit(enrich_fr_detail, rec, fr_client): rec
             for rec in all_results
         }
-        
+
         for future in tqdm(as_completed(futures), total=len(all_results),
                           desc="Stage 1: FR details", unit="doc"):
             try:
@@ -304,10 +306,10 @@ def fetch_and_enrich_documents(
                 if partial:
                     stage1_results.append(partial)
                 else:
-                    failed_count += 1
+                    ineligible_count += 1
             except Exception as e:
-                failed_count += 1
-                logger.debug(f"Unexpected error: {e}")
+                error_count += 1
+                logger.warning(f"Stage 1 enrichment error: {type(e).__name__}: {e}")
     
     fr_client.close()
     
@@ -316,8 +318,9 @@ def fetch_and_enrich_documents(
     non_regs_docs = [p for p in stage1_results if not p.get("regs_document_id")]
     
     logger.info(f"Stage 1 complete: {len(stage1_results)} comment-eligible docs")
-    if failed_count > 0:
-        logger.warning(f"{failed_count} docs failed FR detail fetch")
+    logger.info(f"  {ineligible_count} docs filtered as ineligible (no comment mechanism)")
+    if error_count > 0:
+        logger.warning(f"  {error_count} docs failed FR detail fetch (API errors)")
     logger.info(f"  {len(regs_docs)} with regs_document_id (need Stage 2)")
     logger.info(f"  {len(non_regs_docs)} without regs_document_id")
     
@@ -444,7 +447,7 @@ def _enrich_lifecycle_stage(
             else:
                 failed_rins += 1
         except Exception as e:
-            logger.debug(f"Error fetching agenda for {rin}: {e}")
+            logger.warning(f"Error fetching agenda for {rin}: {type(e).__name__}: {e}")
             failed_rins += 1
 
     reginfo_client.close()
@@ -503,7 +506,8 @@ def _enrich_lifecycle_stage(
                 close_dt = datetime.fromisoformat(str(close_str)[:10])
                 pub_dt = datetime.fromisoformat(str(pub_str)[:10])
                 rec["comment_period_days"] = (close_dt - pub_dt).days
-            except (ValueError, TypeError):
+            except (ValueError, TypeError) as e:
+                logger.debug(f"Date parse failed for {rec.get('document_number')}: {e}")
                 rec["comment_period_days"] = None
         else:
             rec["comment_period_days"] = None

@@ -59,13 +59,13 @@ def parse_years(years_str: str) -> List[int]:
                 end_year = int(end.strip())
                 years.update(range(start_year, end_year + 1))
             except ValueError:
-                pass
+                logger.warning(f"Skipping unparseable year range: {part!r}")
         else:
             # Single year
             try:
                 years.add(int(part))
             except ValueError:
-                pass
+                logger.warning(f"Skipping unparseable year: {part!r}")
     
     return sorted(years)
 
@@ -87,6 +87,8 @@ def parse_steps(steps_str: str) -> List[str]:
         step = step.strip().lower()
         if step in valid_steps:
             steps.append(step)
+        elif step:
+            logger.warning(f"Unknown step: {step!r}. Valid steps: {', '.join(sorted(valid_steps))}")
     
     return steps if steps else None
 

@@ -401,47 +401,55 @@ class RegInfoClient:
         if abstract_match:
             result["abstract"] = re.sub(r'<[^>]+>', '', abstract_match.group(1)).strip()
 
-        # Extract timetable entries
-        # Pattern 1: inline format like "NPRM 08/24/2016 81 FR 57854"
-        timetable_pattern = r'(ANPRM|NPRM|Final (?:Rule|Action)|Interim Final|Withdrawn|Direct Final)[^\d]*(\d{1,2}/\d{1,2}/\d{4})[^\d]*(\d+ FR \d+)?'
-
-        for match in re.finditer(timetable_pattern, html, re.IGNORECASE):
-            action = match.group(1).strip()
-            date_str = match.group(2).strip()
-            citation = match.group(3).strip() if match.group(3) else ""
-
-            # Convert date to ISO format
-            try:
-                date_obj = datetime.strptime(date_str, "%m/%d/%Y")
-                date_iso = date_obj.strftime("%Y-%m-%d")
-            except ValueError:
-                date_iso = date_str
-
-            result["timetable"].append({
-                "action": action.upper(),
-                "date": date_iso,
-                "citation": citation,
-            })
-
-        # Pattern 2: HTML table rows — <td>Action</td><td>Date</td><td>Citation</td>
-        # This catches entries the inline regex misses (e.g. "Withdrawn" in separate <td>)
+        # Extract timetable entries from HTML table rows:
+        #   <td>Action</td><td>Date</td><td>Citation</td>
         td_pattern = r"<td[^>]*>\s*([\w][^<]*?)\s*(?:&nbsp;)?\s*</td>\s*<td[^>]*>\s*(\d{1,2}/\d{1,2}/\d{4})\s*(?:&nbsp;)?\s*</td>"
-        known_actions = {"anprm", "nprm", "final rule", "final action", "interim final",
-                         "withdrawn", "direct final", "nprm comment period reopened",
-                         "nprm comment period end"}
-        existing_entries = {(e["action"], e["date"]) for e in result["timetable"]}
+        known_actions = {
+            # Core milestones
+            "anprm", "nprm", "final rule", "final action", "interim final",
+            "withdrawn", "direct final",
+            # Comment period management
+            "nprm comment period reopened", "nprm comment period end",
+            "nprm comment period extended", "nprm comment period extended end",
+            "nprm comment period reopened end",
+            "nprm extended comment period end",
+            "nprm comment period reopened; corrections",
+            "nprm comment period reopened; corrections end",
+            # NPRM variants
+            "second nprm", "supplemental nprm",
+            "second nprm comment period end", "supplemental nprm comment period end",
+            # Effective date actions
+            "final action effective", "final rule effective",
+            "final rule; delay of effective date", "other/delayed effective date",
+            # Pre-rule
+            "notice of availability",
+            # Omnibus/standing programs
+            "actions will continue through",
+        }
+        existing_entries = set()
 
         for match in re.finditer(td_pattern, html, re.IGNORECASE | re.DOTALL):
             raw_action = re.sub(r'<[^>]+>', '', match.group(1)).strip()
             date_str = match.group(2).strip()
 
-            if not raw_action or raw_action.lower() not in known_actions:
+            if not raw_action:
                 continue
+
+            # Check known_actions; also accept "Duplicate of XXXX-XXXX" pattern
+            action_lower = raw_action.lower()
+            if action_lower not in known_actions and not action_lower.startswith("duplicate of"):
+                continue
+
+            # Handle 00-day placeholder (month-level precision from omnibus RINs)
+            date_parts = date_str.split("/")
+            if len(date_parts) == 3 and date_parts[1] == "00":
+                date_str = f"{date_parts[0]}/01/{date_parts[2]}"
 
             try:
                 date_obj = datetime.strptime(date_str, "%m/%d/%Y")
                 date_iso = date_obj.strftime("%Y-%m-%d")
             except ValueError:
+                logger.warning(f"Malformed date {date_str!r} for action {raw_action!r}, using raw string")
                 date_iso = date_str
 
             key = (raw_action.upper(), date_iso)
@@ -735,14 +743,30 @@ class RegInfoClient:
     _ACTION_CONDENSED = {
         "ANPRM": "ANPRM",
         "NPRM": "NPRM",
+        "SECOND NPRM": "SECOND_NPRM",
+        "SUPPLEMENTAL NPRM": "SUPPLEMENTAL_NPRM",
         "NPRM COMMENT PERIOD REOPENED": "NPRM_REOPENED",
         "NPRM COMMENT PERIOD END": "NPRM_CLOSED",
+        "NPRM COMMENT PERIOD EXTENDED": "NPRM_EXTENDED",
+        "NPRM COMMENT PERIOD EXTENDED END": "NPRM_EXTENDED_END",
+        "NPRM COMMENT PERIOD REOPENED END": "NPRM_REOPENED_END",
+        "NPRM EXTENDED COMMENT PERIOD END": "NPRM_EXTENDED_END",
+        "NPRM COMMENT PERIOD REOPENED; CORRECTIONS": "NPRM_REOPENED_CORRECTIONS",
+        "NPRM COMMENT PERIOD REOPENED; CORRECTIONS END": "NPRM_REOPENED_CORRECTIONS_END",
+        "SECOND NPRM COMMENT PERIOD END": "SECOND_NPRM_CLOSED",
+        "SUPPLEMENTAL NPRM COMMENT PERIOD END": "SUPPLEMENTAL_NPRM_CLOSED",
+        "NOTICE OF AVAILABILITY": "NOA",
         "FINAL ACTION": "FINAL",
         "FINAL RULE": "FINAL",
+        "FINAL ACTION EFFECTIVE": "FINAL_EFFECTIVE",
+        "FINAL RULE EFFECTIVE": "FINAL_EFFECTIVE",
+        "FINAL RULE; DELAY OF EFFECTIVE DATE": "FINAL_DELAYED",
+        "OTHER/DELAYED EFFECTIVE DATE": "FINAL_DELAYED",
         "INTERIM FINAL": "INTERIM_FINAL",
         "DIRECT FINAL": "DIRECT_FINAL",
         "WITHDRAWN": "WITHDRAWN",
         "NEXT ACTION UNDETERMINED": "UNDETERMINED",
+        "ACTIONS WILL CONTINUE THROUGH": "CONTINUING",
     }
 
     @staticmethod
@@ -753,16 +777,19 @@ class RegInfoClient:
             "nprm_citation": None,
             "final_action_date": None,
             "final_action_citation": None,
+            "effective_date": None,
             "withdrawal_date": None,
             "nprm_to_final_days": None,
             "timetable_action_count": 0,
             "has_reopened_comment": False,
+            "has_extended_comment": False,
             "anprm_date": None,
             "anprm_citation": None,
             "interim_final_date": None,
             "interim_final_citation": None,
             "direct_final_date": None,
             "comment_reopened_date": None,
+            "comment_extended_date": None,
             "anprm_to_nprm_days": None,
             "anprm_to_final_days": None,
             "timetable_sequence": None,
@@ -814,13 +841,21 @@ class RegInfoClient:
 
         # Track candidates for each milestone
         anprm_entry = None         # First ANPRM (earliest)
-        nprm_entry = None          # First NPRM (earliest)
-        final_entry = None         # Latest FINAL-type action
+        nprm_entry = None          # First NPRM (earliest, excludes Second/Supplemental)
+        final_entry = None         # Latest FINAL-type action (excludes effective dates)
         final_citation_backup = None  # Citation from any FINAL entry (fallback)
+        effective_entry = None     # Latest effective date action
         interim_final_entry = None # First INTERIM FINAL
         direct_final_entry = None  # First DIRECT FINAL
         withdrawal_entry = None    # First WITHDRAWN
         reopened_entry = None      # First REOPENED
+        extended_entry = None      # First EXTENDED
+
+        # Actions that represent effective dates, NOT final action dates
+        _EFFECTIVE_DATE_ACTIONS = {
+            "FINAL ACTION EFFECTIVE", "FINAL RULE EFFECTIVE",
+            "FINAL RULE; DELAY OF EFFECTIVE DATE", "OTHER/DELAYED EFFECTIVE DATE",
+        }
 
         sequence_tokens = []
 
@@ -828,10 +863,13 @@ class RegInfoClient:
             action = entry.get("action", "")
             action_upper = action.upper()
             date_str = entry.get("date", "")
-            citation = entry.get("citation", "") or None  # "" → None
+            citation = entry.get("citation", "") or None  # "" -> None
 
-            # Build sequence token
-            token = RegInfoClient._ACTION_CONDENSED.get(action_upper, action_upper)
+            # Build sequence token; for "DUPLICATE OF ..." use a generic token
+            if action_upper.startswith("DUPLICATE OF"):
+                token = "DUPLICATE"
+            else:
+                token = RegInfoClient._ACTION_CONDENSED.get(action_upper, action_upper)
             sequence_tokens.append(token)
 
             # ANPRM
@@ -839,18 +877,19 @@ class RegInfoClient:
                 if anprm_entry is None:
                     anprm_entry = {"date": date_str, "citation": citation}
 
-            # NPRM: starts with "NPRM" but NOT "NPRM COMMENT PERIOD"
-            # Excludes "NPRM Comment Period Reopened" and "NPRM Comment Period End"
-            if action_upper.startswith("NPRM") and "COMMENT PERIOD" not in action_upper:
+            # NPRM: exactly "NPRM" only (not Second/Supplemental, not comment period variants)
+            if action_upper == "NPRM":
                 if nprm_entry is None:  # Take earliest
                     nprm_entry = {"date": date_str, "citation": citation}
 
-            # FINAL: any action containing "FINAL" — matches "Final Action",
-            # "Final Rule", "Interim Final", "Direct Final".
-            # If only "Interim Final" exists, it's captured as the final action —
-            # correct for our purposes (we want the latest final-type milestone).
-            if "FINAL" in action_upper:
-                # Always overwrite → keeps latest by date (entries are sorted)
+            # EFFECTIVE DATE actions: track separately, do NOT overwrite final_entry
+            if action_upper in _EFFECTIVE_DATE_ACTIONS:
+                # Always overwrite -> keeps latest by date (entries are sorted)
+                effective_entry = {"date": date_str, "citation": citation}
+            # FINAL: "Final Action", "Final Rule", "Interim Final", "Direct Final"
+            # but NOT effective date variants
+            elif "FINAL" in action_upper:
+                # Always overwrite -> keeps latest by date (entries are sorted)
                 final_entry = {"date": date_str, "citation": citation}
                 if citation:
                     final_citation_backup = citation
@@ -876,6 +915,12 @@ class RegInfoClient:
                 if reopened_entry is None:
                     reopened_entry = {"date": date_str}
 
+            # EXTENDED comment period
+            if "EXTENDED" in action_upper and "COMMENT" in action_upper:
+                result["has_extended_comment"] = True
+                if extended_entry is None:
+                    extended_entry = {"date": date_str}
+
         # --- Extract milestone fields ---
 
         if anprm_entry:
@@ -889,6 +934,14 @@ class RegInfoClient:
         if final_entry:
             result["final_action_date"] = final_entry["date"] or None
             result["final_action_citation"] = final_entry["citation"] or final_citation_backup
+        elif effective_entry:
+            # No explicit Final Action/Rule, but we have an effective date.
+            # Use it as final_action_date (better than nothing).
+            result["final_action_date"] = effective_entry["date"] or None
+            result["final_action_citation"] = effective_entry["citation"]
+
+        if effective_entry:
+            result["effective_date"] = effective_entry["date"] or None
 
         if interim_final_entry:
             result["interim_final_date"] = interim_final_entry["date"] or None
@@ -902,6 +955,9 @@ class RegInfoClient:
 
         if reopened_entry:
             result["comment_reopened_date"] = reopened_entry["date"] or None
+
+        if extended_entry:
+            result["comment_extended_date"] = extended_entry["date"] or None
 
         # --- Compute durations ---
 

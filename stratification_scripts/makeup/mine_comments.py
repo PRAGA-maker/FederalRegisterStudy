@@ -116,13 +116,15 @@ def extract_comment_fields_from_list(item: dict) -> Dict[str, Any]:
     comment_id = item.get("id")
     attrs = item.get("attributes") or {}
     
-    # Extract available fields
-    comment_text = (
-        attrs.get("comment") or 
-        attrs.get("commentText") or 
-        attrs.get("comment_text") or
-        ""
-    )
+    # Extract available fields — try known field names in order
+    comment_text = ""
+    for field_name in ("comment", "commentText", "comment_text"):
+        val = attrs.get(field_name)
+        if val:
+            comment_text = val
+            if field_name != "comment":
+                logger.debug(f"Comment {comment_id}: text from non-standard field '{field_name}'")
+            break
     
     # Submitter info
     first_name = attrs.get("firstName")

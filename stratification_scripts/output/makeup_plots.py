@@ -190,7 +190,7 @@ def calculate_weights(df: pd.DataFrame, fr_csv_path: Optional[Path]) -> pd.DataF
     
     # Default weights = 1.0 if no FR data available
     if not fr_csv_path or not fr_csv_path.exists():
-        print("Warning: FR metadata not found. Using unweighted data (weight=1.0)")
+        logger.warning("FR metadata not found. Using unweighted data (weight=1.0)")
         df["weight"] = 1.0
         df["weight_doc"] = 1.0
         return df
@@ -201,7 +201,7 @@ def calculate_weights(df: pd.DataFrame, fr_csv_path: Optional[Path]) -> pd.DataF
         
         # Ensure critical columns exist
         if "agency" not in fr_df.columns or "comment_count" not in fr_df.columns:
-            print("Warning: FR metadata missing 'agency' or 'comment_count'. Using unweighted data.")
+            logger.warning("FR metadata missing 'agency' or 'comment_count'. Using unweighted data.")
             df["weight"] = 1.0
             df["weight_doc"] = 1.0
             return df
@@ -233,7 +233,7 @@ def calculate_weights(df: pd.DataFrame, fr_csv_path: Optional[Path]) -> pd.DataF
             df["comment_count"] = df["comment_count"].fillna(1)
             df["comment_bin"] = df["comment_count"].apply(get_bin)
         else:
-            print("Warning: Could not link documents to FR metadata. Using unweighted data.")
+            logger.warning("Could not link documents to FR metadata. Using unweighted data.")
             df["weight"] = 1.0
             df["weight_doc"] = 1.0
             return df
@@ -245,7 +245,14 @@ def calculate_weights(df: pd.DataFrame, fr_csv_path: Optional[Path]) -> pd.DataF
         # Merge Population and Sample Stratum Totals
         strata_weights = pd.merge(pop_strata, sample_strata, on=["agency", "comment_bin"], how="inner")
         
-        # Calculate Weight
+        # Calculate Weight — guard against N_sample=0 (would produce inf)
+        zero_sample = strata_weights[strata_weights["N_sample"] == 0]
+        if len(zero_sample) > 0:
+            logger.warning(
+                f"{len(zero_sample)} strata have N_sample=0 (will be excluded from weighting): "
+                f"{zero_sample[['agency', 'comment_bin']].to_dict('records')}"
+            )
+            strata_weights = strata_weights[strata_weights["N_sample"] > 0]
         strata_weights["weight"] = strata_weights["N_pop"] / strata_weights["N_sample"]
         
         # Merge stratum weights back to main dataframe
@@ -265,7 +272,9 @@ def calculate_weights(df: pd.DataFrame, fr_csv_path: Optional[Path]) -> pd.DataF
         # Calculate weight_doc = True Total / Sampled Total
         # This reconstructs the document exactly, without inflating for missing neighbor documents
         # NOTE: Duplicates are counted separately - each duplicate comment gets the same weight as if unique
-        df["weight_doc"] = df["comment_count"] / df["n_sample_doc"]
+        # Guard: n_sample_doc should never be 0 (would mean a doc with no comments in the sample),
+        # but protect against inf just in case
+        df["weight_doc"] = df["comment_count"] / df["n_sample_doc"].replace(0, np.nan)
 
         # Detect if all documents are present (no doc-level sampling)
         # fr_df is already filtered to comment_count > 0, so this excludes
@@ -274,54 +283,49 @@ def calculate_weights(df: pd.DataFrame, fr_csv_path: Optional[Path]) -> pd.DataF
         sample_doc_count = df["document_number"].nunique()
 
         if sample_doc_count >= fr_doc_count * 0.95:
-            print(
+            logger.info(
                 f"All-docs mode detected ({sample_doc_count}/{fr_doc_count} docs present). "
                 f"Using document-level weights only (no cross-doc expansion)."
             )
             df["weight"] = df["weight_doc"]
         else:
-            print(
+            logger.info(
                 f"Doc-sampling mode detected ({sample_doc_count}/{fr_doc_count} docs). "
                 f"Using stratum weights for cross-doc expansion."
             )
 
-        # Fill missing weights and provide diagnostics
-        missing_weights = df["weight"].isna().sum()
-        if missing_weights > 0:
-            print(f"Warning: {missing_weights} comments could not be weighted (metadata mismatch). Defaulting to 1.0")
-            
-            # Diagnose why weights are missing
-            unweighted = df[df["weight"].isna()]
-            if "agency" in unweighted.columns:
-                unmatched_agencies = unweighted["agency"].value_counts().head(10)
-                print(f"  Top unmatched agencies (will use weight=1.0):")
-                for agency, count in unmatched_agencies.items():
-                    print(f"    {agency}: {count} comments")
-            
-            df["weight"] = df["weight"].fillna(1.0)
-            df["weight_doc"] = df["weight_doc"].fillna(1.0)
-        
-        # Count orphaned comments (weight == 1.0 after merge)
-        orphaned = (df["weight"] == 1.0).sum()
+        # Diagnostics: distinguish actual mismatches (NaN) from natural weight=1.0
+        was_nan = df["weight"].isna()
+        n_fallback = was_nan.sum()
+
+        df["weight"] = df["weight"].fillna(1.0)
+        df["weight_doc"] = df["weight_doc"].fillna(1.0)
+
+        n_natural_one = ((df["weight"] == 1.0) & ~was_nan).sum()
         total = len(df)
-        pct_orphaned = orphaned / total * 100 if total > 0 else 0
-        
-        print(f"Reweighting complete.")
-        print(f"  Stratum Weight (Population): Mean={df['weight'].mean():.2f}, Max={df['weight'].max():.2f}")
-        print(f"  Document Weight (Specific):  Mean={df['weight_doc'].mean():.2f}, Max={df['weight_doc'].max():.2f}")
-        print(f"  Comments with weight=1.0 (orphaned): {orphaned:,} ({pct_orphaned:.1f}%)")
-        
-        if orphaned > 0 and orphaned < total * 0.05:  # Less than 5% orphaned is acceptable
-            print(f"  [OK] Weight calculation success rate: {100-pct_orphaned:.1f}%")
-        elif orphaned >= total * 0.05:
-            print(f"  [WARNING] High rate of orphaned comments ({pct_orphaned:.1f}%) - check agency matching")
+
+        logger.info(f"Reweighting complete.")
+        logger.info(f"  Stratum Weight (Population): Mean={df['weight'].mean():.2f}, Max={df['weight'].max():.2f}")
+        logger.info(f"  Document Weight (Specific):  Mean={df['weight_doc'].mean():.2f}, Max={df['weight_doc'].max():.2f}")
+        if n_natural_one > 0:
+            logger.info(f"  Fully-sampled docs (weight=1.0, correct): {n_natural_one:,}")
+
+        if n_fallback > 0:
+            pct = n_fallback / total * 100 if total > 0 else 0
+            logger.warning(f"{n_fallback} comments could not be weighted (metadata mismatch, defaulted to 1.0)")
+            unweighted = df[was_nan]
+            if "agency" in unweighted.columns:
+                for agency, count in unweighted["agency"].value_counts().head(10).items():
+                    logger.warning(f"    {agency}: {count} comments")
+            if pct >= 5:
+                logger.warning(f"High unweightable rate ({pct:.1f}%) - check agency/bin matching")
+        else:
+            logger.info(f"  [OK] All comments successfully weighted.")
         
         return df
         
     except Exception as e:
-        print(f"Error calculating weights: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error(f"Error calculating weights: {e}", exc_info=True)
         df["weight"] = 1.0
         df["weight_doc"] = 1.0
         return df
@@ -1795,19 +1799,22 @@ def plot_ranked_stream(df: pd.DataFrame, year: int, outdir: Path) -> None:
     for i, p in enumerate(percentiles):
         idx = percentile_indices[p]
         y_pos = slice_y_positions[i]
-        
+
+        if len(doc_sorted) == 0 or idx >= len(doc_sorted):
+            continue
+
         # Get composition at this percentile (use smoothed values for consistency)
         shares_at_p = [shares_norm[cat_idx, idx] for cat_idx in range(len(CATEGORY_ORDER))]
-        
+
         # Draw stacked horizontal bar
         left = 0
         for share, color in zip(shares_at_p, colors):
             ax_slices.barh(y_pos, share, left=left, height=bar_height, color=color, edgecolor="white", linewidth=1)
             left += share
-        
+
         # Label for percentile
         comment_count_at_p = int(doc_sorted.iloc[idx]["comment_count"])
-        ax_slices.text(-2, y_pos, f"p{p}\n({comment_count_at_p:,} comments)", 
+        ax_slices.text(-2, y_pos, f"p{p}\n({comment_count_at_p:,} comments)",
                        ha="right", va="center", fontsize=10, fontweight="bold")
     
     ax_slices.set_xlim(0, 100)

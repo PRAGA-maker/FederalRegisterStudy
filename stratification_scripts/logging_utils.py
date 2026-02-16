@@ -221,7 +221,7 @@ def log_completion(logger: logging.Logger, message: str) -> None:
         >>> log_completion(logger, "Year 2024 complete")
         ✓ Year 2024 complete
     """
-    logger.info(f"✓ {message}")
+    logger.info(f"[DONE] {message}")
 
 
 def log_error(logger: logging.Logger, message: str, exc: Optional[Exception] = None) -> None:

@@ -157,7 +157,7 @@ def deduplicate_document_comments(
     if n_comments <= 1:
         # No duplicates possible
         return doc_df.with_columns([
-            pl.lit(None).alias("duplicate_group_id"),
+            pl.lit(None).cast(pl.Utf8).alias("duplicate_group_id"),
             pl.col("comment_id").alias("canonical_comment_id"),
             pl.lit(True).alias("is_canonical"),
         ])
@@ -184,7 +184,7 @@ def deduplicate_document_comments(
     if len(valid_indices) <= 1:
         # No duplicates possible (all empty or only one valid)
         return doc_df.with_columns([
-            pl.lit(None).alias("duplicate_group_id"),
+            pl.lit(None).cast(pl.Utf8).alias("duplicate_group_id"),
             pl.col("comment_id").alias("canonical_comment_id"),
             pl.lit(True).alias("is_canonical"),
         ])
@@ -229,9 +229,10 @@ def deduplicate_document_comments(
             is_canonical_flags[i] = True
     
     # Add columns to DataFrame
+    # Explicitly set dtype to avoid Null vs String type mismatch during concat
     return doc_df.with_columns([
-        pl.Series("duplicate_group_id", duplicate_group_ids),
-        pl.Series("canonical_comment_id", canonical_comment_ids),
+        pl.Series("duplicate_group_id", duplicate_group_ids, dtype=pl.Utf8),
+        pl.Series("canonical_comment_id", canonical_comment_ids, dtype=pl.Utf8),
         pl.Series("is_canonical", is_canonical_flags),
     ])
 
@@ -281,8 +282,10 @@ def deduplicate_comments_for_year(config: PipelineConfig) -> None:
     try:
         model = SentenceTransformer(config.deduplication_model)
     except Exception as e:
-        logger.error(f"Failed to load model: {e}")
-        return
+        raise RuntimeError(
+            f"Failed to load deduplication model '{config.deduplication_model}': {e}. "
+            f"Deduplication cannot proceed — downstream steps depend on this."
+        ) from e
     
     logger.info(f"Using similarity threshold: {config.deduplication_threshold}")
     

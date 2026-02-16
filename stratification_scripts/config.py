@@ -25,10 +25,13 @@ Example:
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 
 class ConfigurationError(Exception):
@@ -77,6 +80,7 @@ def get_regs_api_keys(
                 try:
                     rph = int(rph_str.strip())
                 except ValueError:
+                    logger.warning(f"Invalid RPH {rph_str!r} for API key, using default {default_rph}")
                     rph = default_rph
                 keys_with_limits.append((key.strip(), rph))
             else:

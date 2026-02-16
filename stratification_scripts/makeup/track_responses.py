@@ -281,7 +281,14 @@ def save_responses_incremental(
             df_existing = df_existing.select(df_new.columns)
             df_combined = pl.concat([df_existing, df_new])
         except Exception as e:
-            logger.warning(f"Failed to merge with existing data: {e}, overwriting")
+            # Backup existing file before overwriting to prevent data loss
+            backup_path = responses_csv.with_suffix(f".backup.csv")
+            import shutil
+            shutil.copy2(responses_csv, backup_path)
+            logger.warning(
+                f"Failed to merge with existing data: {e}. "
+                f"Backed up existing file to {backup_path.name}, writing new data only."
+            )
             df_combined = df_new
     else:
         df_combined = df_new

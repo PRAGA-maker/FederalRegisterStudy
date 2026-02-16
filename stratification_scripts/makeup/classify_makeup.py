@@ -29,7 +29,6 @@ from typing import Dict, List, Optional, Set, Tuple
 
 import numpy as np
 import polars as pl
-from gensim.models import Word2Vec
 from sklearn.cluster import MiniBatchKMeans
 from sklearn.neighbors import NearestNeighbors
 from tqdm import tqdm
@@ -66,12 +65,17 @@ def tokenize(text: str) -> List[str]:
     return [t for t in tokens if t not in stopwords]
 
 
-def vectorize_comments(comments: List[str]) -> Tuple[np.ndarray, Optional[Word2Vec]]:
+def vectorize_comments(comments: List[str]) -> Tuple[np.ndarray, Optional["Word2Vec"]]:
     """Train Word2Vec and return normalized comment vectors."""
+    from gensim.models import Word2Vec  # Lazy import: only needed for docs with >1000 comments
     tokenized_all = [tokenize(c) for c in comments]
     corpus = [tokens for tokens in tokenized_all if tokens]
 
     if len(corpus) < 10:
+        logger.warning(
+            f"Insufficient corpus for Word2Vec ({len(corpus)} valid docs, need 10). "
+            f"Returning zero vectors for {len(comments)} comments — clustering will be arbitrary."
+        )
         return np.zeros((len(comments), 300)), None
 
     model = Word2Vec(
@@ -316,8 +320,12 @@ def join_and_write_output(
     if "rin" in df_joined.columns:
         cols.append("rin")
 
-    df_output = df_joined.select(cols).filter(pl.col("category").is_not_null())
-    
+    df_all = df_joined.select(cols)
+    null_count = df_all.filter(pl.col("category").is_null()).shape[0]
+    df_output = df_all.filter(pl.col("category").is_not_null())
+    if null_count > 0:
+        logger.info(f"Filtered {null_count} comments with null category from output")
+
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     df_output.write_csv(str(output_csv))
     
