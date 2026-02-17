@@ -311,8 +311,8 @@ def fetch_and_enrich_documents(
                 error_count += 1
                 logger.warning(f"Stage 1 enrichment error: {type(e).__name__}: {e}")
     
-    fr_client.close()
-    
+    # NOTE: fr_client kept open for Stage 4 (document linking). Closed after Stage 4.
+
     # Split by whether they need Regs.gov enrichment
     regs_docs = [p for p in stage1_results if p.get("regs_document_id")]
     non_regs_docs = [p for p in stage1_results if not p.get("regs_document_id")]
@@ -364,6 +364,14 @@ def fetch_and_enrich_documents(
     # Stage 3: Lifecycle Enrichment (if enabled)
     if getattr(config, "enable_lifecycle_tracking", True):
         rows = _enrich_lifecycle_stage(rows, config)
+        # Stage 4: Resolve FR citations to document numbers
+        rows = _link_documents_by_citation(rows, fr_client, config)
+    else:
+        for rec in rows:
+            rec["nprm_document_number"] = None
+            rec["final_rule_document_number"] = None
+
+    fr_client.close()
 
     df = pd.DataFrame(rows)
 
@@ -556,6 +564,150 @@ def _enrich_lifecycle_stage(
     logger.info("\nLifecycle stage breakdown:")
     for stage, count in stage_counts.most_common():
         logger.info(f"  {stage}: {count}")
+
+    return rows
+
+
+def _link_documents_by_citation(
+    rows: List[dict],
+    fr_client: FederalRegisterClient,
+    config: PipelineConfig,
+) -> List[dict]:
+    """
+    Stage 4: Resolve FR citations from timetable to FR document numbers.
+
+    For each enriched doc that has nprm_citation and/or final_action_citation,
+    looks up the corresponding FR document_number via the FR API.  Results are
+    stored as nprm_document_number and final_rule_document_number columns.
+
+    Uses publication dates from the timetable as lookup hints for efficiency.
+    When an exact-date lookup misses, retries with a wider date window (the
+    timetable date may differ from the actual FR publication date).
+
+    Args:
+        rows: Enriched document records from Stages 1-3.
+        fr_client: FederalRegisterClient instance (must not be closed).
+        config: Pipeline configuration.
+
+    Returns:
+        Updated rows with nprm_document_number and final_rule_document_number.
+    """
+    log_banner(logger, "STAGE 4: DOCUMENT LINKING VIA FR CITATIONS")
+
+    # Collect unique citations with their date hints
+    # Key: citation string, Value: date hint from timetable (may be None)
+    citation_to_date_hint: Dict[str, Optional[str]] = {}
+
+    for rec in rows:
+        nprm_cit = rec.get("nprm_citation")
+        if nprm_cit and isinstance(nprm_cit, str) and nprm_cit.strip():
+            nprm_cit = nprm_cit.strip()
+            if nprm_cit not in citation_to_date_hint:
+                citation_to_date_hint[nprm_cit] = rec.get("nprm_date")
+
+        final_cit = rec.get("final_action_citation")
+        if final_cit and isinstance(final_cit, str) and final_cit.strip():
+            final_cit = final_cit.strip()
+            if final_cit not in citation_to_date_hint:
+                citation_to_date_hint[final_cit] = rec.get("final_action_date")
+
+    if not citation_to_date_hint:
+        logger.info("No FR citations found in timetable data - skipping document linking")
+        for rec in rows:
+            rec["nprm_document_number"] = None
+            rec["final_rule_document_number"] = None
+        return rows
+
+    logger.info(f"Found {len(citation_to_date_hint)} unique FR citations to resolve")
+
+    # Resolve each unique citation via FR API
+    citation_cache: Dict[str, Optional[str]] = {}
+    resolved = 0
+    failed = 0
+    date_hint_misses = 0
+
+    for citation, date_hint in tqdm(
+        citation_to_date_hint.items(),
+        desc="Stage 4: Linking citations",
+        unit="cit",
+    ):
+        try:
+            # First attempt: with date hint for efficient exact-day query
+            result = fr_client.lookup_document_by_citation(
+                citation, publication_date=date_hint
+            )
+
+            # If date hint missed, retry without it (wider 60-day window).
+            # Timetable dates may not match exact FR publication dates.
+            if result is None and date_hint is not None:
+                date_hint_misses += 1
+                logger.info(
+                    f"Citation {citation!r} not found with date hint "
+                    f"{date_hint} - retrying with wider window"
+                )
+                result = fr_client.lookup_document_by_citation(
+                    citation, publication_date=None
+                )
+
+            if result and result.get("document_number"):
+                citation_cache[citation] = result["document_number"]
+                resolved += 1
+            else:
+                citation_cache[citation] = None
+                failed += 1
+                logger.warning(
+                    f"Could not resolve citation {citation!r} "
+                    f"(date_hint={date_hint})"
+                )
+        except Exception as e:
+            citation_cache[citation] = None
+            failed += 1
+            logger.warning(
+                f"Error resolving citation {citation!r}: "
+                f"{type(e).__name__}: {e}"
+            )
+
+    # Apply resolved document numbers to all rows
+    docs_with_nprm_link = 0
+    docs_with_final_link = 0
+
+    for rec in rows:
+        # NPRM document number
+        nprm_cit = rec.get("nprm_citation")
+        if nprm_cit and isinstance(nprm_cit, str) and nprm_cit.strip():
+            rec["nprm_document_number"] = citation_cache.get(nprm_cit.strip())
+            if rec["nprm_document_number"]:
+                docs_with_nprm_link += 1
+        else:
+            rec["nprm_document_number"] = None
+
+        # Final rule document number
+        final_cit = rec.get("final_action_citation")
+        if final_cit and isinstance(final_cit, str) and final_cit.strip():
+            rec["final_rule_document_number"] = citation_cache.get(final_cit.strip())
+            if rec["final_rule_document_number"]:
+                docs_with_final_link += 1
+        else:
+            rec["final_rule_document_number"] = None
+
+    # Summary
+    total_with_any_citation = sum(
+        1 for r in rows
+        if (r.get("nprm_citation") and isinstance(r["nprm_citation"], str) and r["nprm_citation"].strip())
+        or (r.get("final_action_citation") and isinstance(r["final_action_citation"], str) and r["final_action_citation"].strip())
+    )
+
+    logger.info("Document linking complete:")
+    logger.info(f"  {len(citation_to_date_hint)} unique citations found")
+    logger.info(f"  {resolved} resolved, {failed} failed")
+    if date_hint_misses > 0:
+        logger.info(
+            f"  {date_hint_misses} citations needed wider-window retry "
+            f"(timetable date != FR publication date)"
+        )
+    logger.info(f"  {total_with_any_citation} docs had citations")
+    logger.info(f"  {docs_with_nprm_link} docs linked to NPRM document")
+    logger.info(f"  {docs_with_final_link} docs linked to Final Rule document")
 
     return rows
 

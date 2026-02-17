@@ -323,12 +323,13 @@ def calculate_weights(df: pd.DataFrame, fr_csv_path: Optional[Path]) -> pd.DataF
             logger.info(f"  [OK] All comments successfully weighted.")
         
         return df
-        
+
     except Exception as e:
-        logger.error(f"Error calculating weights: {e}", exc_info=True)
-        df["weight"] = 1.0
-        df["weight_doc"] = 1.0
-        return df
+        logger.error(f"Weight calculation failed: {e}", exc_info=True)
+        raise RuntimeError(
+            f"Weight calculation failed — refusing to silently default to 1.0. "
+            f"Fix the underlying issue before generating plots. Error: {e}"
+        ) from e
 
 
 def compute_agency_metrics(df: pd.DataFrame) -> pd.DataFrame:
