@@ -35,6 +35,7 @@ from stratification_scripts.config import (
     get_comments_raw_path,
     get_makeup_data_path,
     get_fr_csv_path,
+    get_agency_responses_path,
 )
 from stratification_scripts.logging_utils import (
     get_logger,
@@ -47,12 +48,6 @@ from stratification_scripts.regulations_gov.client import RegsGovClient
 from stratification_scripts.config import get_regs_api_keys
 
 logger = get_logger(__name__)
-
-
-def get_agency_responses_path(year: int) -> Path:
-    """Get path to agency_responses_{year}.csv"""
-    from stratification_scripts.config import get_data_dir
-    return get_data_dir() / f"agency_responses_{year}.csv"
 
 
 def extract_full_comment_text(
@@ -333,6 +328,10 @@ async def process_responses_async(
         
         # Prepare batch for Gemini
         gemini_batch = []
+        # Track full_text length per comment_id so we don't re-call
+        # extract_full_comment_text() later without regs_client (which
+        # would lose re-downloaded attachment text).
+        comment_text_lengths: Dict[str, int] = {}
         for comment in batch:
             # Extract full comment text
             full_text = extract_full_comment_text(
@@ -340,9 +339,12 @@ async def process_responses_async(
                 client=regs_client,
                 max_pages=max_comment_pages,
             )
-            
+
+            cid = str(comment.get("comment_id", "unknown"))
+            comment_text_lengths[cid] = len(full_text)
+
             metadata = {
-                "comment_id": str(comment.get("comment_id", "unknown")),
+                "comment_id": cid,
                 "document_number": str(comment.get("document_number", "N/A")),
                 "agency": str(comment.get("agency", "N/A")),
                 "commenter_type": str(comment.get("category", "N/A")),
@@ -351,7 +353,7 @@ async def process_responses_async(
                 "lifecycle_stage": str(comment.get("lifecycle_stage", "UNKNOWN")),
                 "rin": str(comment.get("rin", "N/A")),
             }
-            
+
             gemini_batch.append((full_text, metadata))
         
         # Track responses
@@ -377,7 +379,7 @@ async def process_responses_async(
                 "reasoning": parsed_response.get("reasoning", "N/A"),
                 "processed_at": datetime.now().isoformat(),
                 "model": tracker.model,
-                "comment_text_length": len(extract_full_comment_text(original_comment)),
+                "comment_text_length": comment_text_lengths.get(comment_id, 0),
                 "has_attachment": bool(original_comment.get("attachment_text")),
                 # Lifecycle tracking fields
                 "lifecycle_stage": original_comment.get("lifecycle_stage", "UNKNOWN"),
@@ -483,19 +485,7 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
         )
         logger.info(f"Processing {len(df_unprocessed)} unprocessed comments")
     
-    if len(df_unprocessed) == 0:
-        logger.info("All comments already processed")
-        return
-    
-    # Convert to list of dicts
-    comments_to_process = df_unprocessed.to_dicts()
-    
-    # Apply limit if specified (for testing)
-    if limit:
-        comments_to_process = comments_to_process[:limit]
-        logger.info(f"Limited to {len(comments_to_process)} comments for testing")
-    
-    # Initialize Gemini tracker
+    # Initialize Gemini tracker (needed for both Tier 1 and Tier 2)
     logger.info(f"Initializing GeminiResponseTracker with model={config.gemini_model}")
     tracker = GeminiResponseTracker(
         api_key=api_key,
@@ -505,111 +495,504 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
         thinking_level=config.gemini_thinking_level,
     )
     logger.info(f"GeminiResponseTracker initialized successfully with model={tracker.model}")
-    
-    # Initialize RegsGovClient for re-downloading attachments if needed
-    regs_client = None
-    try:
-        api_keys = get_regs_api_keys(required=False)
-        if api_keys:
-            regs_client = RegsGovClient(api_keys, retries=config.retries)
-            logger.info("RegsGovClient initialized for attachment re-downloading")
-    except Exception as e:
-        logger.warning(f"Could not initialize RegsGovClient: {e}")
-        logger.warning("Will use existing attachment text only")
-    
-    # Process comments (pass df_raw for duplicate propagation if deduplication enabled)
-    try:
-        asyncio.run(process_responses_async(
-            tracker,
-            comments_to_process,
-            responses_csv,
-            config.gemini_max_concurrency,
-            regs_client,
-            config.max_comment_pages,
-            df_raw if has_deduplication else None,
-            batch_size,
-        ))
-    finally:
-        if regs_client:
-            regs_client.close()
-    
-    log_banner(logger, "RESPONSE TRACKING COMPLETE")
+
+    # ========================================================================
+    # TIER 1: Google Search grounding for explicit agency responses
+    # ========================================================================
+    if len(df_unprocessed) == 0:
+        logger.info("Tier 1: All comments already processed")
+    else:
+        # Convert to list of dicts
+        comments_to_process = df_unprocessed.to_dicts()
+
+        # Apply limit if specified (for testing)
+        if limit:
+            comments_to_process = comments_to_process[:limit]
+            logger.info(f"Limited to {len(comments_to_process)} comments for testing")
+
+        # Initialize RegsGovClient for re-downloading attachments if needed
+        regs_client = None
+        try:
+            api_keys = get_regs_api_keys(required=False)
+            if api_keys:
+                regs_client = RegsGovClient(api_keys, retries=config.retries)
+                logger.info("RegsGovClient initialized for attachment re-downloading")
+        except Exception as e:
+            logger.warning(f"Could not initialize RegsGovClient: {e}")
+            logger.warning("Will use existing attachment text only")
+
+        # Process comments (pass df_raw for duplicate propagation if deduplication enabled)
+        try:
+            asyncio.run(process_responses_async(
+                tracker,
+                comments_to_process,
+                responses_csv,
+                config.gemini_max_concurrency,
+                regs_client,
+                config.max_comment_pages,
+                df_raw if has_deduplication else None,
+                batch_size,
+            ))
+        finally:
+            if regs_client:
+                regs_client.close()
+
+    log_banner(logger, "TIER 1 RESPONSE TRACKING COMPLETE")
     logger.info(f"Output file: {responses_csv.absolute()}")
-    
-    # Print summary statistics
-    if responses_csv.exists():
-        df_responses = pl.read_csv(str(responses_csv))
-        total = len(df_responses)
-        
-        logger.info(f"\nTotal responses tracked: {total}")
-        
-        if total > 0:
-            logger.info("\nResponse found breakdown:")
-            for value in ["yes", "no", "uncertain"]:
-                count = df_responses.filter(pl.col("response_found") == value).shape[0]
-                pct = 100.0 * count / total
+
+    # Print Tier 1 summary statistics
+    _print_response_summary(responses_csv, "TIER 1")
+
+    # ========================================================================
+    # TIER 2: NPRM vs FINAL RULE TEXT COMPARISON
+    # ========================================================================
+    # For comments where Tier 1 found no response AND the document has both
+    # nprm_document_number and final_rule_document_number in the FR CSV,
+    # compare the two texts to detect whether the comment's concern was
+    # addressed by changes between proposed and final rule.
+    # ========================================================================
+    _run_tier2_comparison(
+        config=config,
+        tracker=tracker,
+        fr_csv=fr_csv,
+        responses_csv=responses_csv,
+        df_raw=df_raw if has_deduplication else None,
+    )
+
+    log_banner(logger, "ALL RESPONSE TRACKING COMPLETE (TIER 1 + TIER 2)")
+    _print_response_summary(responses_csv, "FINAL (TIER 1 + TIER 2)")
+
+
+def _print_response_summary(responses_csv: Path, label: str = "") -> None:
+    """Print summary statistics from the responses CSV."""
+    if not responses_csv.exists():
+        return
+
+    df_responses = pl.read_csv(str(responses_csv))
+    total = len(df_responses)
+
+    logger.info(f"\n{label} Total responses tracked: {total}")
+
+    if total == 0:
+        return
+
+    logger.info(f"\n{label} Response found breakdown:")
+    for value in ["yes", "no", "uncertain"]:
+        count = df_responses.filter(pl.col("response_found") == value).shape[0]
+        pct = 100.0 * count / total
+        logger.info(f"  {value}: {count} ({pct:.1f}%)")
+
+    # Agency decision breakdown (for responses found)
+    responses_found = df_responses.filter(pl.col("response_found") == "yes")
+    if len(responses_found) > 0:
+        logger.info(f"\n{label} Agency decision breakdown (for found responses):")
+        for value in ["accept", "reject", "partial", "uncertain"]:
+            count = responses_found.filter(pl.col("agency_decision") == value).shape[0]
+            pct = 100.0 * count / len(responses_found)
+            logger.info(f"  {value}: {count} ({pct:.1f}%)")
+
+    # Tier 2 summary (if columns exist)
+    if "tier2_acceptance_status" in df_responses.columns:
+        tier2_processed = df_responses.filter(
+            pl.col("tier2_acceptance_status").is_not_null()
+            & (pl.col("tier2_acceptance_status") != "")
+            & (pl.col("tier2_acceptance_status") != "None")
+        )
+        if len(tier2_processed) > 0:
+            logger.info(f"\n{label} Tier 2 acceptance status breakdown ({len(tier2_processed)} comments):")
+            for value in ["ACCEPTED", "REJECTED", "PARTIAL", "UNCLEAR"]:
+                count = tier2_processed.filter(pl.col("tier2_acceptance_status") == value).shape[0]
+                pct = 100.0 * count / len(tier2_processed)
                 logger.info(f"  {value}: {count} ({pct:.1f}%)")
-            
-            # Agency decision breakdown (for responses found)
-            responses_found = df_responses.filter(pl.col("response_found") == "yes")
-            if len(responses_found) > 0:
-                logger.info("\nAgency decision breakdown (for found responses):")
-                for value in ["accept", "reject", "uncertain"]:
-                    count = responses_found.filter(pl.col("agency_decision") == value).shape[0]
-                    pct = 100.0 * count / len(responses_found)
-                    logger.info(f"  {value}: {count} ({pct:.1f}%)")
 
-            # Lifecycle-stratified response metrics
-            if "lifecycle_stage" in df_responses.columns:
-                log_banner(logger, "RESPONSE RATES BY LIFECYCLE STAGE")
+    # Lifecycle-stratified response metrics
+    if "lifecycle_stage" in df_responses.columns:
+        log_banner(logger, f"RESPONSE RATES BY LIFECYCLE STAGE ({label})")
 
-                # Get unique stages, excluding N/A and UNKNOWN
-                all_stages = df_responses["lifecycle_stage"].unique().to_list()
-                stages = [s for s in all_stages if s and s not in ("N/A", "UNKNOWN", "None", None)]
+        all_stages = df_responses["lifecycle_stage"].unique().to_list()
+        stages = [s for s in all_stages if s and s not in ("N/A", "UNKNOWN", "None", None)]
 
-                if stages:
-                    for stage in sorted(stages):
-                        stage_data = df_responses.filter(pl.col("lifecycle_stage") == stage)
-                        stage_total = len(stage_data)
+        if stages:
+            for stage in sorted(stages):
+                stage_data = df_responses.filter(pl.col("lifecycle_stage") == stage)
+                stage_total = len(stage_data)
 
-                        if stage_total == 0:
-                            continue
+                if stage_total == 0:
+                    continue
 
-                        # Response found rate
-                        found_yes = stage_data.filter(pl.col("response_found") == "yes").shape[0]
-                        found_no = stage_data.filter(pl.col("response_found") == "no").shape[0]
-                        found_rate = 100.0 * found_yes / stage_total
+                found_yes = stage_data.filter(pl.col("response_found") == "yes").shape[0]
+                found_rate = 100.0 * found_yes / stage_total
 
-                        # Decision rates (for found responses)
-                        stage_found = stage_data.filter(pl.col("response_found") == "yes")
-                        accept = stage_found.filter(pl.col("agency_decision") == "accept").shape[0] if len(stage_found) > 0 else 0
-                        reject = stage_found.filter(pl.col("agency_decision") == "reject").shape[0] if len(stage_found) > 0 else 0
+                stage_found = stage_data.filter(pl.col("response_found") == "yes")
+                accept = stage_found.filter(pl.col("agency_decision") == "accept").shape[0] if len(stage_found) > 0 else 0
+                reject = stage_found.filter(pl.col("agency_decision") == "reject").shape[0] if len(stage_found) > 0 else 0
+                partial = stage_found.filter(pl.col("agency_decision") == "partial").shape[0] if len(stage_found) > 0 else 0
 
-                        logger.info(f"\n{stage}:")
-                        logger.info(f"  Total comments: {stage_total}")
-                        logger.info(f"  Response found: {found_yes} ({found_rate:.1f}%)")
-                        if len(stage_found) > 0:
-                            accept_rate = 100.0 * accept / len(stage_found)
-                            reject_rate = 100.0 * reject / len(stage_found)
-                            logger.info(f"  Accept: {accept} ({accept_rate:.1f}%) | Reject: {reject} ({reject_rate:.1f}%)")
-                else:
-                    logger.info("No lifecycle stage data found for stratification")
+                logger.info(f"\n{stage}:")
+                logger.info(f"  Total comments: {stage_total}")
+                logger.info(f"  Response found: {found_yes} ({found_rate:.1f}%)")
+                if len(stage_found) > 0:
+                    accept_rate = 100.0 * accept / len(stage_found)
+                    reject_rate = 100.0 * reject / len(stage_found)
+                    partial_rate = 100.0 * partial / len(stage_found)
+                    logger.info(f"  Accept: {accept} ({accept_rate:.1f}%) | Reject: {reject} ({reject_rate:.1f}%) | Partial: {partial} ({partial_rate:.1f}%)")
+        else:
+            logger.info("No lifecycle stage data found for stratification")
 
 
-# ============================================================================
-# FUTURE STEP 2: HANDLE NO-RESPONSE CASES
-# ============================================================================
-# TODO: This section will be implemented by me after Jennifer's work is done.
-# 
-# Goal: For comments where response_found == "no" or "uncertain",
-#       perform additional processing to attempt finding responses
-#       through alternative channels or methods.
-#
-# Placeholder for:
-# - Alternative search strategies
-# - Manual verification workflows
-# - Extended search timeframes
-# ============================================================================
+def _run_tier2_comparison(
+    config: PipelineConfig,
+    tracker: "GeminiResponseTracker",
+    fr_csv: Path,
+    responses_csv: Path,
+    df_raw: Optional[pl.DataFrame] = None,
+) -> None:
+    """
+    Tier 2: Compare NPRM vs Final Rule text for comments where Tier 1 found no response.
+
+    Loads the FR CSV to get document linking columns (nprm_document_number,
+    final_rule_document_number), identifies eligible comments, fetches document
+    texts from the FR API (with per-document caching), and sends each eligible
+    comment to Gemini for NPRM vs Final Rule comparison.
+
+    Results are merged back into the agency_responses CSV as new columns:
+    tier2_acceptance_status, tier2_confidence, tier2_text_change_summary.
+
+    Args:
+        config: Pipeline configuration
+        tracker: Already-initialized GeminiResponseTracker
+        fr_csv: Path to federal_register_{year}_comments.csv
+        responses_csv: Path to agency_responses_{year}.csv
+        df_raw: Optional raw comments DataFrame for duplicate propagation
+    """
+    from stratification_scripts.federal_register.client import FederalRegisterClient
+
+    log_banner(logger, "TIER 2: NPRM vs FINAL RULE TEXT COMPARISON")
+
+    # ------------------------------------------------------------------
+    # Step 1: Load data and identify Tier 2-eligible comments
+    # ------------------------------------------------------------------
+    if not responses_csv.exists():
+        logger.warning("Tier 2: No responses CSV found. Skipping Tier 2.")
+        return
+
+    if not fr_csv.exists():
+        logger.warning("Tier 2: No FR CSV found. Cannot perform document linking. Skipping Tier 2.")
+        return
+
+    df_responses = pl.read_csv(str(responses_csv))
+    df_fr = pl.read_csv(str(fr_csv))
+
+    # Check required columns exist in FR CSV
+    for col in ["nprm_document_number", "final_rule_document_number"]:
+        if col not in df_fr.columns:
+            logger.warning(f"Tier 2: Column '{col}' not found in FR CSV. Skipping Tier 2.")
+            logger.warning("Tier 2: Run distribution.py Stage 4 (document linking) first.")
+            return
+
+    # Find comments where Tier 1 did NOT find a response
+    no_response = df_responses.filter(pl.col("response_found") != "yes")
+    total_no_response = len(no_response)
+    logger.info(f"Tier 2: {total_no_response} comments with response_found != 'yes'")
+
+    if total_no_response == 0:
+        logger.info("Tier 2: All comments have Tier 1 responses. Nothing to do.")
+        return
+
+    # Skip comments already processed by Tier 2 (idempotency)
+    if "tier2_acceptance_status" in df_responses.columns:
+        already_tier2 = df_responses.filter(
+            pl.col("tier2_acceptance_status").is_not_null()
+            & (pl.col("tier2_acceptance_status") != "")
+            & (pl.col("tier2_acceptance_status") != "None")
+        )
+        already_tier2_ids = set(already_tier2["comment_id"].to_list())
+        if already_tier2_ids:
+            logger.info(f"Tier 2: {len(already_tier2_ids)} comments already have Tier 2 results, skipping them")
+            no_response = no_response.filter(~pl.col("comment_id").is_in(list(already_tier2_ids)))
+
+    if len(no_response) == 0:
+        logger.info("Tier 2: All eligible comments already processed. Nothing to do.")
+        return
+
+    # Join no-response comments with FR CSV to get document linking columns
+    doc_linking = df_fr.select([
+        "document_number",
+        "nprm_document_number",
+        "final_rule_document_number",
+    ])
+
+    no_response_with_links = no_response.join(
+        doc_linking,
+        on="document_number",
+        how="left",
+    )
+
+    # Filter to comments where BOTH nprm and final rule document numbers exist
+    def _is_valid(col_name: str) -> pl.Expr:
+        return (
+            pl.col(col_name).is_not_null()
+            & (pl.col(col_name) != "")
+            & (pl.col(col_name) != "None")
+            & (pl.col(col_name) != "null")
+        )
+
+    eligible = no_response_with_links.filter(
+        _is_valid("nprm_document_number") & _is_valid("final_rule_document_number")
+    )
+
+    total_eligible = len(eligible)
+    logger.info(
+        f"Tier 2: {total_eligible} comments eligible "
+        f"(have both NPRM and Final Rule document numbers, out of {total_no_response} without Tier 1 response)"
+    )
+
+    if total_eligible == 0:
+        logger.info("Tier 2: No eligible comments found. Skipping.")
+        # Log why: breakdown of no-response comments
+        no_nprm = no_response_with_links.filter(~_is_valid("nprm_document_number")).shape[0]
+        no_final = no_response_with_links.filter(~_is_valid("final_rule_document_number")).shape[0]
+        logger.info(f"Tier 2: Breakdown of ineligible: {no_nprm} missing NPRM doc, {no_final} missing Final Rule doc")
+        return
+
+    # ------------------------------------------------------------------
+    # Step 2: Fetch and cache document texts
+    # ------------------------------------------------------------------
+    # Identify unique document pairs to fetch
+    unique_pairs = (
+        eligible
+        .select(["nprm_document_number", "final_rule_document_number"])
+        .unique()
+    )
+
+    logger.info(
+        f"Tier 2: {len(unique_pairs)} unique document pair(s) to fetch "
+        f"(serving {total_eligible} comments)"
+    )
+
+    # Cache: (document_number) -> text
+    doc_text_cache: Dict[str, Optional[str]] = {}
+
+    # Collect all unique document numbers that need fetching
+    all_doc_nums: Set[str] = set()
+    for row in unique_pairs.iter_rows(named=True):
+        all_doc_nums.add(row["nprm_document_number"])
+        all_doc_nums.add(row["final_rule_document_number"])
+
+    logger.info(f"Tier 2: Fetching full text for {len(all_doc_nums)} unique document(s) from FR API")
+
+    fr_client = FederalRegisterClient(
+        max_retries=config.retries,
+        sleep_between=0.5,  # Rate limit: 0.5s between requests
+    )
+
+    fetch_failures: List[str] = []
+
+    try:
+        for doc_num in sorted(all_doc_nums):
+            if doc_num in doc_text_cache:
+                continue
+
+            logger.info(f"Tier 2: Fetching full text for document {doc_num}")
+            text = fr_client.fetch_document_full_text(doc_num, max_chars=50000)
+
+            if text is None:
+                logger.warning(f"Tier 2: FAILED to fetch text for document {doc_num}")
+                fetch_failures.append(doc_num)
+                doc_text_cache[doc_num] = None
+            else:
+                logger.info(f"Tier 2: Fetched {len(text)} chars for document {doc_num}")
+                doc_text_cache[doc_num] = text
+    finally:
+        fr_client.close()
+
+    if fetch_failures:
+        logger.warning(f"Tier 2: Failed to fetch text for {len(fetch_failures)} document(s): {fetch_failures}")
+
+    # ------------------------------------------------------------------
+    # Step 3: Prepare Tier 2 batch for Gemini
+    # ------------------------------------------------------------------
+    # Load raw comments for full text extraction
+    comments_raw_csv = get_comments_raw_path(config.year)
+    df_comments_raw = pl.read_csv(str(comments_raw_csv)) if comments_raw_csv.exists() else None
+
+    tier2_batch: List[tuple] = []  # (comment_text, nprm_text, final_text, metadata)
+    skipped_no_text: List[str] = []
+
+    for row in eligible.iter_rows(named=True):
+        comment_id = str(row["comment_id"])
+        nprm_doc_num = row["nprm_document_number"]
+        final_doc_num = row["final_rule_document_number"]
+
+        nprm_text = doc_text_cache.get(nprm_doc_num)
+        final_text = doc_text_cache.get(final_doc_num)
+
+        if nprm_text is None or final_text is None:
+            logger.warning(
+                f"Tier 2: Skipping comment {comment_id} -- "
+                f"missing text for {'NPRM ' + nprm_doc_num if nprm_text is None else ''}"
+                f"{'Final Rule ' + final_doc_num if final_text is None else ''}"
+            )
+            skipped_no_text.append(comment_id)
+            continue
+
+        # Get the comment text
+        comment_text_str = ""
+        if df_comments_raw is not None:
+            comment_row = df_comments_raw.filter(pl.col("comment_id") == comment_id)
+            if len(comment_row) > 0:
+                comment_dict = comment_row.to_dicts()[0]
+                comment_text_str = extract_full_comment_text(comment_dict)
+
+        if not comment_text_str:
+            # Fallback: try from the joined data
+            ct = row.get("comment_text", "")
+            if ct and str(ct).strip() and str(ct).strip().lower() != "none":
+                comment_text_str = str(ct).strip()
+
+        if not comment_text_str:
+            logger.warning(f"Tier 2: No comment text found for {comment_id}, skipping")
+            skipped_no_text.append(comment_id)
+            continue
+
+        metadata = {
+            "comment_id": comment_id,
+            "document_number": str(row.get("document_number", "N/A")),
+            "agency": str(row.get("agency", "N/A")),
+        }
+
+        tier2_batch.append((comment_text_str, nprm_text, final_text, metadata))
+
+    logger.info(
+        f"Tier 2: Prepared {len(tier2_batch)} comments for Gemini comparison"
+        f" (skipped {len(skipped_no_text)} due to missing text)"
+    )
+
+    if not tier2_batch:
+        logger.info("Tier 2: No comments to process after text filtering. Done.")
+        return
+
+    # ------------------------------------------------------------------
+    # Step 4: Send to Gemini for Tier 2 comparison
+    # ------------------------------------------------------------------
+    logger.info(f"Tier 2: Sending {len(tier2_batch)} comments to Gemini for NPRM vs Final Rule comparison")
+
+    tier2_results = asyncio.run(
+        tracker.track_tier2_batch(tier2_batch, max_concurrency=config.gemini_max_concurrency)
+    )
+
+    # ------------------------------------------------------------------
+    # Step 5: Merge Tier 2 results back into the responses CSV
+    # ------------------------------------------------------------------
+    logger.info(f"Tier 2: Processing {len(tier2_results)} results")
+
+    # Build a mapping: comment_id -> tier2 result dict
+    tier2_map: Dict[str, Dict[str, str]] = {}
+    for comment_id, parsed, raw in tier2_results:
+        tier2_map[comment_id] = {
+            "tier2_acceptance_status": parsed.get("acceptance_status", "UNCLEAR"),
+            "tier2_confidence": parsed.get("confidence", "0.0"),
+            "tier2_text_change_summary": parsed.get("text_change_summary", ""),
+        }
+
+    # Propagate Tier 2 results to duplicates if applicable
+    if df_raw is not None and "is_canonical" in df_raw.columns:
+        duplicate_groups = df_raw.filter(
+            pl.col("duplicate_group_id").is_not_null()
+            & (pl.col("is_canonical") == False)
+        )
+        for row in duplicate_groups.iter_rows(named=True):
+            dup_id = str(row["comment_id"])
+            canonical_id = str(row["canonical_comment_id"])
+            if canonical_id in tier2_map and dup_id not in tier2_map:
+                tier2_map[dup_id] = tier2_map[canonical_id].copy()
+
+    # Reload the responses CSV and add Tier 2 columns
+    df_responses = pl.read_csv(str(responses_csv))
+
+    # Initialize Tier 2 columns if they don't exist
+    for col in ["tier2_acceptance_status", "tier2_confidence", "tier2_text_change_summary"]:
+        if col not in df_responses.columns:
+            df_responses = df_responses.with_columns(
+                pl.lit(None).cast(pl.Utf8).alias(col)
+            )
+
+    # Update rows that have Tier 2 results
+    tier2_updated_count = 0
+    # Build new column values using when/then
+    comment_ids_with_tier2 = list(tier2_map.keys())
+
+    if comment_ids_with_tier2:
+        # Create a small DataFrame with tier2 results for joining
+        tier2_rows = [
+            {
+                "comment_id": cid,
+                "t2_acceptance_status": vals["tier2_acceptance_status"],
+                "t2_confidence": vals["tier2_confidence"],
+                "t2_text_change_summary": vals["tier2_text_change_summary"],
+            }
+            for cid, vals in tier2_map.items()
+        ]
+        df_tier2 = pl.DataFrame(tier2_rows)
+
+        # Join and coalesce
+        df_merged = df_responses.join(df_tier2, on="comment_id", how="left")
+
+        df_merged = df_merged.with_columns([
+            pl.coalesce([
+                pl.col("t2_acceptance_status"),
+                pl.col("tier2_acceptance_status"),
+            ]).alias("tier2_acceptance_status"),
+            pl.coalesce([
+                pl.col("t2_confidence"),
+                pl.col("tier2_confidence"),
+            ]).alias("tier2_confidence"),
+            pl.coalesce([
+                pl.col("t2_text_change_summary"),
+                pl.col("tier2_text_change_summary"),
+            ]).alias("tier2_text_change_summary"),
+        ])
+
+        # Drop temporary join columns
+        df_merged = df_merged.drop(["t2_acceptance_status", "t2_confidence", "t2_text_change_summary"])
+
+        tier2_updated_count = len(df_tier2.filter(pl.col("comment_id").is_in(df_responses["comment_id"].to_list())))
+
+        df_responses = df_merged
+
+    # Backup existing CSV before Tier 2 merge to prevent data loss
+    import shutil
+    if responses_csv.exists():
+        backup_path = responses_csv.with_suffix(f".pre_tier2_backup.csv")
+        shutil.copy2(responses_csv, backup_path)
+        logger.info(f"Tier 2: Backed up existing responses to {backup_path.name}")
+
+    # Write back
+    df_responses.write_csv(str(responses_csv))
+    logger.info(f"Tier 2: Updated {tier2_updated_count} comment(s) in {responses_csv.name}")
+
+    # ------------------------------------------------------------------
+    # Step 6: Log Tier 2 summary
+    # ------------------------------------------------------------------
+    log_banner(logger, "TIER 2 SUMMARY")
+    logger.info(f"  Comments with no Tier 1 response: {total_no_response}")
+    logger.info(f"  Tier 2 eligible (have NPRM + Final Rule doc pairs): {total_eligible}")
+    logger.info(f"  Skipped (missing document text): {len(skipped_no_text)}")
+    logger.info(f"  Processed by Gemini: {len(tier2_results)}")
+    logger.info(f"  Updated in CSV: {tier2_updated_count}")
+
+    if tier2_results:
+        # Acceptance status distribution
+        status_counts: Dict[str, int] = {}
+        for _, parsed, _ in tier2_results:
+            status = parsed.get("acceptance_status", "UNCLEAR")
+            status_counts[status] = status_counts.get(status, 0) + 1
+
+        logger.info(f"\n  Tier 2 acceptance status distribution:")
+        for status in ["ACCEPTED", "REJECTED", "PARTIAL", "UNCLEAR"]:
+            count = status_counts.get(status, 0)
+            pct = 100.0 * count / len(tier2_results) if tier2_results else 0
+            logger.info(f"    {status}: {count} ({pct:.1f}%)")
 
 
 def main() -> int:

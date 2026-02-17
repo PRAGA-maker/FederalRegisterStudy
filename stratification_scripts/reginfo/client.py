@@ -80,6 +80,11 @@ LIFECYCLE_STAGES = [
 ]
 
 
+# Accumulates all unique timetable action types seen across the entire run.
+# Inspect after pipeline completes: from stratification_scripts.reginfo.client import ALL_OBSERVED_ACTIONS
+ALL_OBSERVED_ACTIONS: set = set()
+
+
 class RegInfoClient:
     """
     Client for fetching Unified Agenda data from reginfo.gov.
@@ -404,26 +409,23 @@ class RegInfoClient:
         # Extract timetable entries from HTML table rows:
         #   <td>Action</td><td>Date</td><td>Citation</td>
         td_pattern = r"<td[^>]*>\s*([\w][^<]*?)\s*(?:&nbsp;)?\s*</td>\s*<td[^>]*>\s*(\d{1,2}/\d{1,2}/\d{4})\s*(?:&nbsp;)?\s*</td>"
-        known_actions = {
-            # Core milestones
+        # Reference set of action types the parser previously recognized.
+        # Used ONLY for logging — no filtering. All valid <td>action</td><td>date</td>
+        # pairs are now accepted regardless of action name.
+        _previously_known_actions = {
             "anprm", "nprm", "final rule", "final action", "interim final",
             "withdrawn", "direct final",
-            # Comment period management
             "nprm comment period reopened", "nprm comment period end",
             "nprm comment period extended", "nprm comment period extended end",
             "nprm comment period reopened end",
             "nprm extended comment period end",
             "nprm comment period reopened; corrections",
             "nprm comment period reopened; corrections end",
-            # NPRM variants
             "second nprm", "supplemental nprm",
             "second nprm comment period end", "supplemental nprm comment period end",
-            # Effective date actions
             "final action effective", "final rule effective",
             "final rule; delay of effective date", "other/delayed effective date",
-            # Pre-rule
             "notice of availability",
-            # Omnibus/standing programs
             "actions will continue through",
         }
         existing_entries = set()
@@ -435,10 +437,12 @@ class RegInfoClient:
             if not raw_action:
                 continue
 
-            # Check known_actions; also accept "Duplicate of XXXX-XXXX" pattern
             action_lower = raw_action.lower()
-            if action_lower not in known_actions and not action_lower.startswith("duplicate of"):
-                continue
+            ALL_OBSERVED_ACTIONS.add(raw_action.upper())
+
+            # Log previously-unknown action types at DEBUG level for tracking
+            if action_lower not in _previously_known_actions and not action_lower.startswith("duplicate of"):
+                logger.debug(f"Timetable action (new): {raw_action!r}")
 
             # Handle 00-day placeholder (month-level precision from omnibus RINs)
             date_parts = date_str.split("/")
@@ -798,11 +802,30 @@ class RegInfoClient:
 
     @staticmethod
     def _safe_days_between(date_a: Optional[str], date_b: Optional[str]) -> Optional[int]:
-        """Compute (date_b - date_a) in days, or None if either is missing/malformed."""
+        """Compute (date_b - date_a) in days, or None if either is missing/malformed.
+
+        Skips computation if:
+        - date_b is in the future (projected timetable entry, not an actual event)
+        - date_b < date_a (reversed-order events, e.g. Direct Final before NPRM)
+        """
         if not date_a or not date_b:
             return None
         try:
-            return (datetime.fromisoformat(date_b) - datetime.fromisoformat(date_a)).days
+            dt_a = datetime.fromisoformat(date_a)
+            dt_b = datetime.fromisoformat(date_b)
+            if dt_b > datetime.now():
+                logger.debug(
+                    f"Skipping duration: end date {date_b} is in the future (projected)"
+                )
+                return None
+            days = (dt_b - dt_a).days
+            if days < 0:
+                logger.debug(
+                    f"Skipping duration: negative result ({days} days) "
+                    f"suggests reversed event order ({date_a} -> {date_b})"
+                )
+                return None
+            return days
         except ValueError:
             return None
 

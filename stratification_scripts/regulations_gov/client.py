@@ -31,6 +31,7 @@ logger = get_logger(__name__)
 
 # API endpoints
 REGS_DOC_URL = "https://api.regulations.gov/v4/documents/{documentId}"
+REGS_DOCS_SEARCH_URL = "https://api.regulations.gov/v4/documents"
 REGS_COMMENTS_URL = "https://api.regulations.gov/v4/comments"
 REGS_COMMENT_DETAIL_URL = "https://api.regulations.gov/v4/comments/{commentId}"
 
@@ -400,7 +401,7 @@ class RegsGovClient:
         # Fetch
         data = self.request_json(
             REGS_COMMENTS_URL,
-            params={"filter[commentOnId]": object_id, "page[size]": 1},
+            params={"filter[commentOnId]": object_id, "page[size]": 5},
         )
         
         if not data:
@@ -437,6 +438,119 @@ class RegsGovClient:
         
         attrs = (data.get("data") or {}).get("attributes") or {}
         return attrs.get("objectId") or attrs.get("objectID")
+
+    def find_object_ids_for_docket(
+        self,
+        docket_id: str,
+    ) -> List[str]:
+        """
+        Find objectIds for non-comment documents in a docket.
+
+        Queries /v4/documents?filter[docketId]=... to find the primary
+        rulemaking documents (Rules, Proposed Rules, Notices) — excluding
+        public submissions (which are comments themselves).
+
+        Args:
+            docket_id: Regulations.gov docket ID (e.g., "EPA-R09-OAR-2012-0936")
+
+        Returns:
+            List of objectId strings for commentable documents.
+        """
+        if not docket_id:
+            return []
+
+        data = self.request_json(
+            REGS_DOCS_SEARCH_URL,
+            params={
+                "filter[docketId]": docket_id,
+                "page[size]": 25,
+            },
+        )
+        if not data:
+            return []
+
+        object_ids = []
+        for item in data.get("data") or []:
+            attrs = item.get("attributes") or {}
+            doc_type = attrs.get("documentType", "")
+            # Skip public submissions — those are comments, not commentable docs
+            if doc_type == "Public Submission":
+                continue
+            obj_id = attrs.get("objectId") or attrs.get("objectID")
+            if obj_id:
+                object_ids.append(obj_id)
+
+        return object_ids
+
+    def resolve_docket_documents(
+        self,
+        docket_id: str,
+    ) -> List[Dict[str, Any]]:
+        """
+        Find non-submission documents in a docket with full metadata.
+
+        Like find_object_ids_for_docket but returns richer data needed for
+        Step 1 docket-to-document resolution: document_id, objectId,
+        documentType, and commentCount.
+
+        Args:
+            docket_id: Regulations.gov docket ID (e.g., "FDA-2012-N-1148")
+
+        Returns:
+            List of dicts with keys: document_id, object_id, document_type,
+            comment_count, title.  Sorted by comment_count descending so
+            the most-commented document is first.
+        """
+        if not docket_id:
+            return []
+
+        data = self.request_json(
+            REGS_DOCS_SEARCH_URL,
+            params={
+                "filter[docketId]": docket_id,
+                "page[size]": 25,
+            },
+        )
+        if not data:
+            return []
+
+        docs = []
+        for item in data.get("data") or []:
+            attrs = item.get("attributes") or {}
+            doc_type = attrs.get("documentType", "")
+            if doc_type == "Public Submission":
+                continue
+            obj_id = attrs.get("objectId") or attrs.get("objectID")
+            doc_id = item.get("id") or attrs.get("documentId")
+            cc = attrs.get("commentCount")
+            if not isinstance(cc, int):
+                cc = None
+            if obj_id or doc_id:
+                docs.append({
+                    "document_id": doc_id,
+                    "object_id": obj_id,
+                    "document_type": doc_type,
+                    "comment_count": cc,
+                    "title": attrs.get("title", ""),
+                })
+
+        # Prefer primary commentable documents over supporting material.
+        # When comment_count is available (rare in list endpoint), use it
+        # as tiebreaker within the same priority tier.
+        _DOC_TYPE_PRIORITY = {
+            "Rule": 0,
+            "Proposed Rule": 0,
+            "Notice": 1,
+            "Other": 2,
+            "Supporting & Related Material": 3,
+        }
+        docs.sort(
+            key=lambda d: (
+                _DOC_TYPE_PRIORITY.get(d.get("document_type", ""), 2),
+                -(d.get("comment_count") or 0),
+            ),
+        )
+        return docs
 
     def iter_comments_for_object(
         self,

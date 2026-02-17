@@ -18,10 +18,18 @@ Example:
 
 from __future__ import annotations
 
+import dataclasses
 import sys
 from typing import List, Optional
 
-from stratification_scripts.config import PipelineConfig, get_regs_api_keys, get_openai_api_key
+from stratification_scripts.config import (
+    PipelineConfig,
+    get_regs_api_keys,
+    get_openai_api_key,
+    get_fr_csv_path,
+    get_comments_raw_path,
+    get_makeup_data_path,
+)
 from stratification_scripts.logging_utils import (
     get_logger,
     log_banner,
@@ -32,6 +40,54 @@ from stratification_scripts.logging_utils import (
 )
 
 logger = get_logger(__name__)
+
+
+# Maps each step to (required_input_file_getter, prerequisite_step_name)
+_STEP_DEPENDENCIES = {
+    "mine": (get_fr_csv_path, "federal_register_{year}_comments.csv", "fetch"),
+    "deduplicate": (get_comments_raw_path, "comments_raw_{year}.csv", "mine"),
+    "classify": (get_comments_raw_path, "comments_raw_{year}.csv", "mine"),
+    "track_responses": (get_makeup_data_path, "makeup_data_{year}.csv", "classify"),
+    "plot": (get_makeup_data_path, "makeup_data_{year}.csv", "classify"),
+}
+
+
+def _check_step_inputs(step: str, year: int, steps: List[str]) -> None:
+    """
+    Check that required input files exist before running a step.
+
+    If the prerequisite step is also in the current run's step list and
+    comes before this step, the file is expected to be created during this
+    run, so the check is skipped.
+
+    Args:
+        step: The step about to run.
+        year: The year being processed.
+        steps: Full list of steps in this pipeline run.
+
+    Raises:
+        FileNotFoundError: If a required input file is missing.
+    """
+    if step not in _STEP_DEPENDENCIES:
+        return
+
+    path_fn, file_template, prereq_step = _STEP_DEPENDENCIES[step]
+    input_path = path_fn(year)
+
+    # If the prerequisite step is in the same run and comes before this step,
+    # it should create the file -- skip the check.
+    if prereq_step in steps:
+        prereq_idx = steps.index(prereq_step)
+        current_idx = steps.index(step)
+        if prereq_idx < current_idx:
+            return
+
+    if not input_path.exists():
+        file_name = file_template.format(year=year)
+        raise FileNotFoundError(
+            f"Step '{step}' requires '{file_name}' which does not exist at "
+            f"{input_path}. Run the '{prereq_step}' step first."
+        )
 
 
 def run_year(
@@ -94,9 +150,10 @@ def run_year(
         
         # Step 2: Mine comments
         if "mine" in steps:
+            _check_step_inputs("mine", year, steps)
             current_step += 1
             log_step(logger, current_step, total_steps, "Mining comments")
-            
+
             # Verify API keys are available
             api_keys = get_regs_api_keys(required=True)
             logger.info(f"Using {len(api_keys)} Regulations.gov API key(s)")
@@ -108,6 +165,7 @@ def run_year(
         
         # Step 3: Deduplicate comments
         if "deduplicate" in steps:
+            _check_step_inputs("deduplicate", year, steps)
             current_step += 1
             log_step(logger, current_step, total_steps, "Deduplicating comments")
             
@@ -118,6 +176,7 @@ def run_year(
         
         # Step 4: Classify comments
         if "classify" in steps:
+            _check_step_inputs("classify", year, steps)
             current_step += 1
             log_step(logger, current_step, total_steps, "Classifying comment makeup")
             
@@ -131,6 +190,7 @@ def run_year(
         
         # Step 5: Track agency responses
         if "track_responses" in steps:
+            _check_step_inputs("track_responses", year, steps)
             current_step += 1
             log_step(logger, current_step, total_steps, "Tracking agency responses")
             
@@ -145,6 +205,7 @@ def run_year(
         
         # Step 6: Generate plots
         if "plot" in steps:
+            _check_step_inputs("plot", year, steps)
             current_step += 1
             log_step(logger, current_step, total_steps, "Generating visualizations")
             
@@ -191,28 +252,10 @@ def run_many(
     failed_years = []
     
     for year in years:
-        # Create year-specific config
-        year_config = PipelineConfig(
-            year=year,
-            limit_docs=config.limit_docs,
-            test_mode=config.test_mode,
-            concurrent_workers=config.concurrent_workers,
-            retries=config.retries,
-            fetch_strategy=config.fetch_strategy,
-            max_comments_per_doc=config.max_comments_per_doc,
-            openai_model=config.openai_model,
-            max_concurrency=config.max_concurrency,
-            sample_threshold=config.sample_threshold,
-            sampling_seed=config.sampling_seed,
-            deduplication_threshold=config.deduplication_threshold,
-            deduplication_model=config.deduplication_model,
-            enable_deduplication=config.enable_deduplication,
-            fr_sleep=config.fr_sleep,
-            fr_detail_sleep=config.fr_detail_sleep,
-            per_key_hourly=config.per_key_hourly,
-            verbose=config.verbose,
-            quiet=config.quiet,
-        )
+        # Create year-specific config using dataclasses.replace() to preserve
+        # ALL fields (including Gemini settings, lifecycle settings, etc.)
+        # instead of manually copying a subset of fields.
+        year_config = dataclasses.replace(config, year=year)
         
         if run_year(year_config, steps):
             success_count += 1
@@ -231,31 +274,47 @@ def run_many(
     return True
 
 
-def validate_environment() -> bool:
+def validate_environment(steps: Optional[List[str]] = None) -> bool:
     """
     Validate that required environment variables are set.
-    
+
+    Args:
+        steps: Optional list of pipeline steps that will be run.
+               Used to determine which API keys are required.
+
     Returns:
         True if all required variables are set, False otherwise.
     """
-    from stratification_scripts.exceptions import ConfigurationError
-    
+    # NOTE: config.py defines its own ConfigurationError, which is what
+    # get_regs_api_keys / get_openai_api_key / get_gemini_api_key raise.
+    # exceptions.py has a separate ConfigurationError(PipelineError) that
+    # would NOT catch the config.py version.
+    from stratification_scripts.config import ConfigurationError
+
     errors = []
-    
+
     try:
         get_regs_api_keys(required=True)
     except ConfigurationError as e:
         errors.append(str(e))
-    
+
     try:
         get_openai_api_key(required=True)
     except ConfigurationError as e:
         errors.append(str(e))
-    
+
+    # Check Gemini key when track_responses step is included
+    if steps and "track_responses" in steps:
+        from stratification_scripts.config import get_gemini_api_key
+        try:
+            get_gemini_api_key(required=True)
+        except ConfigurationError as e:
+            errors.append(str(e))
+
     if errors:
         for error in errors:
             logger.error(error)
         return False
-    
+
     return True
 

@@ -49,6 +49,7 @@ from stratification_scripts.logging_utils import (
     log_banner,
     setup_logging,
 )
+from stratification_scripts.federal_register.client import normalize_docket_id
 from stratification_scripts.regulations_gov.client import RegsGovClient
 
 logger = get_logger(__name__)
@@ -347,13 +348,40 @@ def load_documents(
                 f"Requested year {requested_year}, but CSV contains data from {most_common_year}"
             )
 
-    # Filter to documents with comments
-    if "regs_document_id" in df_docs.columns and "comment_count" in df_docs.columns:
+    # Filter to documents that we can query for comments.
+    # Primary path: regs_document_id is set and comment_count > 0
+    # Fallback path: docket_id is set (for docs where FR API didn't provide
+    # a regs_document_id — we resolve via Regs.gov docket lookup)
+    has_regs_id = "regs_document_id" in df_docs.columns
+    has_docket = "docket_id" in df_docs.columns
+    has_count = "comment_count" in df_docs.columns
+
+    if has_regs_id and has_count and has_docket:
+        known_comments = (
+            pl.col("regs_document_id").is_not_null() & (pl.col("comment_count") > 0)
+        )
+        # Docket fallback: docs with docket_id but no regs_document_id
+        # (comment_count unknown — Step 1 couldn't query without document_id)
+        docket_fallback = (
+            pl.col("regs_document_id").is_null()
+            & pl.col("docket_id").is_not_null()
+            & (pl.col("docket_id") != "")
+        )
+        n_before = len(df_docs)
+        df_docs = df_docs.filter(known_comments | docket_fallback)
+        n_known = len(df_docs.filter(known_comments))
+        n_docket = len(df_docs.filter(docket_fallback))
+        logger.info(
+            f"Filtered to {len(df_docs)} mineable documents "
+            f"({n_known} with known comments, {n_docket} via docket fallback, "
+            f"{n_before - len(df_docs)} excluded)"
+        )
+    elif has_regs_id and has_count:
         df_docs = df_docs.filter(
             (pl.col("regs_document_id").is_not_null()) & (pl.col("comment_count") > 0)
         )
         logger.info(f"Found {len(df_docs)} documents with comments > 0")
-    elif "regs_document_id" in df_docs.columns:
+    elif has_regs_id:
         df_docs = df_docs.filter(pl.col("regs_document_id").is_not_null())
     else:
         logger.error("CSV missing regs_document_id column")
@@ -440,20 +468,32 @@ def collect_comment_ids_for_document(
     """
     doc_number = row.get("document_number")
     regs_doc_id = row.get("regs_document_id")
-    
+    docket_id = normalize_docket_id(row.get("docket_id"))
+
     if not regs_doc_id:
         regs_doc_id = get_regs_document_id_via_fr(doc_number, retries)
-    
-    if not regs_doc_id:
-        return []
 
-    object_id = client.get_object_id_for_document(regs_doc_id)
+    # Resolve object_id: primary path via document_id, fallback via docket_id
+    object_id = None
+    if regs_doc_id:
+        object_id = client.get_object_id_for_document(regs_doc_id)
+
+    if not object_id and docket_id:
+        # Docket fallback: find commentable documents in the docket
+        object_ids = client.find_object_ids_for_docket(docket_id)
+        if object_ids:
+            object_id = object_ids[0]
+            logger.debug(
+                f"Resolved {doc_number} via docket {docket_id} "
+                f"({len(object_ids)} docs found)"
+            )
+
     if not object_id:
         return []
 
     comment_ids: List[str] = []
     limit_for_doc = max_comments_per_doc if max_comments_per_doc else None
-    
+
     try:
         for item in client.iter_comments_for_object(object_id, limit_comments=limit_for_doc):
             if not isinstance(item, dict):
@@ -578,12 +618,12 @@ def build_two_stage_sample_plan(
             doc_row = doc_rows.get(doc_num)
             if not doc_row:
                 continue
-            
+
             comment_ids = collect_comment_ids_for_document(
                 doc_row, client, existing_ids, retries, max_comments_per_doc,
                 cache_payloads=comment_id_to_payload
             )
-            
+
             if not comment_ids:
                 continue
             
@@ -612,7 +652,17 @@ def build_two_stage_sample_plan(
         
         if total_stratum_ids == 0:
             continue
-        
+
+        # Docket-fallback docs have NULL comment_count in the CSV, which
+        # produces target_comments=0 via sum(NULLs)=0. Now that we've
+        # collected real IDs, recalculate the target from actual counts.
+        if target_comments == 0 and total_stratum_ids > 0:
+            target_comments = calculate_sample_size(total_stratum_ids)
+            logger.info(
+                f"Stratum had unknown comment counts -- recalculated "
+                f"target from {total_stratum_ids} collected IDs: {target_comments}"
+            )
+
         if target_comments is None or total_stratum_ids <= target_comments:
             for doc_num, ids in stratum_ids_by_doc.items():
                 sampled_doc_to_ids[doc_num] = ids
@@ -909,7 +959,6 @@ def main() -> int:
     config = PipelineConfig(
         year=args.year,
         limit_docs=limit_docs,
-        test_mode=args.test,
         max_comments_per_doc=args.max_comments_per_doc,
         retries=args.retries,
         concurrent_workers=args.concurrent_workers,

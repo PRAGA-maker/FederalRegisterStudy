@@ -322,7 +322,7 @@ class PipelineConfig:
         limit_docs: Max documents to process (None = all)
         concurrent_workers: Number of concurrent API workers
         retries: Max retry attempts for API calls
-        fetch_strategy: Comment sampling strategy (stratified, smart, all, sample)
+        fetch_strategy: Comment sampling strategy ("all" or "stratified")
         max_comments_per_doc: Skip documents with more comments than this
         openai_model: OpenAI model for classification
         max_concurrency: Max concurrent OpenAI requests
@@ -345,7 +345,6 @@ class PipelineConfig:
     # General settings
     year: int = 2024
     limit_docs: Optional[int] = None
-    test_mode: bool = False
     verbose: bool = False
     quiet: bool = False
     
@@ -378,8 +377,12 @@ class PipelineConfig:
     gemini_max_concurrency: int = 150
     enable_search_grounding: bool = True
     max_comment_pages: int = 30
-    #gemini_thinking_level: Optional[str] = None  # "minimal"|"low"|"medium"|"high"
-    gemini_thinking_level: Optional[str] = "medium"
+    # Thinking level for Gemini 3 models. Valid SDK enum values: "LOW", "MEDIUM", "HIGH",
+    # "MINIMAL" (case-insensitive). Default None because thinking + Google Search tools +
+    # structured JSON output is an unsupported combination in the Gemini API
+    # (see googleapis/python-genai#867). Set to a value only if search grounding
+    # is disabled or structured output is not used.
+    gemini_thinking_level: Optional[str] = None
 
     # Lifecycle tracking settings
     enable_lifecycle_tracking: bool = True

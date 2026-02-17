@@ -42,17 +42,18 @@ logger = get_logger(__name__)
 # =========================
 
 ResponseFound = Literal["yes", "no", "uncertain"]
-AgencyDecision = Literal["accept", "reject", "uncertain"]
+AgencyDecision = Literal["accept", "reject", "partial", "uncertain"]
+Tier2AcceptanceStatus = Literal["ACCEPTED", "REJECTED", "PARTIAL", "UNCLEAR"]
 
 
 class AgencyResponse(BaseModel):
     """Structured response schema for agency response tracking."""
-    
+
     response_found: ResponseFound = Field(
         description='Whether a response exists: "yes" | "no" | "uncertain"'
     )
     agency_decision: AgencyDecision = Field(
-        description='Only meaningful if response_found="yes": "accept" | "reject" | "uncertain"'
+        description='Only meaningful if response_found="yes": "accept" | "reject" | "partial" | "uncertain"'
     )
     response_text: str = Field(
         description='Agency response text, or "N/A" if none found'
@@ -63,11 +64,11 @@ class AgencyResponse(BaseModel):
     reasoning: str = Field(
         description="Brief explanation of determination (1-2 sentences)"
     )
-    
+
     def normalized(self) -> Dict[str, str]:
         """Normalize output for CSV storage."""
         d = self.model_dump()
-        
+
         # Enforce decision consistency
         if d["response_found"] != "yes":
             d["agency_decision"] = "uncertain"
@@ -75,11 +76,43 @@ class AgencyResponse(BaseModel):
                 d["response_text"] = "N/A"
             if not d["response_location"] or d["response_location"].lower() in ["", "none", "null"]:
                 d["response_location"] = "N/A"
-        
+
         # Cap response_text length to reduce CSV bloat (keep at ~4000 chars)
         if len(d["response_text"]) > 4000:
             d["response_text"] = d["response_text"][:4000] + " ...[truncated]"
-        
+
+        return d
+
+
+class Tier2Response(BaseModel):
+    """Structured response schema for Tier 2 NPRM vs Final Rule text comparison."""
+
+    acceptance_status: Tier2AcceptanceStatus = Field(
+        description=(
+            'Whether the comment concern was addressed by changes between proposed and final rule: '
+            '"ACCEPTED" | "REJECTED" | "PARTIAL" | "UNCLEAR"'
+        )
+    )
+    confidence: float = Field(
+        description="Confidence score from 0.0 to 1.0",
+        ge=0.0,
+        le=1.0,
+    )
+    text_change_summary: str = Field(
+        description=(
+            "1-2 sentence summary describing what changed between proposed and final rule "
+            "relevant to the comment, or why the determination was made"
+        )
+    )
+
+    def normalized(self) -> Dict[str, str]:
+        """Normalize output for CSV storage."""
+        d = self.model_dump()
+        # Cap summary length
+        if len(d["text_change_summary"]) > 2000:
+            d["text_change_summary"] = d["text_change_summary"][:2000] + " ...[truncated]"
+        # Ensure confidence is a string for CSV
+        d["confidence"] = str(d["confidence"])
         return d
 
 
@@ -100,13 +133,17 @@ TASK:
 1. Use web grounding (search) to find whether the agency responded to THIS specific comment.
    Look for Federal Register notices, response-to-comments PDFs, agency docket materials, or official response documents.
 2. Decide if a response exists.
-3. If a response exists, classify whether the agency accepted the comment's suggestion, rejected it, or the disposition is unclear.
+3. If a response exists, classify whether the agency accepted the comment's suggestion, rejected it, partially accepted it, or the disposition is unclear.
 4. Provide the response text (can be detailed, up to several paragraphs) and where you found it.
 
 OUTPUT REQUIREMENTS:
 - You MUST return your response as valid JSON matching the required schema.
 - The response_found field must be exactly one of: "yes", "no", or "uncertain"
-- The agency_decision field must be exactly one of: "accept", "reject", or "uncertain"
+- The agency_decision field must be exactly one of: "accept", "reject", "partial", or "uncertain"
+  - "accept" = the agency fully accepted the comment's recommendation or suggestion
+  - "reject" = the agency fully rejected the comment's recommendation or suggestion
+  - "partial" = the agency accepted some aspects of the comment and rejected others, or made partial modifications in response to the comment (a genuinely mixed decision)
+  - "uncertain" = cannot determine what the agency decided (unknown disposition)
 - If response_found is "no" or "uncertain", set agency_decision to "uncertain"
 - response_text should contain the actual agency response text, or "N/A" if none found
 - response_location should contain the URL or location where you found the response, or "N/A" if none found
@@ -119,6 +156,48 @@ IMPORTANT:
 - If a document was withheld or otherwise materially changed for non-comment related reasons, this is a "no", not "uncertain". 
 - If multiple responses exist, write out explicitly a joined text of all in order for the most relevant one or one that directly is connected to the comment we give. 
 - Ensure all string fields are properly escaped for JSON format
+"""
+
+
+# Tier 2: NPRM vs Final Rule text comparison prompt
+TIER2_COMPARISON_PROMPT = """You are comparing a public comment against the proposed rule (NPRM) and the final rule to determine whether the comment's concern was addressed.
+
+COMMENT INFORMATION:
+- Comment ID: {comment_id}
+- Document Number: {document_number}
+- Agency: {agency}
+
+COMMENT TEXT:
+{comment_text}
+
+PROPOSED RULE (NPRM) TEXT (may be truncated):
+{nprm_text}
+
+FINAL RULE TEXT (may be truncated):
+{final_rule_text}
+
+TASK:
+1. Read the public comment and understand what concern, suggestion, or objection it raises.
+2. Compare the proposed rule text (NPRM) with the final rule text.
+3. Determine whether the changes between proposed and final rule address the comment's concern.
+4. Consider the final rule preamble -- agencies typically discuss and respond to public comments in the preamble section of the final rule (often under headings like "Discussion of Comments" or "Response to Comments").
+
+DETERMINATION CRITERIA:
+- ACCEPTED: The final rule made changes that align with what the comment suggested or requested. The concern was addressed favorably.
+- REJECTED: The final rule explicitly or implicitly did not adopt the comment's suggestion. The agency kept the provision as proposed, or the preamble explains why the suggestion was not adopted.
+- PARTIAL: Some aspects of the comment were addressed but not all, or the change was a compromise.
+- UNCLEAR: Cannot determine from the available text whether the comment was addressed. The text may be truncated, the comment may be off-topic, or the relevant section may not be present.
+
+OUTPUT REQUIREMENTS:
+- acceptance_status: Exactly one of "ACCEPTED", "REJECTED", "PARTIAL", or "UNCLEAR"
+- confidence: A float from 0.0 to 1.0 indicating how confident you are in the determination
+- text_change_summary: 1-2 sentences describing what specifically changed (or didn't change) between proposed and final rule relevant to this comment
+
+IMPORTANT:
+- Focus on substantive changes, not formatting or numbering changes
+- If the comment is very general or off-topic relative to the rule, mark as UNCLEAR with low confidence
+- If the final rule preamble explicitly discusses and responds to the comment's concern, that is strong evidence
+- Be conservative: if unsure, prefer UNCLEAR over guessing
 """
 
 
@@ -427,9 +506,12 @@ class GeminiResponseTracker:
                     )
                     
                 except ValidationError as ve:
-                    # Schema validation failed - not retryable
+                    # Schema validation failed - not retryable.
+                    # Use VALIDATION_ERROR prefix so downstream analysis can
+                    # distinguish API/schema failures from genuine uncertainty.
                     logger.warning(
-                        f"Schema validation failed for {comment_metadata.get('comment_id')}: {ve}. "
+                        f"VALIDATION_ERROR: Pydantic schema validation failed for "
+                        f"{comment_metadata.get('comment_id')}: {ve}. "
                         f"Response text preview: {raw_text[:500] if 'raw_text' in locals() and raw_text else 'not found'}"
                     )
                     return (
@@ -439,7 +521,7 @@ class GeminiResponseTracker:
                             agency_decision="uncertain",
                             response_text="N/A",
                             response_location="N/A",
-                            reasoning="Structured output validation failed",
+                            reasoning="VALIDATION_ERROR: Structured output validation failed",
                         ).normalized(),
                         "ERROR: schema_validation_failed",
                     )
@@ -540,6 +622,246 @@ class GeminiResponseTracker:
 
         results: List[Tuple[str, Dict[str, str], str]] = []
         for task in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc="Tracking responses"):
+            results.append(await task)
+
+        return results
+
+    async def track_tier2_response(
+        self,
+        comment_text: str,
+        nprm_text: str,
+        final_rule_text: str,
+        comment_metadata: Dict[str, str],
+        semaphore: Optional[asyncio.Semaphore] = None,
+    ) -> Tuple[str, Dict[str, str], str]:
+        """
+        Tier 2: Compare NPRM vs Final Rule text to determine if a comment was addressed.
+
+        This method does NOT use Google Search grounding (unlike Tier 1). Instead,
+        it compares the provided document texts directly.
+
+        Args:
+            comment_text: Full comment text
+            nprm_text: Full text of the proposed rule (NPRM)
+            final_rule_text: Full text of the final rule
+            comment_metadata: Dict with comment_id, document_number, agency
+            semaphore: Optional semaphore for concurrency control
+
+        Returns:
+            Tuple of (comment_id, parsed_tier2_dict, raw_model_response)
+        """
+        # Truncate comment text
+        max_comment_chars = 10000
+        if len(comment_text) > max_comment_chars:
+            comment_text = comment_text[:max_comment_chars] + "\n\n[... truncated ...]"
+
+        # NPRM and final rule texts are pre-truncated by the caller, but enforce a safety limit
+        max_doc_chars = 55000
+        if len(nprm_text) > max_doc_chars:
+            nprm_text = nprm_text[:max_doc_chars] + "\n\n[... truncated ...]"
+        if len(final_rule_text) > max_doc_chars:
+            final_rule_text = final_rule_text[:max_doc_chars] + "\n\n[... truncated ...]"
+
+        prompt = TIER2_COMPARISON_PROMPT.format(
+            comment_id=comment_metadata.get("comment_id", "N/A"),
+            document_number=comment_metadata.get("document_number", "N/A"),
+            agency=comment_metadata.get("agency", "N/A"),
+            comment_text=comment_text,
+            nprm_text=nprm_text,
+            final_rule_text=final_rule_text,
+        )
+
+        # Build a Tier 2-specific config WITHOUT search grounding
+        tier2_config = self._types.GenerateContentConfig(
+            temperature=0.2,
+            top_p=0.95,
+            max_output_tokens=10000,
+            tools=None,  # No Google Search for Tier 2
+            thinking_config=self._base_config.thinking_config,
+            response_mime_type="application/json",
+            response_schema=Tier2Response,
+        )
+
+        async def do_request() -> Tuple[str, Dict[str, str], str]:
+            backoff = 2.0
+            comment_id = comment_metadata.get("comment_id", "unknown")
+
+            for attempt in range(self.max_retries):
+                try:
+                    logger.debug(
+                        f"Tier 2 API call attempt {attempt+1}/{self.max_retries} for {comment_id}, "
+                        f"prompt_length={len(prompt)}"
+                    )
+
+                    # Use Content list format (consistent with Tier 1)
+                    contents_input = [self._types.Content(
+                        role="user",
+                        parts=[self._types.Part(text=prompt)]
+                    )]
+
+                    response = await self._client.aio.models.generate_content(
+                        model=self.model,
+                        contents=contents_input,
+                        config=tier2_config,
+                    )
+
+                    # Extract raw text
+                    raw_text = ""
+                    if hasattr(response, 'text'):
+                        raw_text = (response.text or "").strip()
+                    elif hasattr(response, 'candidates') and response.candidates:
+                        candidate = response.candidates[0]
+                        if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                            text_parts = [p.text for p in candidate.content.parts if hasattr(p, 'text')]
+                            raw_text = " ".join(text_parts).strip()
+
+                    # Try parsed structured output first
+                    parsed_obj = None
+                    if hasattr(response, 'parsed'):
+                        parsed_obj = response.parsed
+
+                    if parsed_obj is not None:
+                        if isinstance(parsed_obj, Tier2Response):
+                            parsed = parsed_obj.normalized()
+                        elif isinstance(parsed_obj, dict):
+                            parsed = Tier2Response.model_validate(parsed_obj).normalized()
+                        else:
+                            try:
+                                if hasattr(parsed_obj, '__dict__'):
+                                    parsed = Tier2Response.model_validate(parsed_obj.__dict__).normalized()
+                                elif hasattr(parsed_obj, 'model_dump'):
+                                    parsed = Tier2Response.model_validate(parsed_obj.model_dump()).normalized()
+                                else:
+                                    parsed = Tier2Response.model_validate_json(str(parsed_obj)).normalized()
+                            except Exception as parse_err:
+                                logger.warning(f"Tier 2: Failed to parse parsed_obj: {parse_err}")
+                                parsed_obj = None
+
+                    if parsed_obj is None:
+                        # Fallback: parse JSON from raw text
+                        if not raw_text:
+                            raise ValueError(f"Tier 2: Response has no text and no parsed object for {comment_id}")
+
+                        try:
+                            parsed = Tier2Response.model_validate_json(raw_text).normalized()
+                        except Exception as json_err:
+                            json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', raw_text, re.DOTALL)
+                            if json_match:
+                                try:
+                                    parsed = Tier2Response.model_validate_json(json_match.group(0)).normalized()
+                                except Exception:
+                                    raise ValueError(f"Tier 2: Failed to parse JSON: {json_err}") from json_err
+                            else:
+                                raise ValueError(f"Tier 2: Failed to parse JSON: {json_err}") from json_err
+
+                    logger.debug(f"Tier 2: Successfully parsed response for {comment_id}")
+                    return (comment_id, parsed, raw_text or "OK_JSON")
+
+                except ValidationError as ve:
+                    logger.warning(
+                        f"Tier 2: Schema validation failed for {comment_id}: {ve}"
+                    )
+                    return (
+                        comment_id,
+                        Tier2Response(
+                            acceptance_status="UNCLEAR",
+                            confidence=0.0,
+                            text_change_summary="Schema validation failed",
+                        ).normalized(),
+                        "ERROR: tier2_schema_validation_failed",
+                    )
+
+                except Exception as e:
+                    error_type = type(e).__name__
+                    error_msg = str(e)
+
+                    logger.error(
+                        f"Tier 2 API error for {comment_id} "
+                        f"(attempt {attempt+1}/{self.max_retries}): {error_type}: {error_msg}"
+                    )
+
+                    retryable = self._is_retryable_error(e)
+
+                    if attempt >= self.max_retries - 1 or not retryable:
+                        logger.warning(
+                            f"Tier 2: call failed (retryable={retryable}) after attempt {attempt+1}: "
+                            f"{error_type}: {error_msg}"
+                        )
+                        return (
+                            comment_id,
+                            Tier2Response(
+                                acceptance_status="UNCLEAR",
+                                confidence=0.0,
+                                text_change_summary=f"API error: {error_type}",
+                            ).normalized(),
+                            f"ERROR: {error_msg}",
+                        )
+
+                    jitter = random.uniform(0.5, 2.0)
+                    sleep_time = backoff + jitter
+                    if "429" in str(e).lower():
+                        sleep_time += 30.0
+
+                    await asyncio.sleep(sleep_time)
+                    backoff = min(backoff * 2, 120.0)
+
+            # Should not reach here
+            return (
+                comment_metadata.get("comment_id", "unknown"),
+                Tier2Response(
+                    acceptance_status="UNCLEAR",
+                    confidence=0.0,
+                    text_change_summary="API retries exhausted",
+                ).normalized(),
+                "ERROR: tier2_retries_exhausted",
+            )
+
+        if semaphore:
+            async with semaphore:
+                return await do_request()
+        return await do_request()
+
+    async def track_tier2_batch(
+        self,
+        items: List[Tuple[str, str, str, Dict[str, str]]],
+        max_concurrency: int = 10,
+    ) -> List[Tuple[str, Dict[str, str], str]]:
+        """
+        Tier 2: Process a batch of comment+document comparisons concurrently.
+
+        Args:
+            items: List of (comment_text, nprm_text, final_rule_text, metadata) tuples
+            max_concurrency: Maximum concurrent API calls
+
+        Returns:
+            List of (comment_id, parsed_tier2_dict, raw_response) tuples
+        """
+        if not items:
+            return []
+
+        semaphore = asyncio.Semaphore(max_concurrency)
+
+        async def run_single(
+            comment_text: str,
+            nprm_text: str,
+            final_rule_text: str,
+            metadata: Dict[str, str],
+        ):
+            return await self.track_tier2_response(
+                comment_text, nprm_text, final_rule_text, metadata, semaphore
+            )
+
+        tasks = [
+            asyncio.create_task(run_single(ct, nt, ft, meta))
+            for ct, nt, ft, meta in items
+        ]
+
+        results: List[Tuple[str, Dict[str, str], str]] = []
+        for task in tqdm(
+            asyncio.as_completed(tasks),
+            total=len(tasks),
+            desc="Tier 2 comparisons",
+        ):
             results.append(await task)
 
         return results

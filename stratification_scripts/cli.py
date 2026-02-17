@@ -224,7 +224,6 @@ Examples:
     # Create base config
     config = PipelineConfig(
         limit_docs=limit_docs,
-        test_mode=args.test,
         concurrent_workers=args.concurrent_workers,
         openai_model=args.model,
         fetch_strategy=args.fetch_strategy,

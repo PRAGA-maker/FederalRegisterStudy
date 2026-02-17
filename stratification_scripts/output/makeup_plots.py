@@ -44,9 +44,17 @@ from stratification_scripts.logging_utils import (
     log_banner,
     setup_logging,
 )
+from stratification_scripts.output.lifecycle_plots import generate_lifecycle_plots
 
 logger = get_logger(__name__)
-warnings.filterwarnings('ignore')
+
+# Scope warning suppression to known noisy sources instead of global ignore.
+# matplotlib emits FutureWarnings on layout/tick changes; pandas/numpy emit
+# DeprecationWarnings during groupby/plot operations.
+warnings.filterwarnings("ignore", category=FutureWarning, module="matplotlib")
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="matplotlib")
+warnings.filterwarnings("ignore", category=FutureWarning, module="pandas")
+warnings.filterwarnings("ignore", category=FutureWarning, module="numpy")
 
 # ============================================================================
 # CONSTANTS & CONFIGURATION
@@ -2635,26 +2643,28 @@ def write_decision_distribution_report(df: pd.DataFrame, year: int, outdir: Path
             return
         
         # Validate agency_decision values
-        valid_decisions = ["accept", "reject", "uncertain"]
+        valid_decisions = ["accept", "reject", "partial", "uncertain"]
         invalid_decisions = df_found[~df_found["agency_decision"].isin(valid_decisions)]
         if len(invalid_decisions) > 0:
             logger.warning(f"Found {len(invalid_decisions):,} rows with invalid agency_decision values - excluding from report")
             df_found = df_found[df_found["agency_decision"].isin(valid_decisions)]
-    
+
         # Count decisions using DOCUMENT WEIGHTED sums
         decision_weighted = df_found.groupby("agency_decision")["weight_doc"].sum()
         total_responses_weighted = df_found["weight_doc"].sum()
-        
+
         # Calculate proportions (weighted)
         decision_props = (decision_weighted / total_responses_weighted * 100) if total_responses_weighted > 0 else pd.Series()
-        
+
         # Calculate conditional probabilities (weighted)
         accept_weighted = decision_weighted.get("accept", 0)
         reject_weighted = decision_weighted.get("reject", 0)
+        partial_weighted = decision_weighted.get("partial", 0)
         uncertain_weighted = decision_weighted.get("uncertain", 0)
-        
+
         p_accept_given_response = (accept_weighted / total_responses_weighted * 100) if total_responses_weighted > 0 else 0
         p_reject_given_response = (reject_weighted / total_responses_weighted * 100) if total_responses_weighted > 0 else 0
+        p_partial_given_response = (partial_weighted / total_responses_weighted * 100) if total_responses_weighted > 0 else 0
         p_uncertain_given_response = (uncertain_weighted / total_responses_weighted * 100) if total_responses_weighted > 0 else 0
         
         # Breakdown by commenter type (weighted)
@@ -2666,12 +2676,12 @@ def write_decision_distribution_report(df: pd.DataFrame, year: int, outdir: Path
                 cat_total_weighted = cat_data["weight_doc"].sum()
                 if cat_total_weighted > 0:
                     cat_decisions = {}
-                    for decision in ["accept", "reject", "uncertain"]:
+                    for decision in ["accept", "reject", "partial", "uncertain"]:
                         decision_data = cat_data[cat_data["agency_decision"] == decision]
                         decision_weight = decision_data["weight_doc"].sum()
                         cat_decisions[decision] = (decision_weight / cat_total_weighted * 100) if cat_total_weighted > 0 else 0
                     decision_by_type_weighted[cat] = cat_decisions
-        
+
         # Agency-level asymmetries (weighted)
         # Calculate weighted acceptance/rejection rates by agency
         agency_stats = []
@@ -2680,6 +2690,7 @@ def write_decision_distribution_report(df: pd.DataFrame, year: int, outdir: Path
             if agency_total_weighted > 0:
                 accept_weight = agency_data[agency_data["agency_decision"] == "accept"]["weight_doc"].sum()
                 reject_weight = agency_data[agency_data["agency_decision"] == "reject"]["weight_doc"].sum()
+                partial_weight = agency_data[agency_data["agency_decision"] == "partial"]["weight_doc"].sum()
                 uncertain_weight = agency_data[agency_data["agency_decision"] == "uncertain"]["weight_doc"].sum()
                 
                 accept_pct = (accept_weight / agency_total_weighted * 100) if agency_total_weighted > 0 else 0
@@ -2715,7 +2726,7 @@ def write_decision_distribution_report(df: pd.DataFrame, year: int, outdir: Path
         report_lines.append(f"{'Decision':<20} | {'Count':>10} | {'Proportion':>12}")
         report_lines.append("-" * 50)
         
-        for decision in ["accept", "reject", "uncertain"]:
+        for decision in ["accept", "reject", "partial", "uncertain"]:
             count_weighted = decision_weighted.get(decision, 0)
             prop = decision_props.get(decision, 0)
             report_lines.append(f"{decision.capitalize():<20} | {count_weighted:>10,.0f} | {prop:>11.1f}%")
@@ -2731,6 +2742,7 @@ def write_decision_distribution_report(df: pd.DataFrame, year: int, outdir: Path
         report_lines.append("Given that a response was found:")
         report_lines.append(f"  P(accept | response) = {p_accept_given_response:.1f}%")
         report_lines.append(f"  P(reject | response) = {p_reject_given_response:.1f}%")
+        report_lines.append(f"  P(partial | response) = {p_partial_given_response:.1f}%")
         report_lines.append(f"  P(uncertain | response) = {p_uncertain_given_response:.1f}%")
         report_lines.append("")
         report_lines.append("")
@@ -2738,18 +2750,19 @@ def write_decision_distribution_report(df: pd.DataFrame, year: int, outdir: Path
         # Table 3: Breakdown by commenter type
         report_lines.append("TABLE 3: DECISION RATES BY COMMENTER TYPE")
         report_lines.append("-" * 80)
-        header = f"{'Commenter Type':<45} | {'Accept %':>10} | {'Reject %':>10} | {'Uncertain %':>12}"
+        header = f"{'Commenter Type':<45} | {'Accept %':>10} | {'Reject %':>10} | {'Partial %':>10} | {'Uncertain %':>12}"
         report_lines.append(header)
-        report_lines.append("-" * 80)
-        
+        report_lines.append("-" * 95)
+
         for cat in CATEGORY_ORDER:
             if cat in decision_by_type_weighted:
                 cat_decisions = decision_by_type_weighted[cat]
                 accept_pct = cat_decisions.get("accept", 0)
                 reject_pct = cat_decisions.get("reject", 0)
+                partial_pct = cat_decisions.get("partial", 0)
                 uncertain_pct = cat_decisions.get("uncertain", 0)
                 cat_display = CATEGORY_DISPLAY_NAMES.get(cat, cat)
-                report_lines.append(f"{cat_display:<45} | {accept_pct:>9.1f}% | {reject_pct:>9.1f}% | {uncertain_pct:>11.1f}%")
+                report_lines.append(f"{cat_display:<45} | {accept_pct:>9.1f}% | {reject_pct:>9.1f}% | {partial_pct:>9.1f}% | {uncertain_pct:>11.1f}%")
         
         report_lines.append("-" * 80)
         report_lines.append("")
@@ -2828,7 +2841,7 @@ def plot_decision_by_type(df: pd.DataFrame, year: int, outdir: Path) -> None:
         return
     
     # Additional validation: ensure agency_decision is valid
-    valid_decisions = ["accept", "reject", "uncertain"]
+    valid_decisions = ["accept", "reject", "partial", "uncertain"]
     df_found = df_found[df_found["agency_decision"].isin(valid_decisions)].copy()
     
     if len(df_found) == 0:
@@ -2863,7 +2876,7 @@ def plot_decision_by_type(df: pd.DataFrame, year: int, outdir: Path) -> None:
                 # Log total for each category
                 if cat == "Political Consultant/Lobbyist":
                     logger.info(f"Consultants total: {len(cat_data):,} rows, {cat_total_weighted:.2f} weight")
-                    logger.info(f"Consultants breakdown: accept={cat_decisions.get('accept', 0):.1f}%, reject={cat_decisions.get('reject', 0):.1f}%, uncertain={cat_decisions.get('uncertain', 0):.1f}%")
+                    logger.info(f"Consultants breakdown: accept={cat_decisions.get('accept', 0):.1f}%, reject={cat_decisions.get('reject', 0):.1f}%, partial={cat_decisions.get('partial', 0):.1f}%, uncertain={cat_decisions.get('uncertain', 0):.1f}%")
     
     # Convert to DataFrame for plotting
     decision_df = pd.DataFrame(decision_by_type).T.fillna(0)
@@ -2885,7 +2898,7 @@ def plot_decision_by_type(df: pd.DataFrame, year: int, outdir: Path) -> None:
             logger.warning(f"Category {cat} percentages sum to {row_sum:.1f}% (expected ~100%)")
     
     # Plot grouped bar
-    decision_by_type_display[valid_decisions].plot(kind="bar", ax=ax, color=["#6B7D6D", "#DDE3EA", "#9A8153"])
+    decision_by_type_display[valid_decisions].plot(kind="bar", ax=ax, color=["#6B7D6D", "#DDE3EA", "#B8860B", "#9A8153"])
     ax.set_ylabel("Percentage", fontsize=FONT_LABEL)
     ax.set_xlabel("Commenter Type", fontsize=FONT_LABEL)
     ax.set_title(f"Agency Decision by Commenter Type - {year}", fontsize=FONT_TITLE, fontweight="bold")
@@ -3620,7 +3633,11 @@ def generate_plots_for_year(
         generate_response_plots(df_responses, df, outdir, year)
     else:
         logger.info("No response tracking data found, skipping response plots")
-    
+
+    # Generate lifecycle-specific plots (Phase 4: items 4I, 4J, 4K)
+    log_banner(logger, "LIFECYCLE PLOTS")
+    generate_lifecycle_plots(df, fr_csv_path, year, outdir)
+
     log_banner(logger, f"COMPLETE - All visualizations saved to: {outdir}")
 
 

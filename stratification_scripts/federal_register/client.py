@@ -144,6 +144,31 @@ def extract_docket_id(details: dict) -> Optional[str]:
     return None
 
 
+# Prefixes the FR API attaches to docket IDs that Regs.gov doesn't recognize.
+# The Regs.gov API expects bare IDs like "FDA-2012-N-1148", not
+# "Docket No. FDA-2012-N-1148".
+_DOCKET_PREFIX_RE = re.compile(
+    r"^(?:DHS\s+)?(?:Docket|Doc\.?|Document)\s*(?:No\.?|Number|#:?)\s*",
+    re.IGNORECASE,
+)
+
+
+def normalize_docket_id(raw: Optional[str]) -> Optional[str]:
+    """
+    Strip common FR API prefixes from docket IDs for Regs.gov lookup.
+
+    Examples:
+        "Docket No. FDA-2012-N-1148"  -> "FDA-2012-N-1148"
+        "Doc. No. AMS-FV-12-0043"     -> "AMS-FV-12-0043"
+        "Docket #: EPA-R10-OAR-2010"  -> "EPA-R10-OAR-2010"
+        "EPA-HQ-OAR-2024-0001"        -> "EPA-HQ-OAR-2024-0001" (no-op)
+    """
+    if not raw or not isinstance(raw, str):
+        return raw
+    cleaned = _DOCKET_PREFIX_RE.sub("", raw).strip()
+    return cleaned if cleaned else raw
+
+
 _FR_CITATION_RE = re.compile(r"(\d+)\s+FR\s+(\d+)")
 
 
@@ -330,6 +355,116 @@ class FederalRegisterClient:
 
         return None
 
+    def fetch_document_full_text(
+        self,
+        document_number: str,
+        max_chars: int = 50000,
+    ) -> Optional[str]:
+        """
+        Fetch and clean the full text of a Federal Register document.
+
+        Uses the FR API to get the document's raw_text_url, then fetches and
+        cleans the HTML-wrapped text. Intelligently truncates to max_chars,
+        prioritizing the preamble section where agencies discuss public comments.
+
+        Args:
+            document_number: FR document number (e.g., "2015-28547").
+            max_chars: Maximum characters to return. The preamble (comment
+                discussion) section is preserved first if truncation is needed.
+
+        Returns:
+            Cleaned document text string, or None if fetch fails.
+
+        Side Effects:
+            Makes up to 2 HTTP requests (document metadata + raw text).
+            Sleeps for self.sleep_between seconds between requests.
+        """
+        if not document_number:
+            logger.warning("fetch_document_full_text called with empty document_number")
+            return None
+
+        # Step 1: Get document metadata to find raw_text_url
+        details = self.fetch_document_details(document_number, enrich_identifiers=False)
+        if not details:
+            logger.warning(f"Failed to fetch document details for {document_number}")
+            return None
+
+        raw_text_url = details.get("raw_text_url")
+        if not raw_text_url:
+            logger.warning(f"No raw_text_url for document {document_number}")
+            return None
+
+        # Step 2: Fetch the raw text content
+        if self.sleep_between > 0:
+            time.sleep(self.sleep_between)
+
+        backoff = 1.0
+        for attempt in range(self.max_retries):
+            try:
+                r = self.session.get(raw_text_url, timeout=60)
+            except requests.RequestException as e:
+                if attempt == self.max_retries - 1:
+                    logger.warning(
+                        f"Failed to fetch raw text for {document_number}: {type(e).__name__}: {e}"
+                    )
+                    return None
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 16)
+                continue
+
+            if r.status_code == 200:
+                break
+            if r.status_code in (403, 429, 500, 502, 503, 504):
+                if attempt == self.max_retries - 1:
+                    logger.warning(
+                        f"HTTP {r.status_code} fetching raw text for {document_number} "
+                        f"after {self.max_retries} retries"
+                    )
+                    return None
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 16)
+                continue
+            logger.warning(f"HTTP {r.status_code} fetching raw text for {document_number}")
+            return None
+        else:
+            return None
+
+        raw_html = r.text
+
+        # Step 3: Clean HTML tags from the raw text
+        # The FR raw_text_url returns HTML-wrapped <pre> text
+        text = re.sub(r'<[^>]+>', '', raw_html)
+        # Normalize whitespace (collapse multiple blank lines)
+        text = re.sub(r'\n{4,}', '\n\n\n', text)
+        text = text.strip()
+
+        if not text:
+            logger.warning(f"Empty text after cleaning for document {document_number}")
+            return None
+
+        # Step 4: Intelligent truncation if needed
+        if len(text) <= max_chars:
+            return text
+
+        # For Final Rules, the preamble (where agencies discuss comments) is at the top.
+        # The regulatory text / amendatory instructions are at the bottom.
+        # Strategy: keep first max_chars characters (which preserves the preamble).
+        # Look for a natural break point near the limit.
+        truncation_point = max_chars
+
+        # Try to find a paragraph break near the limit
+        search_start = max(0, max_chars - 500)
+        last_para_break = text.rfind('\n\n', search_start, max_chars + 200)
+        if last_para_break > search_start:
+            truncation_point = last_para_break
+
+        truncated = text[:truncation_point]
+        logger.info(
+            f"Truncated document {document_number} from {len(text)} to {len(truncated)} chars "
+            f"(max_chars={max_chars})"
+        )
+        return truncated + f"\n\n[... truncated from {len(text)} chars ...]"
+
     def lookup_document_by_citation(
         self,
         citation: str,
@@ -431,7 +566,7 @@ class FederalRegisterClient:
             data = r.json()
             results = data.get("results", [])
 
-            # Scan for matching start_page
+            # Scan for matching start_page (exact match first)
             for doc in results:
                 if doc.get("start_page") == page or str(doc.get("start_page")) == str(page):
                     return {
@@ -441,6 +576,26 @@ class FederalRegisterClient:
                         "publication_date": doc.get("publication_date"),
                         "citation": doc.get("citation"),
                     }
+
+            # Off-by-one fallback: reginfo.gov citations sometimes have
+            # start pages off by 1 (~6% of citations). Try page+1 and
+            # page-1 before giving up.
+            for offset in (1, -1):
+                adjusted_page = page + offset
+                for doc in results:
+                    if doc.get("start_page") == adjusted_page or str(doc.get("start_page")) == str(adjusted_page):
+                        logger.warning(
+                            f"Citation {citation} matched with page offset {offset:+d} "
+                            f"(cited page {page}, actual start_page {adjusted_page}, "
+                            f"doc {doc.get('document_number')})"
+                        )
+                        return {
+                            "document_number": doc.get("document_number"),
+                            "title": doc.get("title"),
+                            "type": doc.get("type"),
+                            "publication_date": doc.get("publication_date"),
+                            "citation": doc.get("citation"),
+                        }
 
             # If exact-day query returned no match, something is off
             if publication_date:

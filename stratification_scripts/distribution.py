@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from collections import Counter
 from datetime import datetime
@@ -49,6 +50,7 @@ from stratification_scripts.federal_register.client import (
     extract_rin,
     extract_all_rins,
     extract_docket_id,
+    normalize_docket_id,
 )
 from stratification_scripts.logging_utils import (
     get_logger,
@@ -58,6 +60,21 @@ from stratification_scripts.logging_utils import (
 from stratification_scripts.regulations_gov.client import RegsGovClient
 
 logger = get_logger(__name__)
+
+# Regulatory Agenda meta-document title patterns.
+# These are agency-level planning documents (not rulemakings) that the FR API
+# classifies as "Proposed Rule". ~40-80 per year across all agencies.
+_REG_AGENDA_PHRASES = (
+    "regulatory agenda",           # "Regulatory Agenda", "Semiannual Regulatory Agenda"
+    "semiannual agenda",           # "Semiannual Agenda of Regulations"
+    "unified agenda",              # "Unified Agenda of Federal Regulatory..."
+    "regulatory flexibility agenda",
+    "agenda of regulations",       # "Semiannual Agenda of Regulations Under Development..."
+    "deregulatory agenda",         # "Department Regulatory and Deregulatory Agenda..."
+)
+# "Regulatory Plan" needs word-boundary regex to avoid false-positiving on
+# "Regulatory Planning" (which is a legitimate rulemaking action).
+_REG_PLAN_RE = re.compile(r"\bregulatory plan\b")
 
 
 def enrich_fr_detail(
@@ -132,6 +149,19 @@ def enrich_fr_detail(
     is_prorule = rec.get("type") == "Proposed Rule"
     has_comment_mechanism = bool(comment_url or comments_close_on or regs_document_id)
     eligibility_reason = None
+
+    # Exclude Regulatory Agenda meta-documents (see module-level constants).
+    title_lower = (rec.get("title") or "").lower()
+    is_reg_agenda = (
+        any(phrase in title_lower for phrase in _REG_AGENDA_PHRASES)
+        or bool(_REG_PLAN_RE.search(title_lower))
+    )
+    if is_reg_agenda:
+        logger.info(
+            f"Excluding regulatory agenda meta-document: "
+            f"{(rec.get('title') or '')[:80]}"
+        )
+        return None
 
     if is_prorule:
         eligibility_reason = "prorule"
@@ -216,6 +246,90 @@ def enrich_regs_count(
     base_rec["comment_count"] = comment_count
     base_rec["count_source"] = count_source
     return base_rec
+
+
+def _resolve_docket_linkages(
+    rows: List[dict],
+    regs_client: RegsGovClient,
+    config: PipelineConfig,
+) -> List[dict]:
+    """
+    Stage 1.5: Resolve docket IDs to Regs.gov document IDs.
+
+    For docs that have a docket_id but no regs_document_id, queries the
+    Regs.gov /v4/documents endpoint to find the primary commentable
+    document.  Populates regs_document_id and comment_count so that
+    Stage 2 can fetch accurate counts and downstream sampling works.
+
+    Args:
+        rows: Records from Stage 1 enrichment.
+        regs_client: RegsGovClient instance.
+        config: Pipeline configuration.
+
+    Returns:
+        Updated rows with resolved regs_document_id where possible.
+    """
+    log_banner(logger, "STAGE 1.5: DOCKET-TO-DOCUMENT RESOLUTION")
+
+    needs_resolution = [
+        r for r in rows
+        if r.get("docket_id") and not r.get("regs_document_id")
+    ]
+
+    if not needs_resolution:
+        logger.info("No docs need docket resolution (all have regs_document_id or no docket_id)")
+        return rows
+
+    logger.info(
+        f"{len(needs_resolution)} docs have docket_id but no regs_document_id"
+    )
+
+    resolved = 0
+    empty = 0
+    non_regs = 0
+
+    for rec in tqdm(needs_resolution, desc="Stage 1.5: Docket resolution", unit="doc"):
+        raw_docket = rec["docket_id"]
+        clean_docket = normalize_docket_id(raw_docket)
+
+        if not clean_docket:
+            continue
+
+        docs = regs_client.resolve_docket_documents(clean_docket)
+
+        if not docs:
+            empty += 1
+            logger.debug(
+                f"Docket {clean_docket!r} returned 0 documents on Regs.gov "
+                f"(doc={rec.get('document_number')})"
+            )
+            continue
+
+        # Pick the best match: highest comment count, or first if all zero
+        best = docs[0]  # Already sorted by type priority then comment count
+        rec["regs_document_id"] = best["document_id"]
+        rec["count_source"] = "regulations.gov-docket"
+        rec["submission_channel"] = "regs.gov"
+
+        cc = best.get("comment_count")
+        if isinstance(cc, int) and cc >= 0:
+            rec["comment_count"] = cc
+
+        resolved += 1
+        logger.debug(
+            f"Resolved {rec.get('document_number')}: "
+            f"docket {clean_docket!r} -> {best['document_id']} "
+            f"(type={best['document_type']}, comments={cc})"
+        )
+
+    non_regs = empty  # Docs where Regs.gov returned nothing
+    logger.info(
+        f"Docket resolution: {resolved} resolved, "
+        f"{non_regs} returned empty (non-Regs.gov agencies or invalid format), "
+        f"{len(needs_resolution) - resolved - non_regs} other failures"
+    )
+
+    return rows
 
 
 def fetch_and_enrich_documents(
@@ -313,47 +427,75 @@ def fetch_and_enrich_documents(
     
     # NOTE: fr_client kept open for Stage 4 (document linking). Closed after Stage 4.
 
-    # Split by whether they need Regs.gov enrichment
-    regs_docs = [p for p in stage1_results if p.get("regs_document_id")]
-    non_regs_docs = [p for p in stage1_results if not p.get("regs_document_id")]
-    
     logger.info(f"Stage 1 complete: {len(stage1_results)} comment-eligible docs")
     logger.info(f"  {ineligible_count} docs filtered as ineligible (no comment mechanism)")
     if error_count > 0:
         logger.warning(f"  {error_count} docs failed FR detail fetch (API errors)")
-    logger.info(f"  {len(regs_docs)} with regs_document_id (need Stage 2)")
-    logger.info(f"  {len(non_regs_docs)} without regs_document_id")
-    
+
+    regs_before = sum(1 for p in stage1_results if p.get("regs_document_id"))
+    logger.info(f"  {regs_before} with regs_document_id")
+    logger.info(f"  {len(stage1_results) - regs_before} without regs_document_id")
+
+    # Stage 1.5: Resolve docket IDs to Regs.gov document IDs
+    # This populates regs_document_id and comment_count for docs that only
+    # had a docket_id, so Stage 2 can process them normally.
+    if api_keys:
+        regs_client = RegsGovClient(api_keys, retries=config.retries)
+        stage1_results = _resolve_docket_linkages(
+            stage1_results, regs_client, config
+        )
+    else:
+        regs_client = None
+
+    # Split by whether they need Regs.gov count enrichment (after 1.5 resolution)
+    regs_docs = [p for p in stage1_results if p.get("regs_document_id")]
+    non_regs_docs = [p for p in stage1_results if not p.get("regs_document_id")]
+
+    regs_after = len(regs_docs)
+    if regs_after > regs_before:
+        logger.info(
+            f"After docket resolution: {regs_after} with regs_document_id "
+            f"(+{regs_after - regs_before} from docket lookup)"
+        )
+
     # Stage 2: Regs.gov count enrichment
     rows: List[dict] = []
-    
-    if regs_docs and api_keys:
+
+    if regs_docs and regs_client:
         log_banner(logger, "STAGE 2: REGS.GOV COUNT ENRICHMENT")
         logger.info(f"Using {workers_stage2} workers")
-        
-        regs_client = RegsGovClient(api_keys, retries=config.retries)
-        
+
+        stage2_errors = 0
         with ThreadPoolExecutor(max_workers=workers_stage2) as executor:
             futures = {
                 executor.submit(enrich_regs_count, rec, regs_client): rec
                 for rec in regs_docs
             }
-            
+
             for future in tqdm(as_completed(futures), total=len(regs_docs),
                               desc="Stage 2: Regs.gov counts", unit="doc"):
+                original_rec = futures[future]
                 try:
                     enriched = future.result()
                     if enriched:
                         rows.append(enriched)
                 except Exception as e:
-                    if not config.quiet:
-                        logger.debug(f"Error in Stage 2: {e}")
-        
+                    stage2_errors += 1
+                    logger.warning(
+                        f"Stage 2 enrichment failed for {original_rec.get('document_number', '?')}: "
+                        f"{type(e).__name__}: {e} -- preserving Stage 1 data"
+                    )
+                    # Preserve Stage 1 data instead of dropping the record
+                    rows.append(original_rec)
+
+        if stage2_errors > 0:
+            logger.warning(f"Stage 2: {stage2_errors} docs failed Regs.gov enrichment (Stage 1 data preserved)")
+
         regs_client.close()
     elif regs_docs:
         # No API keys - use Stage 1 data as-is
         rows.extend(regs_docs)
-    
+
     # Add non-regs.gov docs
     rows.extend(non_regs_docs)
 
@@ -736,6 +878,13 @@ def save_documents(
     log_banner(logger, "SAVED FEDERAL REGISTER DOCUMENTS")
     logger.info(f"Output file: {csv_path.absolute()}")
     logger.info(f"Documents saved: {len(df)}")
+
+    # Log all unique timetable action types observed during this run
+    from stratification_scripts.reginfo.client import ALL_OBSERVED_ACTIONS
+    if ALL_OBSERVED_ACTIONS:
+        logger.info(f"Unique timetable action types observed: {len(ALL_OBSERVED_ACTIONS)}")
+        for action in sorted(ALL_OBSERVED_ACTIONS):
+            logger.debug(f"  Action type: {action}")
     
     return csv_path
 

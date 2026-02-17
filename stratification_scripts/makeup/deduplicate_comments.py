@@ -30,6 +30,12 @@ import polars as pl
 from sentence_transformers import SentenceTransformer
 from tqdm import tqdm
 
+try:
+    import faiss
+    _FAISS_AVAILABLE = True
+except ImportError:
+    _FAISS_AVAILABLE = False
+
 from stratification_scripts.config import (
     PipelineConfig,
     get_comments_raw_path,
@@ -41,6 +47,11 @@ from stratification_scripts.logging_utils import (
 )
 
 logger = get_logger(__name__)
+
+# Threshold for switching from numpy (O(N^2) memory) to FAISS (constant memory).
+# Below this, the full similarity matrix fits comfortably in RAM.
+# 5000 comments -> 5000x5000 float32 matrix -> ~100MB, well within limits.
+_FAISS_THRESHOLD_N = 5000
 
 
 def compute_comment_embeddings(
@@ -72,67 +83,169 @@ def compute_comment_embeddings(
     return embeddings
 
 
+class _UnionFind:
+    """Disjoint-set / union-find for building connected components from edges."""
+
+    def __init__(self, n: int):
+        self.parent = list(range(n))
+        self.rank = [0] * n
+
+    def find(self, x: int) -> int:
+        while self.parent[x] != x:
+            self.parent[x] = self.parent[self.parent[x]]  # path compression
+            x = self.parent[x]
+        return x
+
+    def union(self, x: int, y: int) -> None:
+        rx, ry = self.find(x), self.find(y)
+        if rx == ry:
+            return
+        # union by rank
+        if self.rank[rx] < self.rank[ry]:
+            rx, ry = ry, rx
+        self.parent[ry] = rx
+        if self.rank[rx] == self.rank[ry]:
+            self.rank[rx] += 1
+
+    def groups(self) -> Dict[int, List[int]]:
+        """Return groups that contain more than one element."""
+        from collections import defaultdict
+        components: Dict[int, List[int]] = defaultdict(list)
+        for i in range(len(self.parent)):
+            components[self.find(i)].append(i)
+        # Filter to multi-element groups and renumber
+        result: Dict[int, List[int]] = {}
+        gid = 0
+        for members in components.values():
+            if len(members) > 1:
+                result[gid] = members
+                gid += 1
+        return result
+
+
+def _find_duplicate_groups_numpy(
+    embeddings: np.ndarray,
+    threshold: float,
+) -> Dict[int, List[int]]:
+    """
+    Find duplicate groups using a full NxN cosine similarity matrix (numpy).
+
+    Suitable for small N (below _FAISS_THRESHOLD_N) where the full matrix
+    fits in RAM.  Embeddings must already be L2-normalized.
+    """
+    n = len(embeddings)
+    # Compute full similarity matrix -- O(N^2) memory
+    similarity_matrix = np.dot(embeddings, embeddings.T)
+    adjacency = similarity_matrix >= threshold
+
+    # Connected components via BFS
+    visited: Set[int] = set()
+    groups: Dict[int, List[int]] = {}
+    group_id = 0
+
+    for i in range(n):
+        if i in visited:
+            continue
+
+        group: List[int] = []
+        stack = [i]
+
+        while stack:
+            node = stack.pop()
+            if node in visited:
+                continue
+            visited.add(node)
+            group.append(node)
+
+            neighbors = np.where(adjacency[node])[0]
+            for neighbor in neighbors:
+                if neighbor not in visited:
+                    stack.append(neighbor)
+
+        if len(group) > 1:
+            groups[group_id] = group
+            group_id += 1
+
+    return groups
+
+
+def _find_duplicate_groups_faiss(
+    embeddings: np.ndarray,
+    threshold: float,
+) -> Dict[int, List[int]]:
+    """
+    Find duplicate groups using FAISS range_search -- constant memory per query.
+
+    Uses IndexFlatIP (inner product on L2-normalized vectors = cosine similarity)
+    with range_search to find all pairs above the threshold without materializing
+    the full NxN similarity matrix.  Connected components are built with union-find.
+
+    Embeddings must already be L2-normalized and contiguous float32.
+    """
+    n, d = embeddings.shape
+
+    # FAISS requires contiguous float32
+    emb = np.ascontiguousarray(embeddings, dtype=np.float32)
+
+    # IndexFlatIP: exact inner-product search (= cosine sim for unit vectors)
+    index = faiss.IndexFlatIP(d)
+    index.add(emb)
+
+    # range_search returns all (query, result) pairs with score >= threshold.
+    # lims is an (n+1,) array: results for query i are I[lims[i]:lims[i+1]].
+    lims, D, I = index.range_search(emb, threshold)
+
+    # Build connected components via union-find from the sparse edge list
+    uf = _UnionFind(n)
+    for i in range(n):
+        start, end = int(lims[i]), int(lims[i + 1])
+        for idx in range(start, end):
+            j = int(I[idx])
+            if j != i:
+                uf.union(i, j)
+
+    return uf.groups()
+
+
 def find_duplicate_groups(
     embeddings: np.ndarray,
     threshold: float = 0.95,
 ) -> Dict[int, List[int]]:
     """
     Find duplicate groups using cosine similarity.
-    
-    Uses transitive closure: if A≈B and B≈C, then A≈B≈C are in the same group.
-    
+
+    Uses transitive closure: if A~=B and B~=C, then A~=B~=C are in the same group.
+
+    For small inputs (N <= 5000), uses an in-memory numpy dot product.
+    For larger inputs, uses FAISS IndexFlatIP.range_search to avoid
+    allocating the full NxN similarity matrix (which causes OOM at ~50K).
+
     Args:
         embeddings: Normalized embeddings array (n_comments, embedding_dim)
         threshold: Cosine similarity threshold (default: 0.95)
-    
+
     Returns:
         Dict mapping group_id to list of comment indices in that group
     """
     n = len(embeddings)
     if n <= 1:
         return {}
-    
-    # Compute pairwise cosine similarity (embeddings are already normalized)
-    # cosine_sim = dot product of normalized vectors
-    similarity_matrix = np.dot(embeddings, embeddings.T)
-    
-    # Build adjacency graph (undirected)
-    # Two comments are connected if similarity >= threshold
-    adjacency = similarity_matrix >= threshold
-    
-    # Find connected components (transitive closure)
-    visited = set()
-    groups: Dict[int, List[int]] = {}
-    group_id = 0
-    
-    for i in range(n):
-        if i in visited:
-            continue
-        
-        # Start new group with i
-        group = []
-        stack = [i]
-        
-        while stack:
-            node = stack.pop()
-            if node in visited:
-                continue
-            
-            visited.add(node)
-            group.append(node)
-            
-            # Add all neighbors (similar comments) to stack
-            neighbors = np.where(adjacency[node])[0]
-            for neighbor in neighbors:
-                if neighbor not in visited:
-                    stack.append(neighbor)
-        
-        # Only create group if it has more than one comment
-        if len(group) > 1:
-            groups[group_id] = group
-            group_id += 1
-    
-    return groups
+
+    if n <= _FAISS_THRESHOLD_N:
+        logger.debug(f"Using numpy path for {n} embeddings (below threshold {_FAISS_THRESHOLD_N})")
+        return _find_duplicate_groups_numpy(embeddings, threshold)
+
+    # Large dataset -- require FAISS
+    if not _FAISS_AVAILABLE:
+        raise ImportError(
+            f"FAISS is required for deduplication of large comment sets "
+            f"(N={n:,} > {_FAISS_THRESHOLD_N:,}). The full NxN similarity matrix "
+            f"would require ~{n * n * 4 / 1e9:.1f} GB of RAM. "
+            f"Install FAISS: pip install faiss-cpu"
+        )
+
+    logger.debug(f"Using FAISS path for {n} embeddings (above threshold {_FAISS_THRESHOLD_N})")
+    return _find_duplicate_groups_faiss(embeddings, threshold)
 
 
 def deduplicate_document_comments(

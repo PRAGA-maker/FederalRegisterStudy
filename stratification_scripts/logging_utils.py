@@ -243,17 +243,4 @@ def log_error(logger: logging.Logger, message: str, exc: Optional[Exception] = N
         logger.error(message)
 
 
-def log_warning(logger: logging.Logger, message: str) -> None:
-    """
-    Log a warning message.
-    
-    Args:
-        logger: Logger to use
-        message: Warning message
-    
-    Example:
-        >>> log_warning(logger, "Low merge rate detected")
-        ⚠ Low merge rate detected
-    """
-    logger.warning(f"⚠ {message}")
 
