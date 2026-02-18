@@ -31,6 +31,7 @@ import re
 import sys
 from collections import Counter
 from datetime import datetime
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, List, Optional
@@ -501,56 +502,109 @@ def fetch_and_enrich_documents(
             f"(+{regs_after - regs_before} from docket lookup)"
         )
 
-    # Stage 2: Regs.gov count enrichment
-    rows: List[dict] = []
+    # ---- STAGES 2 + 3 ----
+    # Stage 2 (Regs.gov count enrichment) and Stage 3 (reginfo.gov lifecycle)
+    # hit different APIs with different rate limits and modify disjoint fields
+    # on the same records. When both are needed, they run concurrently.
+    #
+    # Both stages modify records in stage1_results IN-PLACE:
+    #   Stage 2: comment_count, count_source
+    #   Stage 3: lifecycle_stage, unified_agenda_stage, rin_timetable, timeline_*
+    # No field overlap -> thread-safe under CPython GIL.
 
-    if regs_docs and regs_client:
-        log_banner(logger, "STAGE 2: REGS.GOV COUNT ENRICHMENT")
-        logger.info(f"Using {workers_stage2} workers")
-
-        stage2_errors = 0
-        with ThreadPoolExecutor(max_workers=workers_stage2) as executor:
-            futures = {
-                executor.submit(enrich_regs_count, rec, regs_client): rec
-                for rec in regs_docs
-            }
-
-            for future in tqdm(as_completed(futures), total=len(regs_docs),
-                              desc="Stage 2: Regs.gov counts", unit="doc"):
-                original_rec = futures[future]
-                try:
-                    enriched = future.result()
-                    if enriched:
-                        rows.append(enriched)
-                except Exception as e:
-                    stage2_errors += 1
-                    logger.warning(
-                        f"Stage 2 enrichment failed for {original_rec.get('document_number', '?')}: "
-                        f"{type(e).__name__}: {e} -- preserving Stage 1 data"
-                    )
-                    # Preserve Stage 1 data instead of dropping the record
-                    rows.append(original_rec)
-
-        if stage2_errors > 0:
-            logger.warning(f"Stage 2: {stage2_errors} docs failed Regs.gov enrichment (Stage 1 data preserved)")
-
-        regs_client.close()
-    elif regs_docs:
-        # No API keys - use Stage 1 data as-is
-        rows.extend(regs_docs)
-
-    # Add non-regs.gov docs
-    rows.extend(non_regs_docs)
+    rows = stage1_results  # Both stages mutate these dicts in-place
 
     if not rows:
         logger.warning("No data collected - check API parameters")
         return pd.DataFrame()
 
-    # Stage 3: Lifecycle Enrichment (if enabled)
-    if getattr(config, "enable_lifecycle_tracking", True):
+    has_stage2_work = bool(regs_docs and regs_client)
+    has_lifecycle = getattr(config, "enable_lifecycle_tracking", True)
+
+    # Shared state for Stage 2 background thread
+    _stage2_errors = [0]
+    _stage2_exception = [None]
+
+    def _run_stage2_thread():
+        """Stage 2 in background thread: Regs.gov count enrichment."""
+        try:
+            log_banner(logger, "STAGE 2: REGS.GOV COUNT ENRICHMENT")
+            logger.info(f"Using {workers_stage2} workers for {len(regs_docs)} docs")
+
+            with ThreadPoolExecutor(max_workers=workers_stage2) as executor:
+                futures = {
+                    executor.submit(enrich_regs_count, rec, regs_client): rec
+                    for rec in regs_docs
+                }
+                for future in tqdm(
+                    as_completed(futures), total=len(regs_docs),
+                    desc="Stage 2: Regs.gov counts", unit="doc",
+                ):
+                    original_rec = futures[future]
+                    try:
+                        future.result()  # In-place mutation of the record
+                    except Exception as e:
+                        _stage2_errors[0] += 1
+                        logger.warning(
+                            f"Stage 2 enrichment failed for "
+                            f"{original_rec.get('document_number', '?')}: "
+                            f"{type(e).__name__}: {e} -- Stage 1 data preserved"
+                        )
+
+            if _stage2_errors[0] > 0:
+                logger.warning(
+                    f"Stage 2: {_stage2_errors[0]} docs failed "
+                    f"Regs.gov enrichment (Stage 1 data preserved)"
+                )
+            regs_client.close()
+        except Exception as e:
+            _stage2_exception[0] = e
+            logger.error(f"Stage 2 thread failed: {type(e).__name__}: {e}")
+
+    if has_stage2_work and has_lifecycle:
+        # ---- PARALLEL: Stage 2 (Regs.gov) + Stage 3 (reginfo.gov) ----
+        log_banner(logger, "STAGES 2+3: PARALLEL ENRICHMENT")
+        logger.info(
+            f"Stage 2: {len(regs_docs)} regs.gov docs ({workers_stage2} workers) | "
+            f"Stage 3: lifecycle via reginfo.gov | "
+            f"Different APIs -- running concurrently"
+        )
+
+        stage2_thread = threading.Thread(
+            target=_run_stage2_thread, name="stage2-regs", daemon=True
+        )
+        stage2_thread.start()
+
+        # Stage 3 runs in main thread (its tqdm bars display cleanly)
         rows = _enrich_lifecycle_stage(rows, config)
-        # Stage 4: Resolve FR citations to document numbers
+
+        # Wait for Stage 2 to finish
+        stage2_thread.join()
+
+        if _stage2_exception[0]:
+            logger.error(
+                f"Stage 2 failed but Stage 3 succeeded. "
+                f"Regs.gov docs retain Stage 1 comment counts. "
+                f"Error: {_stage2_exception[0]}"
+            )
+
+        # Stage 4: needs Stage 3 output (nprm_citation, final_action_citation)
         rows = _link_documents_by_citation(rows, fr_client, config)
+
+    elif has_stage2_work:
+        # Stage 2 only (lifecycle tracking disabled)
+        _run_stage2_thread()
+        if _stage2_exception[0]:
+            raise _stage2_exception[0]
+        for rec in rows:
+            rec["nprm_document_number"] = None
+            rec["final_rule_document_number"] = None
+
+    elif has_lifecycle:
+        # Stage 3 only (no Regs.gov API keys or no regs.gov docs)
+        rows = _enrich_lifecycle_stage(rows, config)
+        rows = _link_documents_by_citation(rows, fr_client, config)
+
     else:
         for rec in rows:
             rec["nprm_document_number"] = None

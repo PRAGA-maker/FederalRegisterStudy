@@ -449,7 +449,10 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
     # Join with FR data to get agency info and lifecycle stage if not already present
     if fr_csv.exists():
         logger.info(f"Loading FR data from: {fr_csv}")
-        df_fr = pl.read_csv(str(fr_csv))
+        df_fr = pl.read_csv(
+            str(fr_csv),
+            schema_overrides={"cfr_titles": pl.Utf8, "topics": pl.Utf8, "abstract": pl.Utf8},
+        )
 
         # Determine which columns to join
         join_cols = ["document_number"]
@@ -681,7 +684,10 @@ def _run_tier2_comparison(
         return
 
     df_responses = pl.read_csv(str(responses_csv))
-    df_fr = pl.read_csv(str(fr_csv))
+    df_fr = pl.read_csv(
+        str(fr_csv),
+        schema_overrides={"cfr_titles": pl.Utf8, "topics": pl.Utf8, "abstract": pl.Utf8},
+    )
 
     # Check required columns exist in FR CSV
     for col in ["nprm_document_number", "final_rule_document_number"]:

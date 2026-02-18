@@ -201,6 +201,127 @@ IMPORTANT:
 """
 
 
+def _parse_gemini_response(response, schema_class, logger):
+    """
+    Extract and validate structured output from a Gemini response.
+
+    Returns (raw_text, parsed_dict) where parsed_dict is the normalized
+    schema output, or (raw_text, None) if parsing failed but raw_text exists,
+    or ("", None) if the response is completely empty.
+
+    Raises TypeError or AttributeError if the SDK response object has
+    None internals (e.g., None candidates/parts). The caller should catch
+    these and route to the empty-response handler.
+    """
+    # Extract raw text
+    raw_text = ""
+    if hasattr(response, 'text'):
+        try:
+            raw_text = (response.text or "").strip()
+        except (TypeError, AttributeError, ValueError):
+            raw_text = ""
+
+    if not raw_text and hasattr(response, 'candidates') and response.candidates:
+        candidate = response.candidates[0]
+        if hasattr(candidate, 'content') and candidate.content:
+            parts = getattr(candidate.content, 'parts', None)
+            if parts is not None:
+                text_parts = [p.text for p in parts if hasattr(p, 'text') and p.text]
+                raw_text = " ".join(text_parts).strip()
+
+    # Try parsed structured output
+    parsed_obj = None
+    if hasattr(response, 'parsed'):
+        parsed_obj = response.parsed  # May raise TypeError if SDK internals are None
+    elif hasattr(response, 'candidates') and response.candidates:
+        candidate = response.candidates[0]
+        if hasattr(candidate, 'content') and candidate.content:
+            parts = getattr(candidate.content, 'parts', None)
+            if parts is not None:
+                for part in parts:
+                    if hasattr(part, 'struct_data'):
+                        parsed_obj = part.struct_data
+                        break
+
+    if parsed_obj is not None:
+        if isinstance(parsed_obj, schema_class):
+            return raw_text, parsed_obj.normalized()
+        elif isinstance(parsed_obj, dict):
+            return raw_text, schema_class.model_validate(parsed_obj).normalized()
+        else:
+            try:
+                if hasattr(parsed_obj, '__dict__'):
+                    return raw_text, schema_class.model_validate(parsed_obj.__dict__).normalized()
+                elif hasattr(parsed_obj, 'model_dump'):
+                    return raw_text, schema_class.model_validate(parsed_obj.model_dump()).normalized()
+                else:
+                    return raw_text, schema_class.model_validate_json(str(parsed_obj)).normalized()
+            except Exception as parse_err:
+                logger.warning(f"Failed to parse parsed_obj: {parse_err}, falling back to raw_text")
+
+    # No parsed object — try raw text as JSON
+    if raw_text:
+        try:
+            return raw_text, schema_class.model_validate_json(raw_text).normalized()
+        except Exception:
+            # Try regex extraction
+            json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', raw_text, re.DOTALL)
+            if json_match:
+                try:
+                    return raw_text, schema_class.model_validate_json(json_match.group(0)).normalized()
+                except Exception:
+                    pass
+            # Has text but couldn't parse — raise so caller gets the error
+            raise ValueError(f"Failed to parse JSON from response text: {raw_text[:200]}")
+
+    # Completely empty
+    return "", None
+
+
+def _diagnose_empty_response(response) -> str:
+    """
+    Inspect a Gemini response that produced no text/parsed output.
+
+    Returns a short diagnostic string describing what the response contains
+    (e.g., finish_reason, part types). Used for logging and error messages.
+    """
+    parts_info = []
+    try:
+        if hasattr(response, 'candidates') and response.candidates:
+            candidate = response.candidates[0]
+            finish_reason = getattr(candidate, 'finish_reason', None)
+            if finish_reason:
+                parts_info.append(f"finish_reason={finish_reason}")
+            safety = getattr(candidate, 'safety_ratings', None)
+            if safety:
+                blocked = [r for r in safety if getattr(r, 'blocked', False)]
+                if blocked:
+                    parts_info.append(f"safety_blocked={len(blocked)}")
+            if hasattr(candidate, 'content') and candidate.content and hasattr(candidate.content, 'parts'):
+                part_types = []
+                for p in candidate.content.parts:
+                    ptype = type(p).__name__
+                    # Check for common non-text part types
+                    if hasattr(p, 'thought') and p.thought:
+                        ptype = "thought"
+                    elif hasattr(p, 'text') and p.text:
+                        ptype = f"text({len(p.text)})"
+                    elif hasattr(p, 'executable_code'):
+                        ptype = "executable_code"
+                    elif hasattr(p, 'code_execution_result'):
+                        ptype = "code_execution_result"
+                    part_types.append(ptype)
+                parts_info.append(f"parts={part_types}")
+            else:
+                parts_info.append("no_content_parts")
+        else:
+            parts_info.append("no_candidates")
+    except Exception as diag_err:
+        parts_info.append(f"diag_error={type(diag_err).__name__}")
+
+    return "; ".join(parts_info) if parts_info else "unknown"
+
+
 class GeminiResponseTracker:
     """
     Async Gemini client for tracking agency responses to comments.
@@ -323,6 +444,12 @@ class GeminiResponseTracker:
         # Default conservative: retry
         return True
 
+    # Maximum retries specifically for empty-response errors (thought_signature
+    # only, no text/parsed output). These are NOT transient: the model simply
+    # didn't produce JSON output. Retrying 10 times with exponential backoff
+    # wastes ~486s per comment. Cap at 2 retries instead.
+    MAX_EMPTY_RESPONSE_RETRIES = 2
+
     async def track_response(
         self,
         comment_text: str,
@@ -331,13 +458,13 @@ class GeminiResponseTracker:
     ) -> Tuple[str, Dict[str, str], str]:
         """
         Track agency response for a single comment.
-        
+
         Args:
             comment_text: Full comment text to analyze (truncated to ~20k chars)
-            comment_metadata: Dict with comment_id, document_number, agency, 
+            comment_metadata: Dict with comment_id, document_number, agency,
                             commenter_type, submission_date
             semaphore: Optional semaphore for concurrency control
-        
+
         Returns:
             Tuple of (comment_id, parsed_response_dict, raw_model_response)
         """
@@ -345,7 +472,7 @@ class GeminiResponseTracker:
         max_chars = 20000
         if len(comment_text) > max_chars:
             comment_text = comment_text[:max_chars] + "\n\n[... truncated ...]"
-        
+
         prompt = RESPONSE_TRACKING_PROMPT.format(
             comment_id=comment_metadata.get("comment_id", "N/A"),
             document_number=comment_metadata.get("document_number", "N/A"),
@@ -354,10 +481,11 @@ class GeminiResponseTracker:
             submission_date=comment_metadata.get("submission_date", "N/A"),
             full_comment_text=comment_text,
         )
-        
+
         async def do_request() -> Tuple[str, Dict[str, str], str]:
             backoff = 2.0
-            
+            empty_response_count = 0  # Track empty-response retries separately
+
             for attempt in range(self.max_retries):
                 try:
                     # Log request details for debugging
@@ -365,150 +493,84 @@ class GeminiResponseTracker:
                         f"Gemini API call attempt {attempt+1}/{self.max_retries} for comment_id={comment_metadata.get('comment_id')}, "
                         f"model={self.model}, prompt_length={len(prompt)}"
                     )
-                    
-                    # Convert prompt string to Content object/list format expected by SDK
-                    # Try different formats for compatibility with different SDK versions
-                    contents_input = None
-                    response = None
-                    last_error = None
-                    
-                    # Format 1: List of Content objects (most common for newer SDK versions)
-                    try:
-                        contents_input = [self._types.Content(
-                            role="user",
-                            parts=[self._types.Part(text=prompt)]
-                        )]
-                        response = await self._client.aio.models.generate_content(
-                            model=self.model,
-                            contents=contents_input,
-                            config=self._base_config,
-                        )
-                        logger.debug(f"API call succeeded with Content list format")
-                    except Exception as e1:
-                        last_error = e1
-                        logger.debug(f"Content list format failed: {type(e1).__name__}: {e1}")
-                        
-                        # Format 2: Single Content object
-                        try:
-                            contents_input = self._types.Content(
-                                role="user",
-                                parts=[self._types.Part(text=prompt)]
-                            )
-                            response = await self._client.aio.models.generate_content(
-                                model=self.model,
-                                contents=contents_input,
-                                config=self._base_config,
-                            )
-                            logger.debug(f"API call succeeded with single Content object format")
-                        except Exception as e2:
-                            last_error = e2
-                            logger.debug(f"Single Content object format failed: {type(e2).__name__}: {e2}")
-                            
-                            # Format 3: String directly (some SDK versions accept this)
-                            try:
-                                response = await self._client.aio.models.generate_content(
-                                    model=self.model,
-                                    contents=prompt,
-                                    config=self._base_config,
-                                )
-                                logger.debug(f"API call succeeded with string format")
-                            except Exception as e3:
-                                last_error = e3
-                                logger.debug(f"String format failed: {type(e3).__name__}: {e3}")
-                                # Re-raise the last error to be handled by outer exception handler
-                                raise e3
-                    
+
+                    # Use Content list format (standard for current SDK)
+                    contents_input = [self._types.Content(
+                        role="user",
+                        parts=[self._types.Part(text=prompt)]
+                    )]
+                    response = await self._client.aio.models.generate_content(
+                        model=self.model,
+                        contents=contents_input,
+                        config=self._base_config,
+                    )
+
                     if response is None:
-                        raise ValueError("All API call formats failed") from last_error
-                    
-                    # Log response structure for debugging
-                    logger.debug(
-                        f"Response received for comment_id={comment_metadata.get('comment_id')}, "
-                        f"has_text={hasattr(response, 'text')}, has_parsed={hasattr(response, 'parsed')}, "
-                        f"response_type={type(response).__name__}, response_attrs={[a for a in dir(response) if not a.startswith('_')][:10]}"
+                        raise ValueError("API returned None response")
+
+                    # ---- RESPONSE PARSING ----
+                    # The entire parsing block is wrapped to catch
+                    # TypeError/AttributeError from SDK internals (e.g.,
+                    # iterating over None candidates/parts). These errors
+                    # are routed to the empty-response handler instead of
+                    # the general retry loop with exponential backoff.
+                    try:
+                        raw_text, parsed = _parse_gemini_response(
+                            response, AgencyResponse, logger
+                        )
+                    except (TypeError, AttributeError) as sdk_err:
+                        # SDK returned a response we can't parse — treat as empty
+                        logger.debug(
+                            f"SDK error parsing response for "
+                            f"{comment_metadata.get('comment_id')}: {sdk_err}"
+                        )
+                        raw_text = ""
+                        parsed = None
+
+                    if parsed is not None:
+                        logger.debug(f"Successfully parsed response for comment_id={comment_metadata.get('comment_id')}")
+                        return (
+                            comment_metadata.get("comment_id", "unknown"),
+                            parsed,
+                            raw_text or "OK_JSON",
+                        )
+
+                    # ---- EMPTY RESPONSE HANDLING ----
+                    # Gemini returned a response with no usable text/JSON.
+                    # Often caused by thought_signature-only parts or
+                    # SDK TypeError from None candidates.
+                    # Cap retries to avoid exponential backoff storms.
+                    empty_response_count += 1
+                    diag = _diagnose_empty_response(response)
+
+                    if empty_response_count >= self.MAX_EMPTY_RESPONSE_RETRIES:
+                        logger.warning(
+                            f"Empty response for {comment_metadata.get('comment_id')} "
+                            f"after {empty_response_count} attempts (capped). "
+                            f"Diagnosis: {diag}"
+                        )
+                        return (
+                            comment_metadata.get("comment_id", "unknown"),
+                            AgencyResponse(
+                                response_found="uncertain",
+                                agency_decision="uncertain",
+                                response_text="N/A",
+                                response_location="N/A",
+                                reasoning=f"Empty model response after {empty_response_count} attempts: {diag}",
+                            ).normalized(),
+                            f"EMPTY_RESPONSE: {diag}",
+                        )
+
+                    logger.warning(
+                        f"Empty response for {comment_metadata.get('comment_id')} "
+                        f"(attempt {empty_response_count}/{self.MAX_EMPTY_RESPONSE_RETRIES}). "
+                        f"Diagnosis: {diag}. Retrying..."
                     )
-                    
-                    # Extract raw text from response
-                    raw_text = ""
-                    if hasattr(response, 'text'):
-                        raw_text = (response.text or "").strip()
-                    elif hasattr(response, 'candidates') and response.candidates:
-                        # Some SDK versions wrap text in candidates
-                        candidate = response.candidates[0]
-                        if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
-                            text_parts = [p.text for p in candidate.content.parts if hasattr(p, 'text')]
-                            raw_text = " ".join(text_parts).strip()
-                    
-                    # Preferred: parsed structured output
-                    parsed_obj = None
-                    if hasattr(response, 'parsed'):
-                        parsed_obj = response.parsed
-                    elif hasattr(response, 'candidates') and response.candidates:
-                        # Check if parsed data is in candidates
-                        candidate = response.candidates[0]
-                        if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
-                            for part in candidate.content.parts:
-                                if hasattr(part, 'struct_data'):
-                                    parsed_obj = part.struct_data
-                                    break
-                    
-                    if parsed_obj is not None:
-                        if isinstance(parsed_obj, AgencyResponse):
-                            parsed = parsed_obj.normalized()
-                        elif isinstance(parsed_obj, dict):
-                            # SDK returned dict-like; validate via Pydantic
-                            parsed = AgencyResponse.model_validate(parsed_obj).normalized()
-                        else:
-                            # Try to convert to dict first
-                            try:
-                                if hasattr(parsed_obj, '__dict__'):
-                                    parsed = AgencyResponse.model_validate(parsed_obj.__dict__).normalized()
-                                elif hasattr(parsed_obj, 'model_dump'):
-                                    parsed = AgencyResponse.model_validate(parsed_obj.model_dump()).normalized()
-                                else:
-                                    # Last resort: convert to string and parse as JSON
-                                    parsed = AgencyResponse.model_validate_json(str(parsed_obj)).normalized()
-                            except Exception as parse_err:
-                                logger.warning(f"Failed to parse parsed_obj: {parse_err}, falling back to raw_text")
-                                parsed_obj = None
-                    
-                    if parsed_obj is None:
-                        # Fallback: validate JSON string from response.text
-                        if not raw_text:
-                            raise ValueError(
-                                f"Response has no text and no parsed object. "
-                                f"Response type: {type(response).__name__}, "
-                                f"Response attrs: {[a for a in dir(response) if not a.startswith('_')][:10]}"
-                            )
-                        
-                        # Try to parse as JSON
-                        try:
-                            parsed = AgencyResponse.model_validate_json(raw_text).normalized()
-                        except Exception as json_err:
-                            # If JSON parsing fails, try to extract JSON from text
-                            # Try to find JSON object in the text
-                            json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', raw_text, re.DOTALL)
-                            if json_match:
-                                try:
-                                    json_str = json_match.group(0)
-                                    parsed = AgencyResponse.model_validate_json(json_str).normalized()
-                                    logger.debug("Extracted JSON from response text using regex")
-                                except Exception:
-                                    raise ValueError(f"Failed to parse JSON from response text: {json_err}") from json_err
-                            else:
-                                raise ValueError(f"Failed to parse JSON from response text: {json_err}") from json_err
-                    
-                    logger.debug(f"Successfully parsed response for comment_id={comment_metadata.get('comment_id')}")
-                    return (
-                        comment_metadata.get("comment_id", "unknown"),
-                        parsed,
-                        raw_text or "OK_JSON",
-                    )
-                    
+                    await asyncio.sleep(2.0 + random.uniform(0.5, 1.5))
+                    continue
+
                 except ValidationError as ve:
                     # Schema validation failed - not retryable.
-                    # Use VALIDATION_ERROR prefix so downstream analysis can
-                    # distinguish API/schema failures from genuine uncertainty.
                     logger.warning(
                         f"VALIDATION_ERROR: Pydantic schema validation failed for "
                         f"{comment_metadata.get('comment_id')}: {ve}. "
@@ -525,32 +587,18 @@ class GeminiResponseTracker:
                         ).normalized(),
                         "ERROR: schema_validation_failed",
                     )
-                    
+
                 except Exception as e:
-                    # Enhanced error logging
                     error_type = type(e).__name__
                     error_msg = str(e)
-                    error_repr = repr(e)
-                    
-                    # Try to get more details from the exception
-                    error_details = {
-                        "type": error_type,
-                        "message": error_msg,
-                        "repr": error_repr,
-                    }
-                    
-                    # Check if exception has additional attributes
-                    if hasattr(e, "__dict__"):
-                        error_details["attributes"] = {k: str(v)[:200] for k, v in e.__dict__.items()}
-                    
+
                     logger.error(
                         f"Gemini API error for comment_id={comment_metadata.get('comment_id')} "
-                        f"(attempt {attempt+1}/{self.max_retries}): {error_type}: {error_msg}\n"
-                        f"Full error details: {error_details}"
+                        f"(attempt {attempt+1}/{self.max_retries}): {error_type}: {error_msg}"
                     )
-                    
+
                     retryable = self._is_retryable_error(e)
-                    
+
                     if attempt >= self.max_retries - 1 or not retryable:
                         logger.warning(
                             f"Gemini call failed (retryable={retryable}) after attempt {attempt+1}: "
@@ -567,16 +615,16 @@ class GeminiResponseTracker:
                             ).normalized(),
                             f"ERROR: {error_msg}",
                         )
-                    
+
                     jitter = random.uniform(0.5, 2.0)
                     sleep_time = backoff + jitter
                     if "429" in str(e).lower():
                         sleep_time += 30.0
-                    
+
                     logger.debug(f"Retrying after error (attempt {attempt+1}): {error_type}: {error_msg} (sleep {sleep_time:.1f}s)")
                     await asyncio.sleep(sleep_time)
                     backoff = min(backoff * 2, 120.0)
-            
+
             # Should never hit due to returns above, but keep safe
             return (
                 comment_metadata.get("comment_id", "unknown"),
@@ -685,6 +733,7 @@ class GeminiResponseTracker:
         async def do_request() -> Tuple[str, Dict[str, str], str]:
             backoff = 2.0
             comment_id = comment_metadata.get("comment_id", "unknown")
+            empty_response_count = 0
 
             for attempt in range(self.max_retries):
                 try:
@@ -693,7 +742,6 @@ class GeminiResponseTracker:
                         f"prompt_length={len(prompt)}"
                     )
 
-                    # Use Content list format (consistent with Tier 1)
                     contents_input = [self._types.Content(
                         role="user",
                         parts=[self._types.Part(text=prompt)]
@@ -705,57 +753,52 @@ class GeminiResponseTracker:
                         config=tier2_config,
                     )
 
-                    # Extract raw text
-                    raw_text = ""
-                    if hasattr(response, 'text'):
-                        raw_text = (response.text or "").strip()
-                    elif hasattr(response, 'candidates') and response.candidates:
-                        candidate = response.candidates[0]
-                        if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
-                            text_parts = [p.text for p in candidate.content.parts if hasattr(p, 'text')]
-                            raw_text = " ".join(text_parts).strip()
+                    # ---- RESPONSE PARSING ----
+                    # Use shared parser, same pattern as Tier 1.
+                    # TypeError/AttributeError from SDK internals (None
+                    # candidates/parts) are routed to empty-response handler.
+                    try:
+                        raw_text, parsed = _parse_gemini_response(
+                            response, Tier2Response, logger
+                        )
+                    except (TypeError, AttributeError) as sdk_err:
+                        logger.debug(
+                            f"Tier 2: SDK error parsing response for {comment_id}: {sdk_err}"
+                        )
+                        raw_text = ""
+                        parsed = None
 
-                    # Try parsed structured output first
-                    parsed_obj = None
-                    if hasattr(response, 'parsed'):
-                        parsed_obj = response.parsed
+                    if parsed is not None:
+                        logger.debug(f"Tier 2: Successfully parsed response for {comment_id}")
+                        return (comment_id, parsed, raw_text or "OK_JSON")
 
-                    if parsed_obj is not None:
-                        if isinstance(parsed_obj, Tier2Response):
-                            parsed = parsed_obj.normalized()
-                        elif isinstance(parsed_obj, dict):
-                            parsed = Tier2Response.model_validate(parsed_obj).normalized()
-                        else:
-                            try:
-                                if hasattr(parsed_obj, '__dict__'):
-                                    parsed = Tier2Response.model_validate(parsed_obj.__dict__).normalized()
-                                elif hasattr(parsed_obj, 'model_dump'):
-                                    parsed = Tier2Response.model_validate(parsed_obj.model_dump()).normalized()
-                                else:
-                                    parsed = Tier2Response.model_validate_json(str(parsed_obj)).normalized()
-                            except Exception as parse_err:
-                                logger.warning(f"Tier 2: Failed to parse parsed_obj: {parse_err}")
-                                parsed_obj = None
+                    # ---- EMPTY RESPONSE HANDLING ----
+                    empty_response_count += 1
+                    diag = _diagnose_empty_response(response)
 
-                    if parsed_obj is None:
-                        # Fallback: parse JSON from raw text
-                        if not raw_text:
-                            raise ValueError(f"Tier 2: Response has no text and no parsed object for {comment_id}")
+                    if empty_response_count >= self.MAX_EMPTY_RESPONSE_RETRIES:
+                        logger.warning(
+                            f"Tier 2: Empty response for {comment_id} "
+                            f"after {empty_response_count} attempts (capped). "
+                            f"Diagnosis: {diag}"
+                        )
+                        return (
+                            comment_id,
+                            Tier2Response(
+                                acceptance_status="UNCLEAR",
+                                confidence=0.0,
+                                text_change_summary=f"Empty model response after {empty_response_count} attempts: {diag}",
+                            ).normalized(),
+                            f"EMPTY_RESPONSE: {diag}",
+                        )
 
-                        try:
-                            parsed = Tier2Response.model_validate_json(raw_text).normalized()
-                        except Exception as json_err:
-                            json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', raw_text, re.DOTALL)
-                            if json_match:
-                                try:
-                                    parsed = Tier2Response.model_validate_json(json_match.group(0)).normalized()
-                                except Exception:
-                                    raise ValueError(f"Tier 2: Failed to parse JSON: {json_err}") from json_err
-                            else:
-                                raise ValueError(f"Tier 2: Failed to parse JSON: {json_err}") from json_err
-
-                    logger.debug(f"Tier 2: Successfully parsed response for {comment_id}")
-                    return (comment_id, parsed, raw_text or "OK_JSON")
+                    logger.warning(
+                        f"Tier 2: Empty response for {comment_id} "
+                        f"(attempt {empty_response_count}/{self.MAX_EMPTY_RESPONSE_RETRIES}). "
+                        f"Diagnosis: {diag}. Retrying..."
+                    )
+                    await asyncio.sleep(2.0 + random.uniform(0.5, 1.5))
+                    continue
 
                 except ValidationError as ve:
                     logger.warning(

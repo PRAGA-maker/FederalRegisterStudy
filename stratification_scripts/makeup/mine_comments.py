@@ -350,7 +350,10 @@ def load_documents(
         return None
 
     logger.info(f"Loading documents from: {fr_csv}")
-    df_docs = pl.read_csv(str(fr_csv))
+    df_docs = pl.read_csv(
+        str(fr_csv),
+        schema_overrides={"cfr_titles": pl.Utf8, "topics": pl.Utf8, "abstract": pl.Utf8},
+    )
 
     # Validate year
     if "publication_date" in df_docs.columns:

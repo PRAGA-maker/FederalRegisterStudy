@@ -304,7 +304,10 @@ def join_and_write_output(
     df_joined = df_comments.join(df_results, on="comment_id", how="left")
     
     if fr_csv.exists():
-        df_fr = pl.read_csv(str(fr_csv))
+        df_fr = pl.read_csv(
+            str(fr_csv),
+            schema_overrides={"cfr_titles": pl.Utf8, "topics": pl.Utf8, "abstract": pl.Utf8},
+        )
         if "agency" in df_fr.columns and "document_number" in df_fr.columns:
             df_joined = df_joined.join(
                 df_fr.select(["document_number", "agency"]),
