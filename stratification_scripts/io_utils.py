@@ -4,9 +4,10 @@ I/O utilities for the Federal Register Study pipeline.
 This module provides:
 - UTF-8 text sanitization for API responses
 - PDF text extraction
+- DOCX text extraction
 
 Example:
-    >>> from stratification_scripts.io_utils import sanitize_utf8, extract_pdf_text
+    >>> from stratification_scripts.io_utils import sanitize_utf8, extract_pdf_text, extract_docx_text
     >>>
     >>> # Clean text with invalid UTF-8
     >>> clean_text = sanitize_utf8(dirty_text)
@@ -145,8 +146,71 @@ def extract_pdf_text(
             return sanitize_utf8(text) if text else None
 
         except Exception as pymupdf_error:
-            logger.debug(
+            logger.warning(
                 f"PDF extraction failed: pypdf={pypdf_error}, "
                 f"pymupdf={pymupdf_error}"
             )
             return None
+
+
+def extract_docx_text(
+    docx_bytes: bytes,
+    max_pages: int = 2,
+) -> Optional[str]:
+    """
+    Extract text from DOCX bytes.
+
+    Uses python-docx to read the document and extract paragraph text.
+    Approximates page limits by capping at ~3000 chars (roughly 2 pages).
+
+    Args:
+        docx_bytes: Raw DOCX file content
+        max_pages: Maximum pages to approximate (default: 2)
+
+    Returns:
+        Extracted text or None if extraction failed.
+    """
+    if not docx_bytes:
+        return None
+
+    # DOCX files are ZIP archives starting with PK signature
+    if not docx_bytes[:2] == b'PK':
+        logger.warning(f"Not a DOCX file (starts with {docx_bytes[:20]})")
+        return None
+
+    try:
+        from docx import Document
+
+        doc = Document(io.BytesIO(docx_bytes))
+        text_parts = []
+        char_count = 0
+        # ~1500 chars per page approximation
+        char_limit = max_pages * 1500
+
+        for para in doc.paragraphs:
+            para_text = para.text.strip()
+            if para_text:
+                text_parts.append(para_text)
+                char_count += len(para_text)
+                if char_count >= char_limit:
+                    break
+
+        # Also extract text from tables (common in regulatory comments)
+        if char_count < char_limit:
+            for table in doc.tables:
+                for row in table.rows:
+                    row_texts = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+                    if row_texts:
+                        text_parts.append(" | ".join(row_texts))
+                        char_count += sum(len(t) for t in row_texts)
+                        if char_count >= char_limit:
+                            break
+                if char_count >= char_limit:
+                    break
+
+        text = "\n\n".join(text_parts).strip()
+        return sanitize_utf8(text) if text else None
+
+    except Exception as e:
+        logger.warning(f"DOCX extraction failed: {e}")
+        return None

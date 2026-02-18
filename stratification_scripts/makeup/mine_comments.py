@@ -43,7 +43,7 @@ from stratification_scripts.config import (
     get_comments_raw_path,
     get_fr_csv_path,
 )
-from stratification_scripts.io_utils import sanitize_utf8, extract_pdf_text
+from stratification_scripts.io_utils import sanitize_utf8, extract_pdf_text, extract_docx_text
 from stratification_scripts.logging_utils import (
     get_logger,
     log_banner,
@@ -236,37 +236,61 @@ def extract_comment_fields_from_detail(
             elif att_attrs.get("format"):
                 attachment_formats.append(str(att_attrs.get("format")))
 
-            # Check for PDF format
-            is_pdf = False
-            pdf_url = None
-            
+            # Detect attachment format and download URL
+            detected_format = None
+            file_url = None
+
             if isinstance(file_formats, list) and len(file_formats) > 0:
                 for ff in file_formats:
                     if isinstance(ff, dict):
                         fmt = str(ff.get("format", "")).lower()
                         if "pdf" in fmt:
-                            is_pdf = True
-                            pdf_url = ff.get("fileUrl")
+                            detected_format = "pdf"
+                            file_url = ff.get("fileUrl")
                             break
-            
-            if not is_pdf and att_attrs.get("format"):
-                if "pdf" in str(att_attrs.get("format", "")).lower():
-                    is_pdf = True
-                    pdf_url = att_attrs.get("fileUrl")
-            
-            if not is_pdf:
+                        elif "docx" in fmt or "word" in fmt or "document" in fmt:
+                            detected_format = "docx"
+                            file_url = ff.get("fileUrl")
+                            break
+                        elif "doc" in fmt:
+                            detected_format = "doc"
+                            file_url = ff.get("fileUrl")
+                            break
+
+            if not detected_format and att_attrs.get("format"):
+                fmt = str(att_attrs.get("format", "")).lower()
+                if "pdf" in fmt:
+                    detected_format = "pdf"
+                    file_url = att_attrs.get("fileUrl")
+                elif "docx" in fmt or "word" in fmt or "document" in fmt:
+                    detected_format = "docx"
+                    file_url = att_attrs.get("fileUrl")
+                elif "doc" in fmt:
+                    detected_format = "doc"
+                    file_url = att_attrs.get("fileUrl")
+
+            if not detected_format:
+                logger.warning(
+                    f"Unsupported attachment format for comment, skipping: "
+                    f"formats={attachment_formats}"
+                )
                 continue
 
-            if not pdf_url:
-                pdf_url = att_links.get("self")
+            if not file_url:
+                file_url = att_links.get("self")
 
-            if not pdf_url:
+            if not file_url:
+                logger.warning(f"No download URL for {detected_format} attachment")
                 continue
-            
-            # Download and extract PDF text
-            pdf_bytes = client.download_bytes(pdf_url, timeout=30)
-            if pdf_bytes:
-                extracted_text = extract_pdf_text(pdf_bytes, max_pages=2)
+
+            # Download and extract text based on format
+            file_bytes = client.download_bytes(file_url, timeout=30)
+            if file_bytes:
+                extracted_text = None
+                if detected_format == "pdf":
+                    extracted_text = extract_pdf_text(file_bytes, max_pages=2)
+                elif detected_format in ("docx", "doc"):
+                    extracted_text = extract_docx_text(file_bytes, max_pages=2)
                 if extracted_text:
                     attachment_texts.append(extracted_text)
     
@@ -399,7 +423,11 @@ def load_existing_comment_ids(output_csv: Path) -> Set[str]:
     if not output_csv.exists():
         return set()
 
-    df_existing = pl.read_csv(str(output_csv))
+    df_existing = pl.read_csv(
+        str(output_csv),
+        infer_schema_length=10000,
+        schema_overrides={"zip": pl.Utf8},
+    )
     existing_ids = set(df_existing["comment_id"].to_list())
     logger.info(f"Loaded {len(existing_ids)} existing comments")
     return existing_ids
@@ -843,7 +871,11 @@ def write_comment_output(
     df_new = df_new.select(existing_columns)
 
     if output_csv.exists():
-        df_existing = pl.read_csv(str(output_csv))
+        df_existing = pl.read_csv(
+            str(output_csv),
+            infer_schema_length=10000,
+            schema_overrides={"zip": pl.Utf8},
+        )
 
         for col in df_new.columns:
             if col not in df_existing.columns:

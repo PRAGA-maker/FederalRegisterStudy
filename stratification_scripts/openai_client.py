@@ -105,9 +105,9 @@ def classify_from_metadata(row: Dict) -> Optional[str]:
         ]):
             return LABEL_MAP["org"]
     
-    # Government agency → Academic/Industry/Expert
+    # Government agency → Organization/Corporation
     if gov_agency:
-        return LABEL_MAP["expert"]
+        return LABEL_MAP["org"]
     
     # Submitter type hints
     if submitter_type:
@@ -121,12 +121,11 @@ def classify_from_metadata(row: Dict) -> Optional[str]:
     if organization and (first_name or last_name):
         org_lower = str(organization).lower()
         if any(term in org_lower for term in [
-            "university", "college", "institute", "research",
-            "lab", "dept", "department"
+            "university", "college", "institute", "research", "lab"
         ]):
             return LABEL_MAP["expert"]
         if any(term in org_lower for term in [
-            "consulting", "consultancy", "partners", "solutions", "services"
+            "consulting", "consultancy"
         ]):
             return LABEL_MAP["expert"]
     
