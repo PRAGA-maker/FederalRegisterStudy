@@ -110,6 +110,14 @@ def enrich_fr_detail(
     docket_id: Optional[str] = None
     doc_type: Optional[str] = rec.get("type")
 
+    # New analytical fields (extracted from FR API detail response)
+    abstract: Optional[str] = None
+    topics: Optional[str] = None
+    action: Optional[str] = None
+    significant: Optional[bool] = None
+    cfr_titles: Optional[str] = None
+    cfr_parts_count: int = 0
+
     if doc_number:
         details = fr_client.fetch_document_details(doc_number)
         if details:
@@ -134,6 +142,23 @@ def enrich_fr_detail(
             # Also extract from regs_info if not found
             if not docket_id and isinstance(fr_info, dict):
                 docket_id = fr_info.get("docket_id")
+
+            # Extract analytical metadata from detail response
+            abstract = details.get("abstract")
+            raw_topics = details.get("topics")
+            if raw_topics and isinstance(raw_topics, list) and len(raw_topics) > 0:
+                topics = ", ".join(str(t) for t in raw_topics)
+            action = details.get("action")
+            significant = details.get("significant")
+            cfr_refs = details.get("cfr_references")
+            if cfr_refs and isinstance(cfr_refs, list):
+                titles = sorted(set(
+                    str(int(ref["title"])) if isinstance(ref["title"], (int, float)) else str(ref["title"])
+                    for ref in cfr_refs
+                    if isinstance(ref, dict) and ref.get("title") is not None
+                ))
+                cfr_titles = ", ".join(titles) if titles else None
+                cfr_parts_count = len(cfr_refs)
         else:
             logger.debug(f"FR API failed for {doc_number}")
 
@@ -187,11 +212,18 @@ def enrich_fr_detail(
         "count_source": count_source,
         "eligibility_reason": eligibility_reason,
         "submission_channel": submission_channel,
-        # New lifecycle tracking fields
+        # Lifecycle tracking fields
         "rin": rin,
         "rin_all": ",".join(rin_all) if len(rin_all) > 1 else None,
         "docket_id": docket_id,
         "doc_type": doc_type,
+        # Analytical metadata fields
+        "abstract": abstract,
+        "topics": topics,
+        "action": action,
+        "significant": significant,
+        "cfr_titles": cfr_titles,
+        "cfr_parts_count": cfr_parts_count,
     }
 
 
@@ -238,10 +270,21 @@ def enrich_regs_count(
                     comment_count = mt
                     count_source = "regulations.gov-meta"
     
-    # Ensure we have a valid count
+    # Ensure we have a valid count -- but distinguish "unknown" from "genuinely zero"
     if not isinstance(comment_count, int) or comment_count < 0:
-        logger.warning(f"Comment count fallback to 0 for {regs_document_id} (was {comment_count!r})")
-        comment_count = 0
+        if count_source == "unknown":
+            logger.warning(
+                "Comment count remains unknown for %s "
+                "(count_source=%r, raw=%r) -- leaving as None",
+                regs_document_id, count_source, comment_count,
+            )
+            comment_count = None
+        else:
+            logger.error(
+                "Invalid comment_count=%r with known source %r for %s -- setting to 0",
+                comment_count, count_source, regs_document_id,
+            )
+            comment_count = 0
     
     base_rec["comment_count"] = comment_count
     base_rec["count_source"] = count_source

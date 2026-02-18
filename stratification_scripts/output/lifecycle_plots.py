@@ -10,6 +10,14 @@ columns propagated through the pipeline.
 Example:
     >>> from stratification_scripts.output.lifecycle_plots import generate_lifecycle_plots
     >>> generate_lifecycle_plots(df_makeup, fr_csv_path, year, outdir)
+
+# ---------------------------------------------------------------------------
+# TODO: Batch 5 Agent E (2026-02-17) added doc_type, eligibility_reason,
+# topics, cfr_titles, action, significant to the data pipeline.
+# See makeup_plots.py header and plans/eager-waddling-squirrel.md for the
+# full list of new analyses now possible. Key addition for lifecycle plots:
+# can now split lifecycle heatmaps by doc_type (Proposed Rule vs Notice).
+# ---------------------------------------------------------------------------
 """
 
 from __future__ import annotations

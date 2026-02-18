@@ -9,13 +9,57 @@ Optional dependency: adjustText (pip install adjusttext) for better label positi
 Example:
     # CLI usage
     $ python -m stratification_scripts.output.makeup_plots --year 2024
-    
+
     # Programmatic usage
     >>> from stratification_scripts.output.makeup_plots import generate_plots_for_year
     >>> from stratification_scripts.config import PipelineConfig
-    >>> 
+    >>>
     >>> config = PipelineConfig(year=2024)
     >>> generate_plots_for_year(config)
+
+# ---------------------------------------------------------------------------
+# TODO: New analysis capabilities (Batch 5, Agent E — 2026-02-17)
+# Reference: plans/eager-waddling-squirrel.md
+#
+# Agent E added 6 new FR API fields to the FR CSV and fixed doc_type /
+# eligibility_reason propagation so they flow through all pipeline steps.
+# This unlocks several analyses that were previously impossible.
+#
+# NEW DATA AVAILABLE (FR CSV, 48 columns — was 42):
+#   - abstract        : document summary text (~80% populated)
+#   - topics          : policy domain tags, e.g. "Air pollution control,
+#                       Environmental protection" (Rules ~50%, Notices ~0%)
+#   - action          : granular action type, e.g. "Proposed rule; 12-month
+#                       finding.", "Advance notice of proposed rulemaking."
+#                       Best proxy for notice subtype (~90% populated)
+#   - significant     : EO 12866 significance flag (True/False for rules,
+#                       None for notices)
+#   - cfr_titles      : affected CFR title numbers, e.g. "40, 50"
+#                       (40=EPA, 29=Labor, 26=Tax — rules/prorules only)
+#   - cfr_parts_count : number of CFR parts affected (regulatory scope proxy)
+#
+# FIXED PROPAGATION (comments_raw 26 cols — was 24, makeup_data 7 — was 5):
+#   - doc_type            : "Proposed Rule", "Rule", "Notice" — now in
+#                           comments_raw AND makeup_data (was lost after Step 1)
+#   - eligibility_reason  : "prorule" vs "notice-with-comment-period" — same
+#
+# ANALYSES NOW POSSIBLE (TODO — implement as needed):
+#   1. Commenter composition by doc_type — split donut/bar by Proposed Rule
+#      vs Notice vs Rule. Uses doc_type in makeup_data.
+#   2. Policy domain stratification — group by cfr_titles or topics to answer
+#      "Do environmental rules attract different commenters than labor rules?"
+#   3. Significance analysis — compare commenter mix for EO 12866 "significant"
+#      rules vs routine rules. Uses significant field in FR CSV.
+#   4. Notice subtype breakdown — use action field to classify NO_RIN notices
+#      into PRA/info collection, meetings, petitions, EPA SIPs, etc.
+#   5. Regulatory scope vs participation — correlate cfr_parts_count with
+#      comment volume and commenter diversity.
+#
+# STILL BLOCKED:
+#   - Cross-year lifecycle comparison (proposedplan.md Section 20) — needs a
+#     multi-year joining script to track how commenter composition changes
+#     as documents progress NPRM -> Final Rule across calendar years.
+# ---------------------------------------------------------------------------
 """
 
 from __future__ import annotations
@@ -218,7 +262,9 @@ def calculate_weights(df: pd.DataFrame, fr_csv_path: Optional[Path]) -> pd.DataF
         fr_df = fr_df[fr_df["comment_count"] > 0].copy()
         
         # Assign Comment Bins (matching mine_comments.py logic)
+        # NaN/None → "UNKNOWN" bin (docket-fallback docs with no known count)
         def get_bin(n):
+            if pd.isna(n): return "UNKNOWN"
             if n <= 10: return "0-10"
             elif n <= 100: return "11-100"
             elif n <= 1000: return "101-1000"
@@ -237,8 +283,15 @@ def calculate_weights(df: pd.DataFrame, fr_csv_path: Optional[Path]) -> pd.DataF
         # Join document metadata to sample data to get comment counts per document for binning
         if "document_number" in df.columns and "document_number" in fr_df.columns:
             df = df.merge(fr_df[["document_number", "comment_count"]], on="document_number", how="left")
-            # Fill missing comment counts with 1 (assume singleton) to avoid errors
-            df["comment_count"] = df["comment_count"].fillna(1)
+            # NaN comment_count = doc not in FR population (docket-fallback with unknown count)
+            # Leave NaN — get_bin() puts them in "UNKNOWN" bin, no population expansion
+            n_unmatched = df["comment_count"].isna().sum()
+            if n_unmatched > 0:
+                n_unmatched_docs = df.loc[df["comment_count"].isna(), "document_number"].nunique()
+                logger.warning(
+                    f"{n_unmatched} comments ({n_unmatched_docs} docs) have unknown comment_count "
+                    f"(not in FR population) -- binned as UNKNOWN, weight=1.0"
+                )
             df["comment_bin"] = df["comment_count"].apply(get_bin)
         else:
             logger.warning("Could not link documents to FR metadata. Using unweighted data.")
@@ -1124,10 +1177,14 @@ def plot_workload_vs_citizen_by_document(df: pd.DataFrame, year: int, outdir: Pa
     df_doc_view = df.drop_duplicates(subset=["comment_id"])
     # --------------------------------------------------------------------------
         
-    # Check if we have weights
+    # Check if we have weights — weight_doc is REQUIRED for document-level plots
     if "weight_doc" not in df_doc_view.columns:
-        print("Warning: weight_doc not available. Using standard weight.")
-        df_doc_view["weight_doc"] = df_doc_view.get("weight", 1.0)
+        logger.error(
+            "weight_doc not available for document-level plot (year=%s). "
+            "Cannot use stratum weight as substitute — would violate Y<=X invariant. Skipping.",
+            year,
+        )
+        return
         
     if "comment_count" not in df_doc_view.columns:
         print("Warning: True comment_count not available.")
@@ -2430,12 +2487,12 @@ def generate_narrative_summary(df: pd.DataFrame, fr_csv_path: Optional[Path], ye
                     print(f"  ({unknown_count_docs:,} docs with unknown counts excluded from stats)")
                 print(f"Documents with 0 comments (known counts only): {zero_docs:,} ({pct_zero:.1f}%)")
                 
-                # Urgency / Attention
+                # Urgency / Attention — use known-count docs only (consistent with zero-doc stats)
                 # Top 1% of documents capture X% of comments
-                top_1_pct_n = max(1, int(np.ceil(total_docs * 0.01)))
-                top_docs = fr_df.nlargest(top_1_pct_n, "comment_count")
+                top_1_pct_n = max(1, int(np.ceil(total_docs_known * 0.01)))
+                top_docs = fr_df_known.nlargest(top_1_pct_n, "comment_count")
                 top_vol = top_docs["comment_count"].sum()
-                total_vol = fr_df["comment_count"].sum()
+                total_vol = fr_df_known["comment_count"].sum()
                 pct_captured = top_vol / total_vol * 100 if total_vol > 0 else 0
                 
                 print(f"\nConcentration of Attention:")

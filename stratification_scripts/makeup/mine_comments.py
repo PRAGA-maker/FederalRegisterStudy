@@ -581,10 +581,15 @@ def build_two_stage_sample_plan(
     """
     log_banner(logger, "TWO-STAGE STRATIFIED SAMPLING PLAN", width=60)
     
-    # Assign comment bins
+    # Assign comment bins — NULL comment_count (docket-fallback docs with unknown counts)
+    # gets its own "UNKNOWN" bin so it doesn't pollute real strata
     logger.info("Assigning documents to comment bins...")
+    n_null_count = df_docs.filter(pl.col("comment_count").is_null()).height
+    if n_null_count > 0:
+        logger.info(f"  {n_null_count} docs have NULL comment_count (docket-fallback) -> 'UNKNOWN' bin")
     df_docs = df_docs.with_columns([
-        pl.when(pl.col("comment_count") <= 10).then(pl.lit("0-10"))
+        pl.when(pl.col("comment_count").is_null()).then(pl.lit("UNKNOWN"))
+          .when(pl.col("comment_count") <= 10).then(pl.lit("0-10"))
           .when(pl.col("comment_count") <= 100).then(pl.lit("11-100"))
           .when(pl.col("comment_count") <= 1000).then(pl.lit("101-1000"))
           .when(pl.col("comment_count") <= 10000).then(pl.lit("1001-10000"))
@@ -746,7 +751,7 @@ def run_stratified_pipeline(
         logger.info("No comments selected for fetching")
         return []
 
-    # Build doc metadata lookup for lifecycle propagation
+    # Build doc metadata lookup for lifecycle + doc type propagation
     doc_meta: Dict[str, Dict[str, Any]] = {}
     for row in df_docs.iter_rows(named=True):
         dn = row.get("document_number")
@@ -754,6 +759,8 @@ def run_stratified_pipeline(
             doc_meta[dn] = {
                 "lifecycle_stage": row.get("lifecycle_stage"),
                 "rin": row.get("rin"),
+                "doc_type": row.get("doc_type"),
+                "eligibility_reason": row.get("eligibility_reason"),
             }
 
     # Stage 3: Fetch details
@@ -804,6 +811,8 @@ def run_stratified_pipeline(
             meta = doc_meta.get(doc_number, {})
             fields["lifecycle_stage"] = meta.get("lifecycle_stage")
             fields["rin"] = meta.get("rin")
+            fields["doc_type"] = meta.get("doc_type")
+            fields["eligibility_reason"] = meta.get("eligibility_reason")
 
             existing_ids.add(comment_id)
             return fields
@@ -823,6 +832,8 @@ def run_stratified_pipeline(
             meta = doc_meta.get(doc_number, {})
             fields["lifecycle_stage"] = meta.get("lifecycle_stage")
             fields["rin"] = meta.get("rin")
+            fields["doc_type"] = meta.get("doc_type")
+            fields["eligibility_reason"] = meta.get("eligibility_reason")
 
             return fields
     
@@ -864,7 +875,7 @@ def write_comment_output(
         "gov_agency", "gov_agency_type",
         "has_attachments", "attachment_count", "attachment_formats", "attachment_text",
         "duplicate_comments", "page_count",
-        "lifecycle_stage", "rin",
+        "lifecycle_stage", "rin", "doc_type", "eligibility_reason",
     ]
 
     existing_columns = [c for c in column_order if c in df_new.columns]

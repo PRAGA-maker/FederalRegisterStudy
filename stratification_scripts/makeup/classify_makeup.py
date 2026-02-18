@@ -319,6 +319,10 @@ def join_and_write_output(
         cols.append("lifecycle_stage")
     if "rin" in df_joined.columns:
         cols.append("rin")
+    if "doc_type" in df_joined.columns:
+        cols.append("doc_type")
+    if "eligibility_reason" in df_joined.columns:
+        cols.append("eligibility_reason")
 
     df_all = df_joined.select(cols)
     null_count = df_all.filter(pl.col("category").is_null()).shape[0]

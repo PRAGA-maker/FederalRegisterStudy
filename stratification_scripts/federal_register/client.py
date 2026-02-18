@@ -148,7 +148,7 @@ def extract_docket_id(details: dict) -> Optional[str]:
 # The Regs.gov API expects bare IDs like "FDA-2012-N-1148", not
 # "Docket No. FDA-2012-N-1148".
 _DOCKET_PREFIX_RE = re.compile(
-    r"^(?:DHS\s+)?(?:Docket|Doc\.?|Document)\s*(?:No\.?|Number|#:?)\s*",
+    r"^(?:DHS\s+)?(?:Docket|Doc\.?|Document)\s*(?:No\.?|Number|#:?|ID:?)\s*",
     re.IGNORECASE,
 )
 
@@ -161,6 +161,7 @@ def normalize_docket_id(raw: Optional[str]) -> Optional[str]:
         "Docket No. FDA-2012-N-1148"  -> "FDA-2012-N-1148"
         "Doc. No. AMS-FV-12-0043"     -> "AMS-FV-12-0043"
         "Docket #: EPA-R10-OAR-2010"  -> "EPA-R10-OAR-2010"
+        "Docket ID: DoD-2013-OS-0238" -> "DoD-2013-OS-0238"
         "EPA-HQ-OAR-2024-0001"        -> "EPA-HQ-OAR-2024-0001" (no-op)
     """
     if not raw or not isinstance(raw, str):

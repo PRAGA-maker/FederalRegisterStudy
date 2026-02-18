@@ -572,13 +572,17 @@ class RegsGovClient:
         if not object_id:
             return
 
+        MAX_WINDOWS = 1000  # Safety cap: 1000 windows * 20 pages * 250 items = 5M comments max
+
         fetched = 0
         cursor_ge: Optional[str] = None
-        
-        while True:
+        window = 0
+
+        while window < MAX_WINDOWS:
+            window += 1
             page = 1
             last_seen_ts: Optional[str] = None
-            
+
             while page <= 20:
                 params: Dict[str, Any] = {
                     "filter[commentOnId]": object_id,
@@ -591,6 +595,12 @@ class RegsGovClient:
 
                 data = self.request_json(REGS_COMMENTS_URL, params=params, timeout=30)
                 if data is None:
+                    logger.warning(
+                        "Paging terminated early for object_id=%s: "
+                        "request returned None at window=%d, page=%d "
+                        "(fetched %d comments so far, cursor=%r)",
+                        object_id, window, page, fetched, cursor_ge,
+                    )
                     return
 
                 items: List[dict] = data.get("data") or []
@@ -615,6 +625,13 @@ class RegsGovClient:
             if not last_seen_ts or cursor_ge == last_seen_ts:
                 return
             cursor_ge = last_seen_ts
+
+        # Safety cap reached
+        logger.error(
+            "Safety cap reached for object_id=%s: "
+            "%d windows exhausted, fetched %d comments. Last cursor: %r",
+            object_id, MAX_WINDOWS, fetched, cursor_ge,
+        )
 
     def fetch_comment_detail(
         self,

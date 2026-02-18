@@ -1,0 +1,6 @@
+usage: federal-register [-h] [--years YEARS] [--steps STEPS] [--limit LIMIT]
+                        [--concurrent-workers CONCURRENT_WORKERS]
+                        [--model MODEL] [--test]
+                        [--fetch-strategy {all,stratified}] [--verbose]
+                        [--quiet] [--validate] [--version]
+federal-register: error: unrecognized arguments: mine deduplicate classify track_responses plot
