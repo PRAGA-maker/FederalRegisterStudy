@@ -55,10 +55,63 @@ Example:
 #   5. Regulatory scope vs participation — correlate cfr_parts_count with
 #      comment volume and commenter diversity.
 #
+# RIN-BASED CHAIN-LINKING (Batch 5, Agent F audit — 2026-02-18)
+# Reference: plans/encapsulated-wandering-hollerith.md
+#
+# The pipeline already captures full rulemaking chains via rin_timetable JSON.
+# No additional API calls needed — all data is in the FR CSV.
+#
+# DATA AVAILABLE PER RIN (from FR CSV):
+#   - rin_timetable         : JSON array of ALL actions, dates, FR citations
+#                             (e.g., 20 entries for CFTC RIN 3038-AD82)
+#   - timetable_sequence    : condensed chain string, e.g.
+#                             "NPRM->NPRM_CLOSED->FINAL->FINAL_EFFECTIVE"
+#   - nprm_document_number  : FR doc number of the NPRM
+#   - final_rule_document_number : FR doc number of the Final Rule
+#   - nprm_date, final_action_date, effective_date : milestone dates
+#   - nprm_citation, final_action_citation : FR volume/page citations
+#
+# CHAIN RECONSTRUCTION (zero API calls):
+#   1. Group FR CSV by rin — multiple docs per RIN exist in the same year
+#      (e.g., RIN 3038-AD82 has 5 docs in 2014: initial reopening,
+#      correction, 2nd reopening, extension, 3rd reopening)
+#   2. Parse rin_timetable JSON for the full action sequence
+#   3. Match timetable entries to CSV rows by rin + publication_date
+#      — each match = a comment-eligible step with comment_count
+#   4. Non-comment-eligible docs (final rules without comment periods)
+#      are identified via final_rule_document_number + timetable
+#      date/citation. They have no row but their existence is known.
+#   5. Join comments_raw on document_number to get actual comment text
+#      per chain step
+#
+# KEY INSIGHT: lifecycle_stage reflects the RIN's CURRENT state (as of
+# pipeline run), not the document's role. A 2014 "Proposed Rule" gets
+# FINAL_EFFECTIVE if the RIN progressed to final by 2026. The document's
+# actual role in the chain is determined by matching its publication_date
+# to a timetable entry.
+#
+# CROSS-YEAR JOINING:
+#   Load federal_register_{year}_comments.csv for multiple years, concat,
+#   group by rin. The NPRM (e.g., 2012), supplemental NPRMs (2015),
+#   and final rule (2016) all join into one chain with comments at each
+#   eligible step. This is the primary remaining analytical unlock.
+#
+# EXAMPLE ANALYSES ENABLED:
+#   6. Chain-level comment evolution — for RINs with multiple comment
+#      periods (reopenings, supplemental NPRMs), track how comment
+#      volume and commenter composition change across steps.
+#   7. NPRM-to-Final lifecycle storytelling — for a given RIN, show
+#      the full timeline with comment counts at each eligible step,
+#      plus the final rule date/citation as the outcome.
+#   8. Reopening impact — compare comment volume on initial NPRM vs
+#      reopened comment periods for the same rulemaking.
+#   9. Duration vs participation — correlate nprm_to_final_days with
+#      total comment volume across all chain steps.
+#
 # STILL BLOCKED:
-#   - Cross-year lifecycle comparison (proposedplan.md Section 20) — needs a
-#     multi-year joining script to track how commenter composition changes
-#     as documents progress NPRM -> Final Rule across calendar years.
+#   - Cross-year lifecycle comparison (proposedplan.md Section 20) — needs
+#     multi-year CSVs loaded and joined by rin. The data infrastructure
+#     exists (rin_timetable, document linking); the join script does not.
 # ---------------------------------------------------------------------------
 """
 
