@@ -431,8 +431,8 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
     
     # Join with comments_raw to get full metadata (including deduplication columns if present)
     logger.info(f"Loading raw comments from: {comments_raw_csv}")
-    df_raw = pl.read_csv(str(comments_raw_csv))
-    
+    df_raw = pl.read_csv(str(comments_raw_csv), schema_overrides={"zip": pl.Utf8})
+
     # Check if deduplication was performed
     has_deduplication = "is_canonical" in df_raw.columns
     
@@ -820,7 +820,7 @@ def _run_tier2_comparison(
     # ------------------------------------------------------------------
     # Load raw comments for full text extraction
     comments_raw_csv = get_comments_raw_path(config.year)
-    df_comments_raw = pl.read_csv(str(comments_raw_csv)) if comments_raw_csv.exists() else None
+    df_comments_raw = pl.read_csv(str(comments_raw_csv), schema_overrides={"zip": pl.Utf8}) if comments_raw_csv.exists() else None
 
     tier2_batch: List[tuple] = []  # (comment_text, nprm_text, final_text, metadata)
     skipped_no_text: List[str] = []

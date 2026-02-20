@@ -298,7 +298,7 @@ def join_and_write_output(
     """Join comments + results + FR data and write makeup_data.csv."""
     logger.info("Joining results...")
     
-    df_comments = pl.read_csv(str(comments_csv))
+    df_comments = pl.read_csv(str(comments_csv), schema_overrides={"zip": pl.Utf8})
     df_results = pl.read_csv(str(results_csv))
     
     df_joined = df_comments.join(df_results, on="comment_id", how="left")
@@ -428,8 +428,8 @@ def classify_comments_for_year(config: PipelineConfig) -> None:
         logger.error(f"{comments_csv} not found. Run mine_comments.py first.")
         return
     
-    df_comments = pl.read_csv(str(comments_csv))
-    
+    df_comments = pl.read_csv(str(comments_csv), schema_overrides={"zip": pl.Utf8})
+
     # Check if deduplication was performed
     has_deduplication = "is_canonical" in df_comments.columns
     

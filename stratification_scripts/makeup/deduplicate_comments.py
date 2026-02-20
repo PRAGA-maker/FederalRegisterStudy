@@ -377,7 +377,7 @@ def deduplicate_comments_for_year(config: PipelineConfig) -> None:
     logger.info(f"Loading comments from: {comments_csv}")
     
     # Load comments
-    df = pl.read_csv(str(comments_csv))
+    df = pl.read_csv(str(comments_csv), schema_overrides={"zip": pl.Utf8})
     
     if len(df) == 0:
         logger.warning("No comments to deduplicate")
