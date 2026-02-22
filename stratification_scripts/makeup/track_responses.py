@@ -172,7 +172,7 @@ def load_existing_responses(responses_csv: Path) -> Set[str]:
         return set()
     
     try:
-        df_existing = pl.read_csv(str(responses_csv))
+        df_existing = pl.read_csv(str(responses_csv), infer_schema_length=None)
         processed_ids = set(df_existing["comment_id"].to_list())
         logger.info(f"Loaded {len(processed_ids)} already-processed comments")
         return processed_ids
@@ -253,25 +253,29 @@ def save_responses_incremental(
     if df_comments is not None:
         new_results = propagate_responses_to_duplicates(new_results, df_comments)
     
-    df_new = pl.DataFrame(new_results)
-    
+    df_new = pl.DataFrame(new_results, infer_schema_length=None)
+
     if responses_csv.exists():
         try:
-            df_existing = pl.read_csv(str(responses_csv))
-            
-            # Ensure schema compatibility
+            df_existing = pl.read_csv(str(responses_csv), infer_schema_length=None)
+
+            # Ensure schema compatibility — handle missing columns AND type mismatches
             for col in df_new.columns:
                 if col not in df_existing.columns:
                     df_existing = df_existing.with_columns(
                         pl.lit(None).cast(df_new[col].dtype).alias(col)
                     )
-            
+                elif df_existing[col].dtype != df_new[col].dtype:
+                    # Type mismatch: cast both to Utf8 (safest common type)
+                    df_existing = df_existing.with_columns(pl.col(col).cast(pl.Utf8))
+                    df_new = df_new.with_columns(pl.col(col).cast(pl.Utf8))
+
             for col in df_existing.columns:
                 if col not in df_new.columns:
                     df_new = df_new.with_columns(
                         pl.lit(None).cast(df_existing[col].dtype).alias(col)
                     )
-            
+
             # Align column order
             df_existing = df_existing.select(df_new.columns)
             df_combined = pl.concat([df_existing, df_new])
@@ -370,8 +374,8 @@ async def process_responses_async(
             
             csv_results.append({
                 "comment_id": comment_id,
-                "document_number": original_comment.get("document_number", "N/A"),
-                "agency": original_comment.get("agency", "N/A"),
+                "document_number": str(original_comment.get("document_number") or "N/A"),
+                "agency": str(original_comment.get("agency") or "N/A"),
                 "response_found": parsed_response.get("response_found", "uncertain"),
                 "agency_decision": parsed_response.get("agency_decision", "uncertain"),
                 "response_text": parsed_response.get("response_text", "N/A"),
@@ -382,8 +386,8 @@ async def process_responses_async(
                 "comment_text_length": comment_text_lengths.get(comment_id, 0),
                 "has_attachment": bool(original_comment.get("attachment_text")),
                 # Lifecycle tracking fields
-                "lifecycle_stage": original_comment.get("lifecycle_stage", "UNKNOWN"),
-                "rin": original_comment.get("rin", "N/A"),
+                "lifecycle_stage": str(original_comment.get("lifecycle_stage") or "UNKNOWN"),
+                "rin": str(original_comment.get("rin") or "N/A"),
             })
         
         # Save incrementally (with duplicate propagation if df_comments provided)
@@ -426,12 +430,12 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
     
     # Load makeup data (contains all comments including duplicates after classification propagation)
     logger.info(f"Loading makeup data from: {makeup_data_csv}")
-    df_makeup = pl.read_csv(str(makeup_data_csv))
+    df_makeup = pl.read_csv(str(makeup_data_csv), infer_schema_length=None)
     logger.info(f"Loaded {len(df_makeup)} classified comments")
-    
+
     # Join with comments_raw to get full metadata (including deduplication columns if present)
     logger.info(f"Loading raw comments from: {comments_raw_csv}")
-    df_raw = pl.read_csv(str(comments_raw_csv), schema_overrides={"zip": pl.Utf8})
+    df_raw = pl.read_csv(str(comments_raw_csv), infer_schema_length=None, schema_overrides={"zip": pl.Utf8})
 
     # Check if deduplication was performed
     has_deduplication = "is_canonical" in df_raw.columns
@@ -451,6 +455,7 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
         logger.info(f"Loading FR data from: {fr_csv}")
         df_fr = pl.read_csv(
             str(fr_csv),
+            infer_schema_length=None,
             schema_overrides={"cfr_titles": pl.Utf8, "topics": pl.Utf8, "abstract": pl.Utf8},
         )
 
@@ -571,7 +576,7 @@ def _print_response_summary(responses_csv: Path, label: str = "") -> None:
     if not responses_csv.exists():
         return
 
-    df_responses = pl.read_csv(str(responses_csv))
+    df_responses = pl.read_csv(str(responses_csv), infer_schema_length=None)
     total = len(df_responses)
 
     logger.info(f"\n{label} Total responses tracked: {total}")
@@ -683,9 +688,10 @@ def _run_tier2_comparison(
         logger.warning("Tier 2: No FR CSV found. Cannot perform document linking. Skipping Tier 2.")
         return
 
-    df_responses = pl.read_csv(str(responses_csv))
+    df_responses = pl.read_csv(str(responses_csv), infer_schema_length=None)
     df_fr = pl.read_csv(
         str(fr_csv),
+        infer_schema_length=None,
         schema_overrides={"cfr_titles": pl.Utf8, "topics": pl.Utf8, "abstract": pl.Utf8},
     )
 
@@ -820,7 +826,7 @@ def _run_tier2_comparison(
     # ------------------------------------------------------------------
     # Load raw comments for full text extraction
     comments_raw_csv = get_comments_raw_path(config.year)
-    df_comments_raw = pl.read_csv(str(comments_raw_csv), schema_overrides={"zip": pl.Utf8}) if comments_raw_csv.exists() else None
+    df_comments_raw = pl.read_csv(str(comments_raw_csv), infer_schema_length=None, schema_overrides={"zip": pl.Utf8}) if comments_raw_csv.exists() else None
 
     tier2_batch: List[tuple] = []  # (comment_text, nprm_text, final_text, metadata)
     skipped_no_text: List[str] = []
@@ -914,7 +920,7 @@ def _run_tier2_comparison(
                 tier2_map[dup_id] = tier2_map[canonical_id].copy()
 
     # Reload the responses CSV and add Tier 2 columns
-    df_responses = pl.read_csv(str(responses_csv))
+    df_responses = pl.read_csv(str(responses_csv), infer_schema_length=None)
 
     # Initialize Tier 2 columns if they don't exist
     for col in ["tier2_acceptance_status", "tier2_confidence", "tier2_text_change_summary"]:
