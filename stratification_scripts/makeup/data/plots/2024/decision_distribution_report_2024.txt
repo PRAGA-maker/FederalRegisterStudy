@@ -1,0 +1,74 @@
+Agency Decision Distribution Report (2024)
+================================================================================
+
+TABLE 1: DECISION COUNTS AND PROPORTIONS
+--------------------------------------------------
+Decision             |      Count |   Proportion
+--------------------------------------------------
+Accept               |      1,483 |        51.7%
+Reject               |        557 |        19.4%
+Partial              |        813 |        28.3%
+Uncertain            |         15 |         0.5%
+--------------------------------------------------
+TOTAL                |      2,866 |       100.0%
+
+
+TABLE 2: CONDITIONAL PROBABILITIES
+--------------------------------------------------
+Given that a response was found:
+  P(accept | response) = 51.7%
+  P(reject | response) = 19.4%
+  P(partial | response) = 28.3%
+  P(uncertain | response) = 0.5%
+
+
+TABLE 3: DECISION RATES BY COMMENTER TYPE
+--------------------------------------------------------------------------------
+Commenter Type                                |   Accept % |   Reject % |  Partial % |  Uncertain %
+-----------------------------------------------------------------------------------------------
+Undecided/Anonymous                           |      15.6% |       0.0% |      84.4% |         0.0%
+Ordinary Citizen                              |      68.0% |      16.9% |      14.8% |         0.3%
+Large Organization/Corporation                |      40.2% |      11.3% |      47.5% |         1.0%
+Academic/Industry/Expert                      |      58.3% |      16.3% |      25.1% |         0.3%
+Political Consultant/Lobbyist                 |       1.7% |      78.3% |      20.0% |         0.0%
+--------------------------------------------------------------------------------
+
+
+TABLE 4: AGENCIES BY DECISION RATE
+----------------------------------------------------------------------------------------------------
+Agencies with >50% Acceptance Rate:
+----------------------------------------------------------------------------------------------------
+Agency                                             |   Accept % | Total Responses
+----------------------------------------------------------------------------------------------------
+Agriculture Department, Agricultural Marketing S   |     100.0% |               3
+General Services Administration                    |     100.0% |               1
+Transportation Department, Pipeline and Hazardou   |     100.0% |               2
+Treasury Department, Investment Security Office    |      99.5% |             621
+Education Department                               |      92.3% |              20
+Transportation Department, Federal Aviation Admi   |      91.7% |              40
+Transportation Department                          |      89.7% |              73
+Homeland Security Department, Coast Guard          |      82.3% |             155
+Transportation Department, Federal Railroad Admi   |      60.0% |               5
+Energy Department                                  |      50.9% |              55
+
+Agencies with >50% Rejection Rate:
+----------------------------------------------------------------------------------------------------
+Agency                                             |   Reject % | Total Responses
+----------------------------------------------------------------------------------------------------
+Commerce Department, Industry and Security Burea   |     100.0% |             171
+Defense Department                                 |     100.0% |               1
+Labor Department, Mine Safety and Health Adminis   |     100.0% |               1
+Export-Import Bank                                 |     100.0% |               1
+Homeland Security Department                       |     100.0% |               1
+Homeland Security Department, U.S. Citizenship a   |     100.0% |               1
+Transportation Department, Federal Motor Carrier   |     100.0% |               1
+Social Security Administration                     |     100.0% |               1
+Consumer Product Safety Commission                 |      90.6% |              11
+Treasury Department, Financial Crimes Enforcemen   |      73.7% |              13
+----------------------------------------------------------------------------------------------------
+
+Notes:
+- All percentages are conditional on response being found
+- All counts and percentages use WEIGHTED statistics to account for sampling
+- Agencies shown have >50% acceptance or rejection rate
+- Only agencies with at least 1 response are included

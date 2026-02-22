@@ -1,0 +1,122 @@
+warning: The `tool.uv.dev-dependencies` field (used in `pyproject.toml`) is deprecated and will be removed in a future release; use `dependency-groups.dev` instead
+[2026-02-22 00:26:37] [2024] INFO: ============================================================
+[2026-02-22 00:26:37] [2024] INFO: FEDERAL REGISTER STUDY PIPELINE - YEAR 2024
+[2026-02-22 00:26:37] [2024] INFO: ============================================================
+[2026-02-22 00:26:37] [2024] INFO: Steps to run: plot
+[2026-02-22 00:26:37] [2024] INFO: Step 1/1: Generating visualizations...
+[2026-02-22 00:26:38] [2024] INFO: generated new fontManager
+[2026-02-22 00:26:39] [2024] INFO: ============================================================
+[2026-02-22 00:26:39] [2024] INFO: Federal Register Comment Visualization Suite
+[2026-02-22 00:26:39] [2024] INFO: ============================================================
+[2026-02-22 00:26:39] [2024] INFO: Year: 2024
+[2026-02-22 00:26:39] [2024] INFO: Input: /root/FederalRegisterStudy/stratification_scripts/output/makeup_data_2024.csv
+[2026-02-22 00:26:39] [2024] INFO: Output: /root/FederalRegisterStudy/stratification_scripts/makeup/data/plots/2024
+[2026-02-22 00:26:39] [2024] INFO: Loading data...
+[2026-02-22 00:26:39] [2024] INFO: Loaded 40,482 rows
+[2026-02-22 00:26:39] [2024] INFO: Found FR CSV: /root/FederalRegisterStudy/stratification_scripts/output/federal_register_2024_comments.csv
+[2026-02-22 00:26:39] [2024] INFO: Preprocessing...
+[2026-02-22 00:26:39] [2024] INFO: Calculating weights...
+[2026-02-22 00:26:39] [2024] INFO: All-docs mode detected (2762/2763 docs present). Using document-level weights only (no cross-doc expansion).
+[2026-02-22 00:26:39] [2024] INFO: Reweighting complete.
+[2026-02-22 00:26:39] [2024] INFO:   Stratum Weight (Population): Mean=30.65, Max=1880.76
+[2026-02-22 00:26:39] [2024] INFO:   Document Weight (Specific):  Mean=30.65, Max=1880.76
+[2026-02-22 00:26:39] [2024] INFO:   Fully-sampled docs (weight=1.0, correct): 1,398
+[2026-02-22 00:26:39] [2024] INFO:   [OK] All comments successfully weighted.
+[2026-02-22 00:26:39] [2024] INFO: After preprocessing: 40,482 rows, 134 agencies
+
+============================================================
+NARRATIVE SUMMARY (2024)
+============================================================
+Total Comments Analyzed (sample size): 40,482
+Estimated Population Volume (weighted): 1,240,944
+Ordinary Citizen Comments (weighted): 899,594 (72.5%)
+Total Documents (Federal Register): 24,433
+  (1,881 docs with unknown counts excluded from stats)
+Documents with 0 comments (known counts only): 19,789 (87.7%)
+
+Concentration of Attention:
+- Top 1% of documents (226) capture 98.1% of all comments.
+- 87.7% of documents received zero public attention.
+============================================================
+
+[OK] Saved: weight_distribution.png
+[2026-02-22 00:26:40] [2024] INFO: ============================================================
+[2026-02-22 00:26:40] [2024] INFO: SIMPLE 3-CHART SET
+[2026-02-22 00:26:40] [2024] INFO: ============================================================
+/root/FederalRegisterStudy/stratification_scripts/output/makeup_plots.py:1392: FutureWarning: Downcasting object dtype arrays on .fillna, .ffill, .bfill is deprecated and will change in a future version. Call result.infer_objects(copy=False) instead. To opt-in to the future behavior, set `pd.set_option('future.no_silent_downcasting', True)`
+  fr_stats["is_sampled"] = fr_stats["is_sampled"].fillna(False)
+/root/FederalRegisterStudy/stratification_scripts/output/makeup_plots.py:1527: FutureWarning: The default of observed=False is deprecated and will be changed to True in a future version of pandas. Pass observed=False to retain current behavior or observed=True to adopt the future default and silence this warning.
+  bin_stats = valid_stats_nonzero.groupby("comment_bin").agg({
+Excluding 245 top documents (top 1%) from donut chart
+[OK] Saved: comment_makeup_2024_donut.png
+[OK] Saved: agency_compass_2024.png
+[OK] Saved: workload_vs_makeup_2024.png
+[OK] Saved: workload_vs_citizen_by_agency_2024.png
+[OK] Saved: workload_vs_citizen_by_document_number_2024.png
+[OK] Saved: participation_gap_2024.png
+[OK] Saved: citizen_participation_by_volume_2024.png
+[OK] Saved: comment_concentration_2024.png
+[2026-02-22 00:26:47] [2024] INFO: ============================================================
+[2026-02-22 00:26:47] [2024] INFO: COMPLEX CONTINUUM PAGE
+[2026-02-22 00:26:47] [2024] INFO: ============================================================
+/root/FederalRegisterStudy/stratification_scripts/output/makeup_plots.py:1944: UserWarning: This figure includes Axes that are not compatible with tight_layout, so results might be incorrect.
+  plt.tight_layout()
+[OK] Saved: ranked_stream_composition_2024.png
+[OK] Saved: stream_experiment_binned_2024.png
+[OK] Saved: spotlight_extremes_2024.png
+[OK] Saved: agency_clustering_dendrogram_2024.png
+[OK] Saved: agency_clustering_report_2024.txt
+[2026-02-22 00:26:53] [2024] INFO: ============================================================
+[2026-02-22 00:26:53] [2024] INFO: RESPONSE TRACKING PLOTS
+[2026-02-22 00:26:53] [2024] INFO: ============================================================
+[2026-02-22 00:26:53] [2024] INFO: Generating response tracking plots...
+[2026-02-22 00:26:53] [2024] INFO: Joined 7,815 responses with 40,482 makeup records -> 7,815 matched rows
+/root/FederalRegisterStudy/stratification_scripts/output/makeup_plots.py:2722: UserWarning: Tight layout not applied. The left and right margins cannot be made large enough to accommodate all Axes decorations.
+  plt.tight_layout()
+[OK] Saved: decision_distribution_report_2024.txt
+[2026-02-22 00:26:56] [2024] INFO: Plot data: 860 rows with response_found=='yes' and valid category
+[2026-02-22 00:26:56] [2024] INFO: Categories in data: ['Academic/Industry/Expert (incl. small/local business)', 'Large Organization/Corporation', 'Ordinary Citizen', 'Political Consultant/Lobbyist', 'Undecided/Anonymous']
+[2026-02-22 00:26:56] [2024] INFO: Consultants total: 17 rows, 219.58 weight
+[2026-02-22 00:26:56] [2024] INFO: Consultants breakdown: accept=1.7%, reject=78.3%, partial=20.0%, uncertain=0.0%
+/root/FederalRegisterStudy/.venv/lib/python3.12/site-packages/statsmodels/base/model.py:130: ValueWarning: unknown kwargs ['weights']
+  warnings.warn(msg, ValueWarning)
+/root/FederalRegisterStudy/stratification_scripts/output/makeup_plots.py:3326: UserWarning: This figure includes Axes that are not compatible with tight_layout, so results might be incorrect.
+  plt.tight_layout()
+[OK] Saved: length_vs_rejection_binned_2024.png
+[OK] Saved: length_vs_rejection_logistic_2024.png
+[OK] Saved: response_heatmap_2024.png
+[OK] Saved: agency_response_acceptance_2024.png
+[2026-02-22 00:27:04] [2024] INFO: Response tracking plots complete
+[2026-02-22 00:27:04] [2024] INFO: ============================================================
+[2026-02-22 00:27:04] [2024] INFO: LIFECYCLE PLOTS
+[2026-02-22 00:27:04] [2024] INFO: ============================================================
+[2026-02-22 00:27:04] [2024] INFO: === LIFECYCLE PLOTS (2024) ===
+[2026-02-22 00:27:04] [2024] INFO: Lifecycle stage distribution in makeup data:
+[2026-02-22 00:27:04] [2024] INFO:   NO_RIN: 19099 comments
+[2026-02-22 00:27:04] [2024] INFO:   FINAL_EFFECTIVE: 13593 comments
+[2026-02-22 00:27:04] [2024] INFO:   WITHDRAWN: 3062 comments
+[2026-02-22 00:27:04] [2024] INFO:   NPRM_CLOSED: 2038 comments
+[2026-02-22 00:27:04] [2024] INFO:   LONG_TERM_STALLED: 1781 comments
+[2026-02-22 00:27:04] [2024] INFO:   PRERULE_ANPRM: 522 comments
+[2026-02-22 00:27:04] [2024] INFO:   AGENDA_NOT_FOUND: 365 comments
+[2026-02-22 00:27:04] [2024] INFO:   NPRM_ACTIVE: 22 comments
+[2026-02-22 00:27:04] [2024] INFO: Comment volume by stage: 8 stages, 1240944 total weighted comments
+[2026-02-22 00:27:05] [2024] INFO: [OK] Saved: lifecycle_comment_volume_2024.png
+[2026-02-22 00:27:05] [2024] INFO: Heatmap: 5 categories x 8 stages
+[2026-02-22 00:27:05] [2024] INFO: [OK] Saved: lifecycle_heatmap_2024.png
+[2026-02-22 00:27:05] [2024] INFO: Loaded 7,815 response records from agency_responses_2024.csv
+[2026-02-22 00:27:05] [2024] INFO: Response rate by stage: 7 stages, 860 responses out of 7815 comments
+[2026-02-22 00:27:06] [2024] INFO: [OK] Saved: lifecycle_response_rate_2024.png
+[2026-02-22 00:27:06] [2024] INFO: NPRM-to-Final durations: 1594 documents, range [0, 8347] days
+[2026-02-22 00:27:07] [2024] INFO: [OK] Saved: lifecycle_nprm_to_final_2024.png
+[2026-02-22 00:27:07] [2024] INFO: RIN coverage: {'full': np.int64(2083), 'partial': np.int64(1610), 'label_only': np.int64(305), 'none': np.int64(20435)}
+[2026-02-22 00:27:07] [2024] INFO: [OK] Saved: lifecycle_rin_coverage_2024.png
+[2026-02-22 00:27:07] [2024] INFO: Building lifecycle summary for 1447 unique RINs from 4072 documents
+[2026-02-22 00:27:07] [2024] INFO: [OK] Saved lifecycle summary CSV: /root/FederalRegisterStudy/stratification_scripts/makeup/data/rin_lifecycle_2024.csv (1447 RINs)
+[2026-02-22 00:27:07] [2024] INFO: [OK] Copy saved: /root/FederalRegisterStudy/stratification_scripts/makeup/data/plots/2024/rin_lifecycle_2024.csv
+[2026-02-22 00:27:07] [2024] INFO: === LIFECYCLE PLOTS COMPLETE (2024) ===
+[2026-02-22 00:27:07] [2024] INFO: ============================================================
+[2026-02-22 00:27:07] [2024] INFO: COMPLETE - All visualizations saved to: /root/FederalRegisterStudy/stratification_scripts/makeup/data/plots/2024
+[2026-02-22 00:27:07] [2024] INFO: ============================================================
+[2026-02-22 00:27:07] [2024] INFO: [DONE] Visualizations complete
+[2026-02-22 00:27:07] [2024] INFO: [DONE] Year 2024 complete!
