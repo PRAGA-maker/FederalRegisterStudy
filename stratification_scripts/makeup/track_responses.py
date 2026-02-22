@@ -43,6 +43,7 @@ from stratification_scripts.logging_utils import (
     setup_logging,
 )
 from stratification_scripts.gemini_client import GeminiResponseTracker
+from stratification_scripts.openai_response_client import OpenAIResponseTracker
 from stratification_scripts.io_utils import extract_pdf_text
 from stratification_scripts.regulations_gov.client import RegsGovClient
 from stratification_scripts.config import get_regs_api_keys
@@ -166,11 +167,70 @@ def extract_full_comment_text(
     return "\n\n".join(parts) if parts else ""
 
 
+def strip_error_rows(responses_csv: Path) -> int:
+    """
+    Remove rows with API errors from the responses CSV so they get reprocessed.
+
+    Identifies error rows by checking the 'reasoning' column for known error
+    patterns (API errors, retries exhausted, empty responses, validation errors).
+
+    Args:
+        responses_csv: Path to agency_responses CSV.
+
+    Returns:
+        Number of error rows removed.
+    """
+    if not responses_csv.exists():
+        return 0
+
+    try:
+        df = pl.read_csv(str(responses_csv), infer_schema_length=None)
+    except Exception as e:
+        logger.warning(f"Failed to read responses CSV for error stripping: {e}")
+        return 0
+
+    if "reasoning" not in df.columns:
+        return 0
+
+    original_count = len(df)
+
+    # Identify error rows by reasoning patterns
+    error_mask = (
+        pl.col("reasoning").str.starts_with("API error:")
+        | pl.col("reasoning").str.starts_with("API retries exhausted")
+        | pl.col("reasoning").str.starts_with("Empty model response")
+        | pl.col("reasoning").str.starts_with("VALIDATION_ERROR:")
+    )
+
+    df_errors = df.filter(error_mask)
+    error_count = len(df_errors)
+
+    if error_count == 0:
+        logger.info("No error rows found in responses CSV")
+        return 0
+
+    # Backup before modifying
+    import shutil
+    backup_path = responses_csv.with_suffix(".pre_retry_backup.csv")
+    shutil.copy2(responses_csv, backup_path)
+    logger.info(f"Backed up {original_count} rows to {backup_path.name}")
+
+    # Keep only non-error rows
+    df_clean = df.filter(~error_mask)
+    df_clean.write_csv(str(responses_csv))
+    logger.info(
+        f"Stripped {error_count} error rows from responses CSV "
+        f"({len(df_clean)} rows remaining). These comments will be reprocessed."
+    )
+
+    return error_count
+
+
 def load_existing_responses(responses_csv: Path) -> Set[str]:
     """Load existing response tracking results and return processed comment IDs."""
     if not responses_csv.exists():
         return set()
-    
+
     try:
         df_existing = pl.read_csv(str(responses_csv), infer_schema_length=None)
         processed_ids = set(df_existing["comment_id"].to_list())
@@ -414,8 +474,22 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
     comments_raw_csv = get_comments_raw_path(config.year)
     fr_csv = get_fr_csv_path(config.year)
     responses_csv = get_agency_responses_path(config.year)
-    
-    api_key = get_gemini_api_key(required=True)
+
+    provider = getattr(config, "response_provider", "gemini")
+    retry_errors = getattr(config, "retry_errors", False)
+
+    # Strip error rows before loading if retry-errors requested
+    if retry_errors:
+        stripped = strip_error_rows(responses_csv)
+        if stripped > 0:
+            logger.info(f"Retry-errors: {stripped} error rows will be reprocessed")
+
+    # Get API key based on provider
+    if provider == "openai":
+        from stratification_scripts.config import get_openai_api_key
+        api_key = get_openai_api_key(required=True)
+    else:
+        api_key = get_gemini_api_key(required=True)
     
     # Check input files
     if not makeup_data_csv.exists():
@@ -493,16 +567,26 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
         )
         logger.info(f"Processing {len(df_unprocessed)} unprocessed comments")
     
-    # Initialize Gemini tracker (needed for both Tier 1 and Tier 2)
-    logger.info(f"Initializing GeminiResponseTracker with model={config.gemini_model}")
-    tracker = GeminiResponseTracker(
-        api_key=api_key,
-        model=config.gemini_model,
-        max_retries=10,
-        enable_search=config.enable_search_grounding,
-        thinking_level=config.gemini_thinking_level,
-    )
-    logger.info(f"GeminiResponseTracker initialized successfully with model={tracker.model}")
+    # Initialize tracker based on provider
+    if provider == "openai":
+        logger.info(f"Initializing OpenAIResponseTracker with model=gpt-5-mini")
+        tracker = OpenAIResponseTracker(
+            api_key=api_key,
+            model="gpt-5-mini",
+            max_retries=5,
+            enable_search=True,
+        )
+        logger.info(f"OpenAIResponseTracker initialized successfully with model={tracker.model}")
+    else:
+        logger.info(f"Initializing GeminiResponseTracker with model={config.gemini_model}")
+        tracker = GeminiResponseTracker(
+            api_key=api_key,
+            model=config.gemini_model,
+            max_retries=10,
+            enable_search=config.enable_search_grounding,
+            thinking_level=config.gemini_thinking_level,
+        )
+        logger.info(f"GeminiResponseTracker initialized successfully with model={tracker.model}")
 
     # ========================================================================
     # TIER 1: Google Search grounding for explicit agency responses
@@ -554,18 +638,35 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
     # ========================================================================
     # TIER 2: NPRM vs FINAL RULE TEXT COMPARISON
     # ========================================================================
-    # For comments where Tier 1 found no response AND the document has both
-    # nprm_document_number and final_rule_document_number in the FR CSV,
-    # compare the two texts to detect whether the comment's concern was
-    # addressed by changes between proposed and final rule.
+    # Tier 2 doesn't use web search — it compares NPRM vs Final Rule text
+    # directly via Gemini. When using OpenAI for Tier 1, create a separate
+    # Gemini tracker for Tier 2 (if Gemini key available), or skip.
     # ========================================================================
-    _run_tier2_comparison(
-        config=config,
-        tracker=tracker,
-        fr_csv=fr_csv,
-        responses_csv=responses_csv,
-        df_raw=df_raw if has_deduplication else None,
-    )
+    tier2_tracker = tracker  # Same tracker if Gemini was used for Tier 1
+    if provider == "openai":
+        # Need a Gemini tracker for Tier 2 (no web search needed)
+        gemini_key = get_gemini_api_key(required=False)
+        if gemini_key:
+            logger.info("Creating separate Gemini tracker for Tier 2 (no search grounding)")
+            tier2_tracker = GeminiResponseTracker(
+                api_key=gemini_key,
+                model=config.gemini_model,
+                max_retries=5,
+                enable_search=False,
+                thinking_level=config.gemini_thinking_level,
+            )
+        else:
+            logger.info("Tier 2: Skipping (no Gemini API key available, OpenAI used for Tier 1)")
+            tier2_tracker = None
+
+    if tier2_tracker is not None:
+        _run_tier2_comparison(
+            config=config,
+            tracker=tier2_tracker,
+            fr_csv=fr_csv,
+            responses_csv=responses_csv,
+            df_raw=df_raw if has_deduplication else None,
+        )
 
     log_banner(logger, "ALL RESPONSE TRACKING COMPLETE (TIER 1 + TIER 2)")
     _print_response_summary(responses_csv, "FINAL (TIER 1 + TIER 2)")
@@ -1014,17 +1115,22 @@ def main() -> int:
     )
     parser.add_argument("--year", type=int, default=2024)
     parser.add_argument("--max-concurrency", type=int, default=100)
-    parser.add_argument("--model", type=str, default="gemini-3-flash-preview")
+    parser.add_argument("--model", type=str, default="gemini-3-flash-preview",
+                        help="Gemini model (used for Tier 2 and when provider=gemini)")
+    parser.add_argument("--provider", type=str, default="openai", choices=["openai", "gemini"],
+                        help="LLM provider for Tier 1 response tracking (default: openai)")
     parser.add_argument("--limit", type=int, default=None,
                         help="Limit number of comments to process (for testing)")
     parser.add_argument("--max-comment-pages", type=int, default=30,
                         help="Max pages to extract from PDF attachments")
     parser.add_argument("--disable-search", action="store_true",
-                        help="Disable Google Search grounding")
+                        help="Disable search grounding")
     parser.add_argument("--thinking-level", type=str, default=None,
                         help='Gemini 3 thinking level: minimal|low|medium|high')
     parser.add_argument("--batch-size", type=int, default=1000,
                         help="Number of comments to process per batch (default: 1000)")
+    parser.add_argument("--no-retry-errors", action="store_true",
+                        help="Do NOT retry previously failed API errors")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--quiet", action="store_true")
     
@@ -1034,6 +1140,8 @@ def main() -> int:
     
     config = PipelineConfig(
         year=args.year,
+        response_provider=args.provider,
+        retry_errors=not args.no_retry_errors,
         gemini_model=args.model,
         gemini_max_concurrency=args.max_concurrency,
         enable_search_grounding=not args.disable_search,

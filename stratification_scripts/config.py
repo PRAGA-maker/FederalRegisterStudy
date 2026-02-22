@@ -372,6 +372,10 @@ class PipelineConfig:
     fr_detail_sleep: float = 0.5
     per_key_hourly: int = 1000
     
+    # Response tracking settings
+    response_provider: str = "openai"  # "openai" or "gemini"
+    retry_errors: bool = True  # Always strip API error rows and reprocess them
+
     # Gemini API settings
     gemini_model: str = "gemini-3-flash-preview"
     gemini_max_concurrency: int = 150

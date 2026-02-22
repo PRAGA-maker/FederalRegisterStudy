@@ -193,13 +193,17 @@ def run_year(
             _check_step_inputs("track_responses", year, steps)
             current_step += 1
             log_step(logger, current_step, total_steps, "Tracking agency responses")
-            
-            # Verify Gemini key is available
-            from stratification_scripts.config import get_gemini_api_key
-            get_gemini_api_key(required=True)
-            
+
+            # Verify the right API key is available based on provider
+            provider = getattr(config, "response_provider", "openai")
+            if provider == "openai":
+                get_openai_api_key(required=True)
+            else:
+                from stratification_scripts.config import get_gemini_api_key
+                get_gemini_api_key(required=True)
+
             from stratification_scripts.makeup.track_responses import track_responses_for_year
-            
+
             track_responses_for_year(config)
             log_completion(logger, "Response tracking complete")
         
@@ -303,11 +307,11 @@ def validate_environment(steps: Optional[List[str]] = None) -> bool:
     except ConfigurationError as e:
         errors.append(str(e))
 
-    # Check Gemini key when track_responses step is included
+    # Check response tracking key when track_responses step is included
+    # Default provider is now OpenAI
     if steps and "track_responses" in steps:
-        from stratification_scripts.config import get_gemini_api_key
         try:
-            get_gemini_api_key(required=True)
+            get_openai_api_key(required=True)
         except ConfigurationError as e:
             errors.append(str(e))
 
