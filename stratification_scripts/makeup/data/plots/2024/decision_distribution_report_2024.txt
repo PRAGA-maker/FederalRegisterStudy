@@ -5,29 +5,29 @@ TABLE 1: DECISION COUNTS AND PROPORTIONS
 --------------------------------------------------
 Decision             |      Count |   Proportion
 --------------------------------------------------
-Accept               |      1,483 |        51.7%
-Reject               |        557 |        19.4%
-Partial              |        813 |        28.3%
-Uncertain            |         15 |         0.5%
+Accept               |      1,483 |        51.5%
+Reject               |        562 |        19.5%
+Partial              |        813 |        28.2%
+Uncertain            |         23 |         0.8%
 --------------------------------------------------
-TOTAL                |      2,866 |       100.0%
+TOTAL                |      2,880 |       100.0%
 
 
 TABLE 2: CONDITIONAL PROBABILITIES
 --------------------------------------------------
 Given that a response was found:
-  P(accept | response) = 51.7%
-  P(reject | response) = 19.4%
-  P(partial | response) = 28.3%
-  P(uncertain | response) = 0.5%
+  P(accept | response) = 51.5%
+  P(reject | response) = 19.5%
+  P(partial | response) = 28.2%
+  P(uncertain | response) = 0.8%
 
 
 TABLE 3: DECISION RATES BY COMMENTER TYPE
 --------------------------------------------------------------------------------
 Commenter Type                                |   Accept % |   Reject % |  Partial % |  Uncertain %
 -----------------------------------------------------------------------------------------------
-Undecided/Anonymous                           |      15.6% |       0.0% |      84.4% |         0.0%
-Ordinary Citizen                              |      68.0% |      16.9% |      14.8% |         0.3%
+Undecided/Anonymous                           |      13.4% |       0.0% |      72.3% |        14.3%
+Ordinary Citizen                              |      67.7% |      17.3% |      14.7% |         0.3%
 Large Organization/Corporation                |      40.2% |      11.3% |      47.5% |         1.0%
 Academic/Industry/Expert                      |      58.3% |      16.3% |      25.1% |         0.3%
 Political Consultant/Lobbyist                 |       1.7% |      78.3% |      20.0% |         0.0%
@@ -57,10 +57,11 @@ Agency                                             |   Reject % | Total Response
 ----------------------------------------------------------------------------------------------------
 Commerce Department, Industry and Security Burea   |     100.0% |             171
 Defense Department                                 |     100.0% |               1
-Labor Department, Mine Safety and Health Adminis   |     100.0% |               1
 Export-Import Bank                                 |     100.0% |               1
+Labor Department, Mine Safety and Health Adminis   |     100.0% |               1
 Homeland Security Department                       |     100.0% |               1
 Homeland Security Department, U.S. Citizenship a   |     100.0% |               1
+Justice Department, Drug Enforcement Administrat   |     100.0% |               6
 Transportation Department, Federal Motor Carrier   |     100.0% |               1
 Social Security Administration                     |     100.0% |               1
 Consumer Product Safety Commission                 |      90.6% |              11
