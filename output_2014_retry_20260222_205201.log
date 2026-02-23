@@ -1,0 +1,45 @@
+warning: The `tool.uv.dev-dependencies` field (used in `pyproject.toml`) is deprecated and will be removed in a future release; use `dependency-groups.dev` instead
+[2026-02-22 20:52:01] [2014] INFO: ============================================================
+[2026-02-22 20:52:01] [2014] INFO: FEDERAL REGISTER STUDY PIPELINE - YEAR 2014
+[2026-02-22 20:52:01] [2014] INFO: ============================================================
+[2026-02-22 20:52:01] [2014] INFO: Steps to run: track_responses, plot
+[2026-02-22 20:52:01] [2014] INFO: Step 1/2: Tracking agency responses...
+[2026-02-22 20:52:01] [2014] INFO: ============================================================
+[2026-02-22 20:52:01] [2014] INFO: TRACKING AGENCY RESPONSES - YEAR 2014
+[2026-02-22 20:52:01] [2014] INFO: ============================================================
+[2026-02-22 20:52:01] [2014] INFO: Loading makeup data from: /root/FederalRegisterStudy/stratification_scripts/output/makeup_data_2014.csv
+[2026-02-22 20:52:01] [2014] INFO: Loaded 20335 classified comments
+[2026-02-22 20:52:01] [2014] INFO: Loading raw comments from: /root/FederalRegisterStudy/stratification_scripts/makeup/data/comments_raw_2014.csv
+[2026-02-22 20:52:01] [2014] INFO: Deduplication detected: 15,553 canonical, 2,779 duplicates
+[2026-02-22 20:52:01] [2014] INFO: Joined data: 25699 comments
+[2026-02-22 20:52:01] [2014] INFO: Loading FR data from: /root/FederalRegisterStudy/stratification_scripts/output/federal_register_2014_comments.csv
+[2026-02-22 20:52:01] [2014] INFO: Loaded 1620 already-processed comments
+[2026-02-22 20:52:01] [2014] INFO: Filtering to canonical comments only: 18,961 to process
+[2026-02-22 20:52:01] [2014] INFO: Initializing GeminiResponseTracker with model=gemini-3-flash-preview
+[2026-02-22 20:52:02] [2014] INFO: GeminiResponseTracker initialized successfully with model=gemini-3-flash-preview
+[2026-02-22 20:52:02] [2014] INFO: Initialized RegsGovClient with 3 API keys
+[2026-02-22 20:52:02] [2014] INFO: RegsGovClient initialized for attachment re-downloading
+[2026-02-22 20:52:02] [2014] INFO: Processing 18961 comments in batches of 1000
+[2026-02-22 20:52:02] [2014] INFO: Processing batch 1-1000 of 18961
+[2026-02-22 20:52:34] [2014] WARNING: Ignoring wrong pointing object 9 0 (offset 0)
+[2026-02-22 20:52:34] [2014] WARNING: Ignoring wrong pointing object 11 0 (offset 0)
+[2026-02-22 20:52:34] [2014] WARNING: Ignoring wrong pointing object 13 0 (offset 0)
+[2026-02-22 20:53:04] [2014] WARNING: Ignoring wrong pointing object 8 0 (offset 0)
+[2026-02-22 20:53:06] [2014] WARNING: Ignoring wrong pointing object 8 0 (offset 0)
+[2026-02-22 20:53:07] [2014] WARNING: Ignoring wrong pointing object 8 0 (offset 0)
+[2026-02-22 20:53:08] [2014] WARNING: Ignoring wrong pointing object 8 0 (offset 0)
+[2026-02-22 20:53:49] [2014] WARNING: Ignoring wrong pointing object 8 0 (offset 0)
+[2026-02-22 20:53:49] [2014] WARNING: Ignoring wrong pointing object 10 0 (offset 0)
+[2026-02-22 20:53:49] [2014] WARNING: Ignoring wrong pointing object 12 0 (offset 0)
+[2026-02-22 20:54:10] [2014] WARNING: Ignoring wrong pointing object 12 0 (offset 0)
+[2026-02-22 20:54:10] [2014] WARNING: Ignoring wrong pointing object 14 0 (offset 0)
+[2026-02-22 20:54:10] [2014] WARNING: Ignoring wrong pointing object 18 0 (offset 0)
+[2026-02-22 20:55:38] [2014] WARNING: Ignoring wrong pointing object 8 0 (offset 0)
+[2026-02-22 20:57:25] [2014] WARNING: Ignoring wrong pointing object 10 0 (offset 0)
+[2026-02-22 20:57:25] [2014] WARNING: Ignoring wrong pointing object 49 0 (offset 0)
+[2026-02-22 20:57:26] [2014] WARNING: Ignoring wrong pointing object 10 0 (offset 0)
+[2026-02-22 20:57:26] [2014] WARNING: Ignoring wrong pointing object 49 0 (offset 0)
+[2026-02-22 20:57:27] [2014] WARNING: Ignoring wrong pointing object 10 0 (offset 0)
+[2026-02-22 20:57:27] [2014] WARNING: Ignoring wrong pointing object 49 0 (offset 0)
+[2026-02-22 20:57:29] [2014] WARNING: Ignoring wrong pointing object 10 0 (offset 0)
+[2026-02-22 20:57:29] [2014] WARNING: Ignoring wrong pointing object 49 0 (offset 0)

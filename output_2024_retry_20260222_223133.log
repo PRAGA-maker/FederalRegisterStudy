@@ -1,0 +1,42 @@
+warning: The `tool.uv.dev-dependencies` field (used in `pyproject.toml`) is deprecated and will be removed in a future release; use `dependency-groups.dev` instead
+[2026-02-22 22:31:33] [2024] INFO: ============================================================
+[2026-02-22 22:31:33] [2024] INFO: FEDERAL REGISTER STUDY PIPELINE - YEAR 2024
+[2026-02-22 22:31:33] [2024] INFO: ============================================================
+[2026-02-22 22:31:33] [2024] INFO: Steps to run: track_responses, plot
+[2026-02-22 22:31:33] [2024] INFO: Step 1/2: Tracking agency responses...
+[2026-02-22 22:31:33] [2024] INFO: ============================================================
+[2026-02-22 22:31:33] [2024] INFO: TRACKING AGENCY RESPONSES - YEAR 2024
+[2026-02-22 22:31:33] [2024] INFO: ============================================================
+[2026-02-22 22:31:33] [2024] INFO: Loading makeup data from: /root/FederalRegisterStudy/stratification_scripts/output/makeup_data_2024.csv
+[2026-02-22 22:31:33] [2024] INFO: Loaded 40482 classified comments
+[2026-02-22 22:31:33] [2024] INFO: Loading raw comments from: /root/FederalRegisterStudy/stratification_scripts/makeup/data/comments_raw_2024.csv
+[2026-02-22 22:31:34] [2024] INFO: Deduplication detected: 26,138 canonical, 14,344 duplicates
+[2026-02-22 22:31:34] [2024] INFO: Joined data: 40482 comments
+[2026-02-22 22:31:34] [2024] INFO: Loading FR data from: /root/FederalRegisterStudy/stratification_scripts/output/federal_register_2024_comments.csv
+[2026-02-22 22:31:34] [2024] INFO: Loaded 12259 already-processed comments
+[2026-02-22 22:31:34] [2024] INFO: Filtering to canonical comments only: 17,138 to process
+[2026-02-22 22:31:34] [2024] INFO: Initializing GeminiResponseTracker with model=gemini-3-flash-preview
+[2026-02-22 22:31:34] [2024] INFO: GeminiResponseTracker initialized successfully with model=gemini-3-flash-preview
+[2026-02-22 22:31:35] [2024] INFO: Initialized RegsGovClient with 3 API keys
+[2026-02-22 22:31:35] [2024] INFO: RegsGovClient initialized for attachment re-downloading
+[2026-02-22 22:31:35] [2024] INFO: Processing 17138 comments in batches of 1000
+[2026-02-22 22:31:35] [2024] INFO: Processing batch 1-1000 of 17138
+[2026-02-22 22:31:43] [2024] WARNING: Ignoring wrong pointing object 6 0 (offset 0)
+[2026-02-22 22:31:43] [2024] WARNING: Ignoring wrong pointing object 8 0 (offset 0)
+[2026-02-22 22:31:43] [2024] WARNING: Ignoring wrong pointing object 11 0 (offset 0)
+[2026-02-22 22:31:43] [2024] WARNING: Ignoring wrong pointing object 13 0 (offset 0)
+[2026-02-22 22:31:43] [2024] WARNING: Ignoring wrong pointing object 15 0 (offset 0)
+[2026-02-22 22:31:43] [2024] WARNING: Ignoring wrong pointing object 17 0 (offset 0)
+[2026-02-22 22:31:43] [2024] WARNING: Ignoring wrong pointing object 19 0 (offset 0)
+[2026-02-22 22:31:43] [2024] WARNING: Ignoring wrong pointing object 21 0 (offset 0)
+[2026-02-22 22:31:43] [2024] WARNING: Ignoring wrong pointing object 31 0 (offset 0)
+[2026-02-22 22:31:43] [2024] WARNING: Ignoring wrong pointing object 33 0 (offset 0)
+[2026-02-22 22:31:43] [2024] WARNING: Ignoring wrong pointing object 46 0 (offset 0)
+[2026-02-22 22:31:43] [2024] WARNING: Ignoring wrong pointing object 48 0 (offset 0)
+[2026-02-22 22:31:43] [2024] WARNING: Ignoring wrong pointing object 53 0 (offset 0)
+[2026-02-22 22:31:43] [2024] WARNING: Ignoring wrong pointing object 58 0 (offset 0)
+[2026-02-22 22:31:43] [2024] WARNING: Ignoring wrong pointing object 60 0 (offset 0)
+[2026-02-22 22:31:43] [2024] WARNING: Ignoring wrong pointing object 62 0 (offset 0)
+[2026-02-22 22:31:43] [2024] WARNING: Ignoring wrong pointing object 72 0 (offset 0)
+[2026-02-22 22:31:43] [2024] WARNING: Ignoring wrong pointing object 77 0 (offset 0)
+[2026-02-22 22:31:43] [2024] WARNING: Ignoring wrong pointing object 83 0 (offset 0)
