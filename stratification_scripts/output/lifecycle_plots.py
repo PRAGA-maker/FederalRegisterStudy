@@ -680,6 +680,150 @@ def generate_lifecycle_summary_csv(
 
 
 # ============================================================================
+# PLOT 6: Citizen Participation vs Withdrawal/Stall Rate
+# ============================================================================
+
+def plot_citizen_vs_withdrawal(
+    df: pd.DataFrame,
+    year: int,
+    outdir: Path,
+) -> None:
+    """
+    Grouped bar chart showing how citizen comment share correlates with
+    documents ending up WITHDRAWN or LONG_TERM_STALLED.
+
+    Documents are binned by their citizen commenter share (% of sampled
+    comments classified as Ordinary Citizen). For each bin, we show the
+    % of documents that reached a terminal-negative lifecycle stage
+    (WITHDRAWN or LONG_TERM_STALLED) vs completing normally (FINAL_EFFECTIVE).
+
+    Only RIN-bearing documents with known lifecycle outcomes are included
+    (NO_RIN and AGENDA_NOT_FOUND are excluded since they lack lifecycle data).
+
+    Args:
+        df: Preprocessed makeup DataFrame with lifecycle_stage, category,
+            document_number, and weight columns.
+        year: Analysis year.
+        outdir: Directory to save the plot.
+    """
+    required = {"lifecycle_stage", "category", "document_number"}
+    if not required.issubset(df.columns):
+        missing = required - set(df.columns)
+        logger.warning(f"Missing columns for citizen vs withdrawal plot: {missing}")
+        return
+
+    # Filter to documents with meaningful lifecycle outcomes
+    outcome_stages = {"FINAL_EFFECTIVE", "WITHDRAWN", "LONG_TERM_STALLED",
+                      "NPRM_CLOSED", "INTERIM_FINAL", "FINAL_PENDING"}
+    df_outcome = df[df["lifecycle_stage"].isin(outcome_stages)].copy()
+
+    if len(df_outcome) == 0:
+        logger.warning("No documents with lifecycle outcomes -- skipping citizen vs withdrawal plot")
+        return
+
+    # Compute per-document citizen share (unweighted count ratio within sample)
+    doc_total = df_outcome.groupby("document_number").size().rename("n_total")
+    doc_citizen = (
+        df_outcome[df_outcome["category"] == "Ordinary Citizen"]
+        .groupby("document_number").size().rename("n_citizen")
+    )
+    doc_stage = df_outcome.groupby("document_number")["lifecycle_stage"].first()
+
+    doc_stats = pd.DataFrame({"n_total": doc_total, "n_citizen": doc_citizen,
+                               "lifecycle_stage": doc_stage}).fillna({"n_citizen": 0})
+    doc_stats["citizen_pct"] = doc_stats["n_citizen"] / doc_stats["n_total"] * 100
+    doc_stats["is_terminal_negative"] = doc_stats["lifecycle_stage"].isin(
+        {"WITHDRAWN", "LONG_TERM_STALLED"}
+    )
+
+    n_docs = len(doc_stats)
+    n_terminal = doc_stats["is_terminal_negative"].sum()
+    if n_terminal == 0:
+        logger.info("No WITHDRAWN/LONG_TERM_STALLED documents in outcome set -- skipping plot")
+        return
+
+    # Bin documents by citizen share
+    bins = [0, 1, 25, 50, 75, 100.01]
+    labels = ["0%\n(no citizens)", "1-25%", "25-50%", "50-75%", "75-100%"]
+    doc_stats["citizen_bin"] = pd.cut(doc_stats["citizen_pct"], bins=bins,
+                                       labels=labels, right=False)
+
+    # Compute rates per bin
+    bin_stats = doc_stats.groupby("citizen_bin", observed=False).agg(
+        n_docs=("is_terminal_negative", "size"),
+        n_withdrawn=("is_terminal_negative", lambda x: ((doc_stats.loc[x.index, "lifecycle_stage"] == "WITHDRAWN").sum())),
+        n_stalled=("is_terminal_negative", lambda x: ((doc_stats.loc[x.index, "lifecycle_stage"] == "LONG_TERM_STALLED").sum())),
+        n_terminal=("is_terminal_negative", "sum"),
+    )
+    bin_stats["withdrawn_pct"] = bin_stats["n_withdrawn"] / bin_stats["n_docs"] * 100
+    bin_stats["stalled_pct"] = bin_stats["n_stalled"] / bin_stats["n_docs"] * 100
+
+    # Drop empty bins
+    bin_stats = bin_stats[bin_stats["n_docs"] > 0]
+
+    if len(bin_stats) < 2:
+        logger.warning("Not enough populated bins for citizen vs withdrawal plot")
+        return
+
+    logger.info(
+        f"Citizen vs withdrawal: {n_docs} docs with outcomes, "
+        f"{n_terminal} terminal-negative ({n_terminal/n_docs*100:.1f}%)"
+    )
+
+    # Plot grouped bars
+    fig, ax = plt.subplots(figsize=(10, 7))
+
+    x = np.arange(len(bin_stats))
+    width = 0.35
+
+    bars_w = ax.bar(x - width / 2, bin_stats["withdrawn_pct"], width,
+                    color=LIFECYCLE_COLORS["WITHDRAWN"], edgecolor="white",
+                    linewidth=1.2, label="Withdrawn")
+    bars_s = ax.bar(x + width / 2, bin_stats["stalled_pct"], width,
+                    color=LIFECYCLE_COLORS["LONG_TERM_STALLED"], edgecolor="white",
+                    linewidth=1.2, label="Long-Term Stalled")
+
+    # Annotate bars with counts
+    for bars, col in [(bars_w, "n_withdrawn"), (bars_s, "n_stalled")]:
+        for bar_obj, (_, row) in zip(bars, bin_stats.iterrows()):
+            count = int(row[col])
+            if count > 0:
+                ax.text(
+                    bar_obj.get_x() + bar_obj.get_width() / 2,
+                    bar_obj.get_height() + 0.5,
+                    f"n={count}",
+                    ha="center", va="bottom", fontsize=8, fontweight="bold",
+                )
+
+    # Add doc count below each group
+    for i, (_, row) in enumerate(bin_stats.iterrows()):
+        ax.text(
+            i, -2.5,
+            f"({int(row['n_docs'])} docs)",
+            ha="center", va="top", fontsize=8, color="#888888",
+        )
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(bin_stats.index, fontsize=11)
+    ax.set_xlabel("Citizen Share of Commenters per Document", fontsize=FONT_LABEL, fontweight="bold")
+    ax.set_ylabel("% of Documents", fontsize=FONT_LABEL, fontweight="bold")
+    ax.set_title(
+        f"Citizen Participation vs Rule Withdrawal & Stall ({year})",
+        fontsize=FONT_TITLE, fontweight="bold", pad=15,
+    )
+
+    y_max = max(bin_stats["withdrawn_pct"].max(), bin_stats["stalled_pct"].max())
+    ax.set_ylim(-4, max(y_max * 1.4, 10))
+
+    ax.legend(fontsize=FONT_LEGEND, loc="upper left", framealpha=0.9)
+    _apply_clean_style(ax)
+    plt.tight_layout()
+    fig.savefig(outdir / f"citizen_vs_withdrawal_{year}.png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
+    logger.info(f"[OK] Saved: citizen_vs_withdrawal_{year}.png")
+
+
+# ============================================================================
 # MAIN ENTRY POINT
 # ============================================================================
 
@@ -745,6 +889,12 @@ def generate_lifecycle_plots(
         plot_rin_coverage(fr_csv_path, year, outdir)
     else:
         logger.info("No FR CSV available -- skipping RIN coverage plot")
+
+    # --- Plot 6: Citizen Participation vs Withdrawal/Stall ---
+    if "document_number" in df_makeup.columns:
+        plot_citizen_vs_withdrawal(df_makeup, year, outdir)
+    else:
+        logger.info("document_number not in makeup data -- skipping citizen vs withdrawal plot")
 
     # --- Item 4J: Lifecycle Summary CSV ---
     if has_fr:
