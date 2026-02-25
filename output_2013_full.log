@@ -1,10 +1,0 @@
-warning: The `tool.uv.dev-dependencies` field (used in `pyproject.toml`) is deprecated and will be removed in a future release; use `dependency-groups.dev` instead
-[2026-02-20 15:23:21] [2013] INFO: ============================================================
-[2026-02-20 15:23:21] [2013] INFO: FEDERAL REGISTER STUDY PIPELINE - YEAR 2013
-[2026-02-20 15:23:21] [2013] INFO: ============================================================
-[2026-02-20 15:23:21] [2013] INFO: Steps to run: fetch, mine, deduplicate, classify, track_responses, plot
-[2026-02-20 15:23:21] [2013] INFO: Step 1/6: Fetching and enriching documents...
-[2026-02-20 15:23:21] [2013] INFO: Using 3 Regs.gov API key(s)
-[2026-02-20 15:23:21] [2013] INFO: Stage 1 workers (FR API): 3
-[2026-02-20 15:23:21] [2013] INFO: Stage 2 workers (Regs.gov API): 6
-FR days: 0doc [00:00, ?doc/s]FR days: 1doc [00:00,  2.35doc/s]FR days: 90doc [00:00, 125.75doc/s]FR days: 160doc [00:01, 145.15doc/s]FR days: 251doc [00:01, 151.33doc/s]FR days: 334doc [00:02, 151.18doc/s]FR days: 463doc [00:02, 191.27doc/s]FR days: 588doc [00:03, 237.85doc/s]FR days: 655doc [00:03, 200.43doc/s]FR days: 784doc [00:04, 201.85doc/s]FR days: 878doc [00:04, 199.28doc/s]FR days: 1011doc [00:05, 221.94doc/s]FR days: 1130doc [00:05, 237.32doc/s]FR days: 1221doc [00:06, 226.89doc/s]

@@ -1,30 +1,0 @@
-warning: The `tool.uv.dev-dependencies` field (used in `pyproject.toml`) is deprecated and will be removed in a future release; use `dependency-groups.dev` instead
-[2026-02-20 02:36:16] [2013] INFO: ============================================================
-[2026-02-20 02:36:16] [2013] INFO: FEDERAL REGISTER STUDY PIPELINE - YEAR 2013
-[2026-02-20 02:36:16] [2013] INFO: ============================================================
-[2026-02-20 02:36:16] [2013] INFO: Steps to run: mine, deduplicate, classify, track_responses, plot
-[2026-02-20 02:36:16] [2013] INFO: Step 1/5: Mining comments...
-[2026-02-20 02:36:16] [2013] INFO: Using 3 Regulations.gov API key(s)
-[2026-02-20 02:36:16] [2013] INFO: Loading documents from: /root/FederalRegisterStudy/stratification_scripts/output/federal_register_2013_comments.csv
-[2026-02-20 02:36:16] [2013] INFO: Filtered to 4423 mineable documents (1304 with known comments, 3119 via docket fallback, 5378 excluded)
-[2026-02-20 02:36:16] [2013] INFO: Mining comments from 4423 documents...
-[2026-02-20 02:36:16] [2013] INFO: Fetch strategy: all
-[2026-02-20 02:36:16] [2013] INFO: Initialized RegsGovClient with 3 API keys
-[2026-02-20 02:36:16] [2013] INFO: ============================================================
-[2026-02-20 02:36:16] [2013] INFO: TWO-STAGE STRATIFIED SAMPLING PLAN
-[2026-02-20 02:36:16] [2013] INFO: ============================================================
-[2026-02-20 02:36:16] [2013] INFO: Assigning documents to comment bins...
-[2026-02-20 02:36:16] [2013] INFO:   3119 docs have NULL comment_count (docket-fallback) -> 'UNKNOWN' bin
-[2026-02-20 02:36:16] [2013] INFO: Grouping into strata by agency × comment_bin...
-[2026-02-20 02:36:16] [2013] INFO: Calculating sample sizes per stratum...
-[2026-02-20 02:36:16] [2013] INFO: Created 306 strata
-[2026-02-20 02:36:16] [2013] INFO: ============================================================
-[2026-02-20 02:36:16] [2013] INFO: STAGE 1: SAMPLING DOCUMENTS
-[2026-02-20 02:36:16] [2013] INFO: ============================================================
-[2026-02-20 02:36:16] [2013] INFO: Doc sampling: ALL docs (comments only)
-Sampling strata:   0%|          | 0/306 [00:00<?, ?stratum/s]Sampling strata:   0%|          | 1/306 [00:01<05:05,  1.00s/stratum]                                                                     Sampling strata:   0%|          | 1/306 [00:05<05:05,  1.00s/stratum][2026-02-20 02:36:22] [2013] WARNING: Paging terminated early for object_id=090000648146ff49: request returned None at window=2, page=1 (fetched 223 comments so far, cursor='2014-02-13T22:05:38Z')
-Sampling strata:   1%|          | 2/306 [00:05<15:25,  3.04s/stratum]Sampling strata:   1%|          | 3/306 [00:06<11:40,  2.31s/stratum]                                                                     Sampling strata:   1%|          | 3/306 [00:09<11:40,  2.31s/stratum][2026-02-20 02:36:26] [2013] WARNING: Paging terminated early for object_id=09000064812a27c6: request returned None at window=2, page=1 (fetched 1 comments so far, cursor='2013-05-02T13:18:42Z')
-                                                                     Sampling strata:   1%|          | 3/306 [00:12<11:40,  2.31s/stratum][2026-02-20 02:36:29] [2013] WARNING: Paging terminated early for object_id=09000064812a5800: request returned None at window=2, page=1 (fetched 1 comments so far, cursor='2013-08-29T17:19:20Z')
-                                                                     Sampling strata:   1%|          | 3/306 [00:15<11:40,  2.31s/stratum][2026-02-20 02:36:32] [2013] WARNING: Paging terminated early for object_id=09000064812a7563: request returned None at window=2, page=1 (fetched 2 comments so far, cursor='2013-05-08T18:15:52Z')
-                                                                     Sampling strata:   1%|          | 3/306 [00:18<11:40,  2.31s/stratum][2026-02-20 02:36:35] [2013] WARNING: Paging terminated early for object_id=0900006481348a53: request returned None at window=2, page=1 (fetched 1 comments so far, cursor='2013-07-02T16:43:01Z')
-                                                                     Sampling strata:   1%|          | 3/306 [00:21<11:40,  2.31s/stratum][2026-02-20 02:36:38] [2013] WARNING: Paging terminated early for object_id=0900006481348a85: request returned None at window=2, page=1 (fetched 1 comments so far, cursor='2013-07-24T12:37:26Z')
