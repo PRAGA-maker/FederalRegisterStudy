@@ -41,4 +41,7 @@ Thumbs.db
 claude.md
 nul
 
-output_2024_full.log
+*.log
+*.pre_retry_backup.csv
+*.pre_tier2_backup.csv
+failed_rins_*.txt
