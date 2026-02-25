@@ -125,9 +125,9 @@ class XAIResponseTracker:
                 response = self._client.responses.parse(
                     model=self.model,
                     instructions=(
-                        "You are analyzing a public comment submitted to a U.S. federal agency. "
-                        "Search the web to find if the agency responded. "
-                        "Return structured JSON matching the required schema."
+                        "You are a researcher studying U.S. federal notice-and-comment rulemaking. "
+                        "Search the web to find whether the agency responded to a public comment, "
+                        "then classify their decision. Return structured JSON matching the required schema."
                     ),
                     input=prompt,
                     tools=self._tools,

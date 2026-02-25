@@ -398,11 +398,6 @@ class PipelineConfig:
     
     # Response tracking settings
     response_provider: str = "xai"  # "xai", "openai", or "gemini"
-    retry_errors: bool = True  # Always strip API error rows and reprocess them
-
-    # Response sampling settings (Cochran + FPC, stratified by commenter type)
-    response_sampling_enabled: bool = True
-    response_sampling_census_threshold: int = 30  # Census (take all) if N <= this
 
     # xAI API settings
     xai_model: str = "grok-4-1-fast-reasoning"

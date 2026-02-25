@@ -581,13 +581,11 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
     responses_csv = get_agency_responses_path(config.year)
 
     provider = getattr(config, "response_provider", "xai")
-    retry_errors = getattr(config, "retry_errors", False)
 
-    # Strip error rows before loading if retry-errors requested
-    if retry_errors:
-        stripped = strip_error_rows(responses_csv)
-        if stripped > 0:
-            logger.info(f"Retry-errors: {stripped} error rows will be reprocessed")
+    # Always strip error rows so they get reprocessed
+    stripped = strip_error_rows(responses_csv)
+    if stripped > 0:
+        logger.info(f"Retry-errors: {stripped} error rows will be reprocessed")
 
     # Get API key based on provider
     if provider == "xai":
@@ -715,21 +713,17 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
     if len(df_unprocessed) == 0:
         logger.info("Tier 1: All comments already processed")
     else:
-        # Apply sampling if enabled
-        sampling_enabled = getattr(config, "response_sampling_enabled", False)
-        census_threshold = getattr(config, "response_sampling_census_threshold", 30)
-
-        if sampling_enabled and "category" in df_unprocessed.columns:
+        # Stratified sampling (always on — Cochran+FPC by commenter type)
+        if "category" in df_unprocessed.columns:
             log_banner(logger, "RESPONSE TRACKING SAMPLING")
             df_to_process, weight_map = sample_comments_for_response_tracking(
                 df_unprocessed,
-                census_threshold=census_threshold,
+                census_threshold=30,
                 seed=config.sampling_seed,
             )
         else:
             df_to_process = df_unprocessed
-            if sampling_enabled:
-                logger.info("Sampling enabled but 'category' column not found -- processing all comments")
+            logger.info("No 'category' column -- processing all comments (no sampling)")
 
         # Convert to list of dicts
         comments_to_process = df_to_process.to_dicts()
@@ -1267,10 +1261,6 @@ def main() -> int:
                         help='Gemini 3 thinking level: minimal|low|medium|high')
     parser.add_argument("--batch-size", type=int, default=1000,
                         help="Number of comments to process per batch (default: 1000)")
-    parser.add_argument("--no-retry-errors", action="store_true",
-                        help="Do NOT retry previously failed API errors")
-    parser.add_argument("--no-sampling", action="store_true",
-                        help="Disable response sampling (process all comments)")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--quiet", action="store_true")
     
@@ -1281,8 +1271,6 @@ def main() -> int:
     config = PipelineConfig(
         year=args.year,
         response_provider=args.provider,
-        retry_errors=not args.no_retry_errors,
-        response_sampling_enabled=not args.no_sampling,
         gemini_model=args.model,
         gemini_max_concurrency=args.max_concurrency,
         enable_search_grounding=not args.disable_search,

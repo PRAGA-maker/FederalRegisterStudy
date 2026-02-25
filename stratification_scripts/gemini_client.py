@@ -117,45 +117,61 @@ class Tier2Response(BaseModel):
 
 
 # Response tracking prompt template (optimized for structured JSON output)
-RESPONSE_TRACKING_PROMPT = """You are analyzing a public comment submitted to a U.S. federal agency.
+RESPONSE_TRACKING_PROMPT = """You are a researcher studying the U.S. federal notice-and-comment rulemaking process.
 
-COMMENT INFORMATION:
+BACKGROUND:
+Under the Administrative Procedure Act, federal agencies publish proposed rules in the Federal Register
+and invite public comments. After the comment period closes, agencies must consider and respond to
+substantive comments before issuing a final rule. Responses typically appear in the preamble of the
+final rule (often under headings like "Discussion of Comments", "Response to Comments", or
+"Summary of Comments"), in separate "response to comments" documents in the docket, or in
+Federal Register notices. Agencies may also post response-to-comments PDFs on regulations.gov
+alongside the final rule.
+
+You have TWO jobs for each comment:
+1. FIND whether the agency published a response to this comment (or the class of comments it belongs to).
+2. CLASSIFY the agency's decision: did they accept, reject, or split the commenter's request?
+
+COMMENT DETAILS:
 - Comment ID: {comment_id}
-- Document Number: {document_number}
+- Submitted to Federal Register Document: {document_number}
 - Agency: {agency}
 - Commenter Type: {commenter_type}
 - Submission Date: {submission_date}
 
-COMMENT TEXT (truncated if very long):
+COMMENT TEXT:
 {full_comment_text}
 
-TASK:
-1. Use web grounding (search) to find whether the agency responded to THIS specific comment.
-   Look for Federal Register notices, response-to-comments PDFs, agency docket materials, or official response documents.
-2. Decide if a response exists.
-3. If a response exists, classify whether the agency accepted the comment's suggestion, rejected it, partially accepted it, or the disposition is unclear.
-4. Provide the response text (can be detailed, up to several paragraphs) and where you found it.
+SEARCH STRATEGY:
+Search the web for the agency's response. Productive searches include:
+- The comment ID or docket number on regulations.gov
+- "{agency} response to comments {document_number}" on the Federal Register website
+- The agency name + key phrases from the comment + "final rule" or "response to comments"
+- The docket page on regulations.gov for related final rules or response documents
+Do NOT fabricate URLs. If you find a relevant document, cite its actual URL.
 
-OUTPUT REQUIREMENTS:
-- You MUST return your response as valid JSON matching the required schema.
-- The response_found field must be exactly one of: "yes", "no", or "uncertain"
-- The agency_decision field must be exactly one of: "accept", "reject", "partial", or "uncertain"
-  - "accept" = the agency fully accepted the comment's recommendation or suggestion
-  - "reject" = the agency fully rejected the comment's recommendation or suggestion
-  - "partial" = ONLY use this when the agency response EXPLICITLY addresses multiple distinct recommendations in the comment and accepts some while rejecting others. This must be a genuinely split decision on separable issues -- NOT a soft or hedged acceptance. If the agency mostly accepted but with minor caveats, that is "accept". If the agency mostly rejected but acknowledged one small point, that is "reject". Ask yourself: would the commenter feel their core request was granted? If yes, use "accept". If no, use "reject". Reserve "partial" for truly mixed outcomes on clearly separable sub-issues.
-  - "uncertain" = cannot determine what the agency decided (unknown disposition)
-- If response_found is "no" or "uncertain", set agency_decision to "uncertain"
-- response_text should contain the actual agency response text, or "N/A" if none found
-- response_location should contain the URL or location where you found the response, or "N/A" if none found
-- reasoning should be a brief 1-2 sentence explanation of your determination
+CLASSIFICATION RULES:
+- response_found: "yes" if the agency published any response addressing this comment or its topic.
+  "no" if you searched thoroughly and found nothing. "uncertain" ONLY if search results are
+  ambiguous (e.g., you found a final rule but cannot tell if it addresses this comment).
+  Prefer "yes" or "no" over "uncertain" -- make a call.
+- agency_decision (only when response_found="yes"):
+  - "accept" = the agency adopted the commenter's suggestion, or changed the rule in the direction
+    the commenter requested. If the agency mostly accepted with minor caveats, this is still "accept".
+  - "reject" = the agency kept the provision as proposed or explicitly declined the suggestion.
+    If the agency mostly rejected but acknowledged a small point, this is still "reject".
+  - "partial" = ONLY when the comment raised multiple separable issues and the agency accepted
+    some while rejecting others. This must be a genuinely split outcome on distinct sub-issues.
+    Do not use "partial" for hedged language or soft acceptances.
+  - "uncertain" = the response exists but you cannot determine the disposition.
+- If response_found is "no" or "uncertain", set agency_decision to "uncertain".
 
-IMPORTANT:
-- If you cannot confidently determine whether a response exists, mark response_found="uncertain"
-- Keep response_text informative but concise (excerpt or summary is fine, up to several paragraphs if needed)
-- Be thorough in your search - check Federal Register, agency websites, and docket materials
-- If a document was withheld or otherwise materially changed for non-comment related reasons, this is a "no", not "uncertain". 
-- If multiple responses exist, write out explicitly a joined text of all in order for the most relevant one or one that directly is connected to the comment we give. 
-- Ensure all string fields are properly escaped for JSON format
+OUTPUT: Return valid JSON matching the schema exactly.
+- response_found: "yes" | "no" | "uncertain"
+- agency_decision: "accept" | "reject" | "partial" | "uncertain"
+- response_text: the relevant excerpt from the agency's response (up to a few paragraphs), or "N/A"
+- response_location: the URL where you found it, or "N/A"
+- reasoning: 1-2 sentence explanation of your determination
 """
 
 
