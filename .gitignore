@@ -42,4 +42,5 @@ nul
 
 *.log
 *.pre_retry_backup.csv
+*.pre_tier2_backup.csv
 failed_rins_*.txt
