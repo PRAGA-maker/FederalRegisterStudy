@@ -32,6 +32,7 @@ import polars as pl
 from stratification_scripts.config import (
     PipelineConfig,
     get_gemini_api_key,
+    get_xai_api_key,
     get_comments_raw_path,
     get_makeup_data_path,
     get_fr_csv_path,
@@ -44,9 +45,11 @@ from stratification_scripts.logging_utils import (
 )
 from stratification_scripts.gemini_client import GeminiResponseTracker
 from stratification_scripts.openai_response_client import OpenAIResponseTracker
+from stratification_scripts.xai_response_client import XAIResponseTracker
 from stratification_scripts.io_utils import extract_pdf_text
 from stratification_scripts.regulations_gov.client import RegsGovClient
 from stratification_scripts.config import get_regs_api_keys
+from stratification_scripts.makeup.mine_comments import calculate_sample_size
 
 logger = get_logger(__name__)
 
@@ -241,6 +244,103 @@ def load_existing_responses(responses_csv: Path) -> Set[str]:
         return set()
 
 
+def sample_comments_for_response_tracking(
+    df_unprocessed: pl.DataFrame,
+    census_threshold: int = 30,
+    seed: Optional[int] = None,
+) -> tuple[pl.DataFrame, Dict[str, float]]:
+    """
+    Stratified sample of comments for response tracking (Cochran + FPC).
+
+    Stratifies by ``category`` (commenter type). Categories with N <= census_threshold
+    are taken as census (weight=1.0). Larger categories use Cochran sample sizing.
+    After sampling, guarantees at least 1 comment per document_number.
+
+    Args:
+        df_unprocessed: DataFrame of comments to sample from (must have
+            ``comment_id``, ``category``, ``document_number`` columns).
+        census_threshold: Take all if stratum N is at or below this value.
+        seed: Random seed for reproducibility.
+
+    Returns:
+        Tuple of (sampled DataFrame, weight_map ``{comment_id: weight}``).
+    """
+    import random as _random
+
+    weight_map: Dict[str, float] = {}
+    sampled_frames: list[pl.DataFrame] = []
+
+    # Fallback category for rows missing a category value
+    FALLBACK_CAT = "UNKNOWN"
+
+    df_work = df_unprocessed.with_columns(
+        pl.col("category").fill_null(FALLBACK_CAT).alias("category")
+    )
+
+    categories = df_work["category"].unique().to_list()
+
+    rng = _random.Random(seed)
+
+    for cat in sorted(categories):
+        stratum = df_work.filter(pl.col("category") == cat)
+        N = len(stratum)
+
+        if N <= census_threshold:
+            # Census — take all
+            sampled_frames.append(stratum)
+            for cid in stratum["comment_id"].to_list():
+                weight_map[str(cid)] = 1.0
+            logger.info(f"  Sampling '{cat}': N={N} <= {census_threshold} -> census (weight=1.0)")
+        else:
+            n = calculate_sample_size(N)
+            n = min(n, N)
+            weight = N / n
+
+            # Sample n rows
+            indices = list(range(N))
+            rng.shuffle(indices)
+            selected_indices = sorted(indices[:n])
+            stratum_sampled = stratum[selected_indices]
+
+            sampled_frames.append(stratum_sampled)
+            for cid in stratum_sampled["comment_id"].to_list():
+                weight_map[str(cid)] = weight
+            logger.info(f"  Sampling '{cat}': N={N} -> n={n} (weight={weight:.2f})")
+
+    if sampled_frames:
+        df_sampled = pl.concat(sampled_frames)
+    else:
+        df_sampled = df_unprocessed.head(0)
+
+    # Document coverage guarantee: force-include 1 comment per doc if missing
+    if "document_number" in df_unprocessed.columns:
+        sampled_docs = set(df_sampled["document_number"].to_list())
+        all_docs = set(df_unprocessed["document_number"].to_list())
+        missing_docs = all_docs - sampled_docs
+
+        if missing_docs:
+            force_rows: list[pl.DataFrame] = []
+            for doc_num in missing_docs:
+                doc_rows = df_unprocessed.filter(pl.col("document_number") == doc_num)
+                if len(doc_rows) > 0:
+                    row = doc_rows.head(1)
+                    force_rows.append(row)
+                    cid = str(row["comment_id"][0])
+                    # Weight = total comments for this doc / 1 (single force-include)
+                    weight_map[cid] = float(len(doc_rows))
+
+            if force_rows:
+                df_force = pl.concat(force_rows)
+                df_sampled = pl.concat([df_sampled, df_force])
+                logger.info(f"  Force-included {len(force_rows)} comments for document coverage ({len(missing_docs)} docs)")
+
+    total_N = len(df_unprocessed)
+    total_n = len(df_sampled)
+    logger.info(f"Sampling complete: {total_N} -> {total_n} comments ({total_n/total_N*100:.1f}% of total)")
+
+    return df_sampled, weight_map
+
+
 def propagate_responses_to_duplicates(
     results: List[Dict],
     df_comments: pl.DataFrame,
@@ -358,7 +458,7 @@ def save_responses_incremental(
 
 
 async def process_responses_async(
-    tracker: GeminiResponseTracker,
+    tracker,
     comments_to_process: List[Dict],
     responses_csv: Path,
     max_concurrency: int,
@@ -366,12 +466,13 @@ async def process_responses_async(
     max_comment_pages: int = 30,
     df_comments: Optional[pl.DataFrame] = None,
     batch_size: int = 1000,
+    weight_map: Optional[Dict[str, float]] = None,
 ) -> None:
     """
     Process comments asynchronously in batches.
-    
+
     Args:
-        tracker: GeminiResponseTracker instance
+        tracker: Response tracker instance (Gemini, OpenAI, or xAI)
         comments_to_process: List of comment dicts to process
         responses_csv: Path to save results
         max_concurrency: Max concurrent API calls
@@ -379,6 +480,7 @@ async def process_responses_async(
         max_comment_pages: Max pages to extract from PDFs
         df_comments: Optional DataFrame with comments (for duplicate propagation)
         batch_size: Number of comments to process per batch (default: 1000)
+        weight_map: Optional dict mapping comment_id -> sampling weight
     """
     total_comments = len(comments_to_process)
     
@@ -432,7 +534,7 @@ async def process_responses_async(
                 {}
             )
             
-            csv_results.append({
+            row = {
                 "comment_id": comment_id,
                 "document_number": str(original_comment.get("document_number") or "N/A"),
                 "agency": str(original_comment.get("agency") or "N/A"),
@@ -448,7 +550,10 @@ async def process_responses_async(
                 # Lifecycle tracking fields
                 "lifecycle_stage": str(original_comment.get("lifecycle_stage") or "UNKNOWN"),
                 "rin": str(original_comment.get("rin") or "N/A"),
-            })
+                # Sampling weight (1.0 if no sampling or census)
+                "response_sample_weight": weight_map.get(comment_id, 1.0) if weight_map else 1.0,
+            }
+            csv_results.append(row)
         
         # Save incrementally (with duplicate propagation if df_comments provided)
         save_responses_incremental(responses_csv, csv_results, df_comments)
@@ -475,7 +580,7 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
     fr_csv = get_fr_csv_path(config.year)
     responses_csv = get_agency_responses_path(config.year)
 
-    provider = getattr(config, "response_provider", "gemini")
+    provider = getattr(config, "response_provider", "xai")
     retry_errors = getattr(config, "retry_errors", False)
 
     # Strip error rows before loading if retry-errors requested
@@ -485,7 +590,9 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
             logger.info(f"Retry-errors: {stripped} error rows will be reprocessed")
 
     # Get API key based on provider
-    if provider == "openai":
+    if provider == "xai":
+        api_key = get_xai_api_key(required=True)
+    elif provider == "openai":
         from stratification_scripts.config import get_openai_api_key
         api_key = get_openai_api_key(required=True)
     else:
@@ -568,7 +675,17 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
         logger.info(f"Processing {len(df_unprocessed)} unprocessed comments")
     
     # Initialize tracker based on provider
-    if provider == "openai":
+    if provider == "xai":
+        logger.info(f"Initializing XAIResponseTracker with model={config.xai_model}")
+        tracker = XAIResponseTracker(
+            api_key=api_key,
+            model=config.xai_model,
+            max_retries=5,
+            enable_search=True,
+        )
+        max_concurrency = config.xai_max_concurrency
+        logger.info(f"XAIResponseTracker initialized successfully with model={tracker.model}")
+    elif provider == "openai":
         logger.info(f"Initializing OpenAIResponseTracker with model=gpt-5-mini")
         tracker = OpenAIResponseTracker(
             api_key=api_key,
@@ -576,6 +693,7 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
             max_retries=5,
             enable_search=True,
         )
+        max_concurrency = config.max_concurrency
         logger.info(f"OpenAIResponseTracker initialized successfully with model={tracker.model}")
     else:
         logger.info(f"Initializing GeminiResponseTracker with model={config.gemini_model}")
@@ -586,16 +704,35 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
             enable_search=config.enable_search_grounding,
             thinking_level=config.gemini_thinking_level,
         )
+        max_concurrency = config.gemini_max_concurrency
         logger.info(f"GeminiResponseTracker initialized successfully with model={tracker.model}")
 
     # ========================================================================
-    # TIER 1: Google Search grounding for explicit agency responses
+    # TIER 1: Web search grounding for explicit agency responses
     # ========================================================================
+    weight_map: Optional[Dict[str, float]] = None
+
     if len(df_unprocessed) == 0:
         logger.info("Tier 1: All comments already processed")
     else:
+        # Apply sampling if enabled
+        sampling_enabled = getattr(config, "response_sampling_enabled", False)
+        census_threshold = getattr(config, "response_sampling_census_threshold", 30)
+
+        if sampling_enabled and "category" in df_unprocessed.columns:
+            log_banner(logger, "RESPONSE TRACKING SAMPLING")
+            df_to_process, weight_map = sample_comments_for_response_tracking(
+                df_unprocessed,
+                census_threshold=census_threshold,
+                seed=config.sampling_seed,
+            )
+        else:
+            df_to_process = df_unprocessed
+            if sampling_enabled:
+                logger.info("Sampling enabled but 'category' column not found -- processing all comments")
+
         # Convert to list of dicts
-        comments_to_process = df_unprocessed.to_dicts()
+        comments_to_process = df_to_process.to_dicts()
 
         # Apply limit if specified (for testing)
         if limit:
@@ -619,11 +756,12 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
                 tracker,
                 comments_to_process,
                 responses_csv,
-                config.gemini_max_concurrency,
+                max_concurrency,
                 regs_client,
                 config.max_comment_pages,
                 df_raw if has_deduplication else None,
                 batch_size,
+                weight_map,
             ))
         finally:
             if regs_client:
@@ -643,7 +781,7 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
     # Gemini tracker for Tier 2 (if Gemini key available), or skip.
     # ========================================================================
     tier2_tracker = tracker  # Same tracker if Gemini was used for Tier 1
-    if provider == "openai":
+    if provider in ("openai", "xai"):
         # Need a Gemini tracker for Tier 2 (no web search needed)
         gemini_key = get_gemini_api_key(required=False)
         if gemini_key:
@@ -656,7 +794,7 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
                 thinking_level=config.gemini_thinking_level,
             )
         else:
-            logger.info("Tier 2: Skipping (no Gemini API key available, OpenAI used for Tier 1)")
+            logger.info(f"Tier 2: Skipping (no Gemini API key available, {provider} used for Tier 1)")
             tier2_tracker = None
 
     if tier2_tracker is not None:
@@ -1117,8 +1255,8 @@ def main() -> int:
     parser.add_argument("--max-concurrency", type=int, default=100)
     parser.add_argument("--model", type=str, default="gemini-3-flash-preview",
                         help="Gemini model (used for Tier 2 and when provider=gemini)")
-    parser.add_argument("--provider", type=str, default="openai", choices=["openai", "gemini"],
-                        help="LLM provider for Tier 1 response tracking (default: openai)")
+    parser.add_argument("--provider", type=str, default="xai", choices=["xai", "openai", "gemini"],
+                        help="LLM provider for Tier 1 response tracking (default: xai)")
     parser.add_argument("--limit", type=int, default=None,
                         help="Limit number of comments to process (for testing)")
     parser.add_argument("--max-comment-pages", type=int, default=30,
@@ -1131,6 +1269,8 @@ def main() -> int:
                         help="Number of comments to process per batch (default: 1000)")
     parser.add_argument("--no-retry-errors", action="store_true",
                         help="Do NOT retry previously failed API errors")
+    parser.add_argument("--no-sampling", action="store_true",
+                        help="Disable response sampling (process all comments)")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--quiet", action="store_true")
     
@@ -1142,6 +1282,7 @@ def main() -> int:
         year=args.year,
         response_provider=args.provider,
         retry_errors=not args.no_retry_errors,
+        response_sampling_enabled=not args.no_sampling,
         gemini_model=args.model,
         gemini_max_concurrency=args.max_concurrency,
         enable_search_grounding=not args.disable_search,

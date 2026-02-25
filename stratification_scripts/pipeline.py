@@ -195,8 +195,11 @@ def run_year(
             log_step(logger, current_step, total_steps, "Tracking agency responses")
 
             # Verify the right API key is available based on provider
-            provider = getattr(config, "response_provider", "openai")
-            if provider == "openai":
+            provider = getattr(config, "response_provider", "xai")
+            if provider == "xai":
+                from stratification_scripts.config import get_xai_api_key
+                get_xai_api_key(required=True)
+            elif provider == "openai":
                 get_openai_api_key(required=True)
             else:
                 from stratification_scripts.config import get_gemini_api_key
@@ -308,12 +311,17 @@ def validate_environment(steps: Optional[List[str]] = None) -> bool:
         errors.append(str(e))
 
     # Check response tracking key when track_responses step is included
-    # Default provider is now OpenAI
+    # Default provider is now xAI
     if steps and "track_responses" in steps:
+        from stratification_scripts.config import get_xai_api_key
         try:
-            get_openai_api_key(required=True)
-        except ConfigurationError as e:
-            errors.append(str(e))
+            get_xai_api_key(required=True)
+        except ConfigurationError:
+            # xAI not set; fall back to checking OpenAI (user may override provider)
+            try:
+                get_openai_api_key(required=True)
+            except ConfigurationError as e:
+                errors.append(f"No response tracking API key found (XAI_API_KEY or OPENAI_API_KEY): {e}")
 
     if errors:
         for error in errors:

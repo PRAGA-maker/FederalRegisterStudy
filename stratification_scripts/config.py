@@ -128,24 +128,48 @@ def get_openai_api_key(required: bool = False) -> Optional[str]:
 def get_gemini_api_key(required: bool = False) -> Optional[str]:
     """
     Get Gemini API key from environment.
-    
+
     Args:
         required: If True, raise ConfigurationError when key not found.
-    
+
     Returns:
         API key string or None if not set.
-    
+
     Raises:
         ConfigurationError: If required=True and key is not configured.
     """
     api_key = os.environ.get("GEMINI_API_KEY", "")
-    
+
     if required and not api_key:
         raise ConfigurationError(
             "GEMINI_API_KEY environment variable not set. "
             "Set it with: export GEMINI_API_KEY='your-key-here'"
         )
-    
+
+    return api_key if api_key else None
+
+
+def get_xai_api_key(required: bool = False) -> Optional[str]:
+    """
+    Get xAI API key from environment.
+
+    Args:
+        required: If True, raise ConfigurationError when key not found.
+
+    Returns:
+        API key string or None if not set.
+
+    Raises:
+        ConfigurationError: If required=True and key is not configured.
+    """
+    api_key = os.environ.get("XAI_API_KEY", "")
+
+    if required and not api_key:
+        raise ConfigurationError(
+            "XAI_API_KEY environment variable not set. "
+            "Set it with: export XAI_API_KEY='your-key-here'"
+        )
+
     return api_key if api_key else None
 
 
@@ -373,8 +397,16 @@ class PipelineConfig:
     per_key_hourly: int = 1000
     
     # Response tracking settings
-    response_provider: str = "openai"  # "openai" or "gemini"
+    response_provider: str = "xai"  # "xai", "openai", or "gemini"
     retry_errors: bool = True  # Always strip API error rows and reprocess them
+
+    # Response sampling settings (Cochran + FPC, stratified by commenter type)
+    response_sampling_enabled: bool = True
+    response_sampling_census_threshold: int = 30  # Census (take all) if N <= this
+
+    # xAI API settings
+    xai_model: str = "grok-4-1-fast-reasoning"
+    xai_max_concurrency: int = 50
 
     # Gemini API settings
     gemini_model: str = "gemini-3-flash-preview"

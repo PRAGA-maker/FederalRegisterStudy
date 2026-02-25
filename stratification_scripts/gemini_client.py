@@ -142,7 +142,7 @@ OUTPUT REQUIREMENTS:
 - The agency_decision field must be exactly one of: "accept", "reject", "partial", or "uncertain"
   - "accept" = the agency fully accepted the comment's recommendation or suggestion
   - "reject" = the agency fully rejected the comment's recommendation or suggestion
-  - "partial" = the agency accepted some aspects of the comment and rejected others, or made partial modifications in response to the comment (a genuinely mixed decision)
+  - "partial" = ONLY use this when the agency response EXPLICITLY addresses multiple distinct recommendations in the comment and accepts some while rejecting others. This must be a genuinely split decision on separable issues -- NOT a soft or hedged acceptance. If the agency mostly accepted but with minor caveats, that is "accept". If the agency mostly rejected but acknowledged one small point, that is "reject". Ask yourself: would the commenter feel their core request was granted? If yes, use "accept". If no, use "reject". Reserve "partial" for truly mixed outcomes on clearly separable sub-issues.
   - "uncertain" = cannot determine what the agency decided (unknown disposition)
 - If response_found is "no" or "uncertain", set agency_decision to "uncertain"
 - response_text should contain the actual agency response text, or "N/A" if none found

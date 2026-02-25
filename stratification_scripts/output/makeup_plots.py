@@ -2637,6 +2637,16 @@ def generate_response_plots(
         df["weight"] = 1.0
     if "weight_doc" not in df.columns:
         df["weight_doc"] = df.get("weight", 1.0)
+
+    # Apply response sampling weight if present (Horvitz-Thompson: multiply
+    # doc-level weight by the inverse sampling probability from response tracking)
+    if "response_sample_weight" in df.columns:
+        rsw = pd.to_numeric(df["response_sample_weight"], errors="coerce").fillna(1.0)
+        df["weight"] = df["weight"] * rsw
+        df["weight_doc"] = df["weight_doc"] * rsw
+        n_sampled = (rsw > 1.0).sum()
+        if n_sampled > 0:
+            logger.info(f"Applied response_sample_weight to {n_sampled:,} sampled rows (max weight={rsw.max():.1f})")
     
     # Normalize categories (this filters to only known categories)
     df_before_norm = len(df)
