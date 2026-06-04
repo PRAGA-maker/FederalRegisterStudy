@@ -50,6 +50,11 @@ from stratification_scripts.io_utils import extract_pdf_text
 from stratification_scripts.regulations_gov.client import RegsGovClient
 from stratification_scripts.config import get_regs_api_keys
 from stratification_scripts.makeup.mine_comments import calculate_sample_size
+from stratification_scripts.makeup.fr_response_extractor import (
+    extract_response_section,
+    ResponseExtract,
+)
+from stratification_scripts.federal_register.client import FederalRegisterClient
 
 logger = get_logger(__name__)
 
@@ -552,11 +557,100 @@ async def process_responses_async(
                 "rin": str(original_comment.get("rin") or "N/A"),
                 # Sampling weight (1.0 if no sampling or census)
                 "response_sample_weight": weight_map.get(comment_id, 1.0) if weight_map else 1.0,
+                # Provenance (web-search path)
+                "response_source": "web_search",
+                "response_citation": "",
+                "rtc_document_id": "",
             }
             csv_results.append(row)
         
         # Save incrementally (with duplicate propagation if df_comments provided)
         save_responses_incremental(responses_csv, csv_results, df_comments)
+
+
+def _fetch_final_rule_xml(final_doc_number: str) -> Optional[str]:
+    """Fetch structured full_text_xml for one Final Rule (short-lived own client)."""
+    client = FederalRegisterClient(max_retries=4, sleep_between=0.3)
+    try:
+        return client.fetch_document_full_text_xml(final_doc_number)
+    finally:
+        client.close()
+
+
+def build_grounded_cache(
+    comment_doc_numbers,
+    df_fr: pl.DataFrame,
+    grounded_max_chars: int = 100_000,
+) -> Dict[str, ResponseExtract]:
+    """Map each comment ``document_number`` -> ResponseExtract for its linked Final Rule.
+
+    A comment's document may itself be the Final Rule (doc_type == "Rule") or link to
+    one via ``final_rule_document_number``. Fetches + extracts each unique Final Rule
+    once. Returns only docs with usable grounded_text. Best-effort: failures skipped.
+    """
+    cols = df_fr.columns
+    link: Dict[str, str] = {}
+    sel = [c for c in ["document_number", "final_rule_document_number", "doc_type"] if c in cols]
+    for row in df_fr.select(sel).iter_rows(named=True):
+        dn = str(row.get("document_number") or "")
+        if not dn:
+            continue
+        frn = str(row.get("final_rule_document_number") or "").strip()
+        if frn and frn.lower() not in ("none", "null", ""):
+            link[dn] = frn
+        elif str(row.get("doc_type") or "") == "Rule":
+            link[dn] = dn  # the comment's own doc is itself a final rule
+
+    targets = {dn: link[dn] for dn in {str(d) for d in comment_doc_numbers} if dn in link}
+    extract_by_final: Dict[str, ResponseExtract] = {}
+    for frn in sorted(set(targets.values())):
+        try:
+            xml = _fetch_final_rule_xml(frn)
+        except Exception as e:  # noqa: BLE001 — grounding is best-effort
+            logger.debug(f"Grounded fetch failed for {frn}: {e}")
+            continue
+        if not xml:
+            continue
+        ext = extract_response_section(xml)
+        if ext.grounded_text and len(ext.grounded_text) <= grounded_max_chars + 1000:
+            extract_by_final[frn] = ext
+    return {dn: extract_by_final[frn] for dn, frn in targets.items() if frn in extract_by_final}
+
+
+def _save_grounded_results(
+    responses_csv: Path,
+    results: List,
+    grounded_meta: List,
+    weight_map: Optional[Dict[str, float]],
+    df_comments: Optional[pl.DataFrame],
+    tracker_model: str,
+) -> None:
+    """Format + persist grounded (primary-source) Tier-1 results (per-comment)."""
+    by_id = {str(c.get("comment_id")): (c, ext) for c, ext in grounded_meta}
+    rows: List[Dict] = []
+    for comment_id, parsed, _raw in results:
+        c, ext = by_id.get(comment_id, ({}, None))
+        rows.append({
+            "comment_id": comment_id,
+            "document_number": str(c.get("document_number") or "N/A"),
+            "agency": str(c.get("agency") or "N/A"),
+            "response_found": parsed.get("response_found", "uncertain"),
+            "agency_decision": parsed.get("agency_decision", "uncertain"),
+            "response_text": parsed.get("response_text", "N/A"),
+            "response_location": parsed.get("response_location", "N/A"),
+            "reasoning": parsed.get("reasoning", "N/A"),
+            "processed_at": datetime.now().isoformat(),
+            "model": tracker_model,
+            "comment_text_length": 0,
+            "has_attachment": bool(c.get("attachment_text")),
+            "lifecycle_stage": str(c.get("lifecycle_stage") or "UNKNOWN"),
+            "rin": str(c.get("rin") or "N/A"),
+            "response_sample_weight": weight_map.get(comment_id, 1.0) if weight_map else 1.0,
+            "response_source": "fr_preamble",
+            "response_citation": (ext.matched_header if ext else "") or "",
+            "rtc_document_id": "",
+        })
+    save_responses_incremental(responses_csv, rows, df_comments)
 
 
 def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None, batch_size: int = 1000) -> None:
@@ -744,19 +838,64 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
             logger.warning(f"Could not initialize RegsGovClient: {e}")
             logger.warning("Will use existing attachment text only")
 
-        # Process comments (pass df_raw for duplicate propagation if deduplication enabled)
+        # --- Primary-source grounding (Approach A): build per-rule grounded cache ---
+        grounded_cache: Dict[str, ResponseExtract] = {}
+        if getattr(config, "enable_primary_source_grounding", True) and provider == "xai" and fr_csv.exists():
+            try:
+                doc_nums = [str(c.get("document_number")) for c in comments_to_process]
+                grounded_cache = build_grounded_cache(
+                    doc_nums, df_fr, getattr(config, "grounded_max_chars", 100_000)
+                )
+                logger.info(
+                    f"Primary-source grounding: {len(grounded_cache)} of {len(comments_to_process)} "
+                    f"comments have a Final-Rule response section (grounded, no web search)"
+                )
+            except Exception as e:
+                logger.warning(f"Grounded cache build failed; using web search for all: {e}")
+                grounded_cache = {}
+
+        # Partition comments: grounded primary-source path vs web-search fallback
+        grounded_items: List[tuple] = []
+        grounded_meta: List[tuple] = []
+        fallback: List[Dict] = []
+        for c in comments_to_process:
+            ext = grounded_cache.get(str(c.get("document_number")))
+            if ext is not None and ext.grounded_text:
+                full_text = extract_full_comment_text(c, client=regs_client, max_pages=config.max_comment_pages)
+                meta = {
+                    "comment_id": str(c.get("comment_id")),
+                    "document_number": str(c.get("document_number", "N/A")),
+                    "agency": str(c.get("agency", "N/A")),
+                    "commenter_type": str(c.get("category", "N/A")),
+                    "submission_date": str(c.get("posted_date", "N/A")),
+                }
+                grounded_items.append((full_text, ext.grounded_text, meta))
+                grounded_meta.append((c, ext))
+            else:
+                fallback.append(c)
+
+        # Process both paths (pass df_raw for duplicate propagation if dedup enabled)
         try:
-            asyncio.run(process_responses_async(
-                tracker,
-                comments_to_process,
-                responses_csv,
-                max_concurrency,
-                regs_client,
-                config.max_comment_pages,
-                df_raw if has_deduplication else None,
-                batch_size,
-                weight_map,
-            ))
+            if grounded_items:
+                logger.info(f"Tier 1 GROUNDED path: {len(grounded_items)} comments (primary-source, no web search)")
+                gres = asyncio.run(tracker.track_grounded_batch(grounded_items, max_concurrency=max_concurrency))
+                _save_grounded_results(
+                    responses_csv, gres, grounded_meta, weight_map,
+                    df_raw if has_deduplication else None, tracker.model,
+                )
+            if fallback:
+                logger.info(f"Tier 1 WEB-SEARCH path: {len(fallback)} comments")
+                asyncio.run(process_responses_async(
+                    tracker,
+                    fallback,
+                    responses_csv,
+                    max_concurrency,
+                    regs_client,
+                    config.max_comment_pages,
+                    df_raw if has_deduplication else None,
+                    batch_size,
+                    weight_map,
+                ))
         finally:
             if regs_client:
                 regs_client.close()

@@ -399,6 +399,13 @@ class PipelineConfig:
     # Response tracking settings
     response_provider: str = "xai"  # "xai", "openai", or "gemini"
 
+    # Primary-source grounding (Final Rule preamble) for Tier 1 (xai provider only).
+    # When True, comments whose document links to a Final Rule are classified from the
+    # isolated preamble "Response to Comments" section (no web search); others fall back
+    # to web-search Tier 1.
+    enable_primary_source_grounding: bool = True
+    grounded_max_chars: int = 100_000
+
     # xAI API settings
     xai_model: str = "grok-4-1-fast-reasoning"
     xai_max_concurrency: int = 50
