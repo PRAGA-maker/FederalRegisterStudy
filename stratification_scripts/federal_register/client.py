@@ -466,6 +466,49 @@ class FederalRegisterClient:
         )
         return truncated + f"\n\n[... truncated from {len(text)} chars ...]"
 
+    def fetch_document_full_text_xml(self, document_number: str) -> Optional[str]:
+        """
+        Fetch the STRUCTURED full-text XML (<SUPLINF>/<HD> markup) for an FR document.
+
+        Unlike fetch_document_full_text (flat raw_text), this returns the OFR XML
+        whose section structure lets us isolate the agency's "Response to Comments"
+        preamble section. Returns raw XML string, or None on any failure.
+
+        Side Effects:
+            Makes up to 2 HTTP requests (document metadata + XML).
+        """
+        if not document_number:
+            return None
+        details = self.fetch_document_details(document_number, enrich_identifiers=False)
+        if not details:
+            return None
+        xml_url = details.get("full_text_xml_url")
+        if not xml_url:
+            logger.warning(f"No full_text_xml_url for document {document_number}")
+            return None
+        if self.sleep_between > 0:
+            time.sleep(self.sleep_between)
+        backoff = 1.0
+        for attempt in range(self.max_retries):
+            try:
+                r = self.session.get(xml_url, timeout=60)
+            except requests.RequestException as e:
+                if attempt == self.max_retries - 1:
+                    logger.warning(f"Failed to fetch full_text_xml for {document_number}: {type(e).__name__}: {e}")
+                    return None
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 16)
+                continue
+            if r.status_code == 200:
+                return r.text or None
+            if r.status_code in (403, 429, 500, 502, 503, 504) and attempt < self.max_retries - 1:
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 16)
+                continue
+            logger.warning(f"HTTP {r.status_code} fetching full_text_xml for {document_number}")
+            return None
+        return None
+
     def lookup_document_by_citation(
         self,
         citation: str,
