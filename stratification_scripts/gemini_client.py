@@ -175,6 +175,50 @@ OUTPUT: Return valid JSON matching the schema exactly.
 """
 
 
+# Grounded (primary-source) response prompt — used when we already have the agency's
+# Response-to-Comments text from the Final Rule preamble (no web search). PER-COMMENT.
+GROUNDED_RESPONSE_PROMPT = """You are a researcher studying U.S. federal notice-and-comment rulemaking.
+
+You are given the agency's OWN response-to-comments discussion, taken from the Final Rule
+preamble (SUPPLEMENTARY INFORMATION) and/or a docket "Response to Comments" document. This is
+the primary, authoritative source. Agencies respond to comment THEMES in aggregate, so you must
+MATCH this specific comment to the relevant theme.
+
+YOUR JOB (per-comment):
+1. Find where, if anywhere, the provided text addresses the concern raised in THIS comment.
+2. Classify the agency's disposition of THIS comment's request: accept / reject / partial.
+
+COMMENT DETAILS:
+- Comment ID: {comment_id}
+- Federal Register Document: {document_number}
+- Agency: {agency}
+- Commenter Type: {commenter_type}
+- Submission Date: {submission_date}
+
+COMMENT TEXT:
+{full_comment_text}
+
+AGENCY RESPONSE-TO-COMMENTS TEXT (primary source -- use ONLY this; do not use outside knowledge or web search):
+{grounded_text}
+
+CLASSIFICATION RULES:
+- response_found: "yes" only if the provided text addresses THIS comment's concern (or its theme).
+  "no" if the provided text does NOT address it -- do NOT borrow the agency's disposition of a
+  different topic and apply it here. "uncertain" only if genuinely ambiguous.
+- agency_decision (only when response_found="yes"):
+  - "accept" = agency adopted the request / changed the rule in the requested direction (minor caveats still "accept").
+  - "reject" = agency kept the provision / declined (acknowledging a small point is still "reject").
+  - "partial" = ONLY when the comment raised multiple separable issues and the agency accepted some, rejected others.
+  - "uncertain" = the text addresses it but disposition is unclear.
+- If response_found is "no" or "uncertain", set agency_decision to "uncertain".
+
+OUTPUT: valid JSON matching the schema.
+- response_text: the SPECIFIC passage from the provided text that responds to this comment (not a generic summary), or "N/A".
+- response_location: the matched section heading, or "N/A".
+- reasoning: 1-2 sentences.
+"""
+
+
 # Tier 2: NPRM vs Final Rule text comparison prompt
 TIER2_COMPARISON_PROMPT = """You are comparing a public comment against the proposed rule (NPRM) and the final rule to determine whether the comment's concern was addressed.
 

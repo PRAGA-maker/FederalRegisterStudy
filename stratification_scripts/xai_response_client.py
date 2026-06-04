@@ -31,6 +31,7 @@ from stratification_scripts.logging_utils import get_logger
 from stratification_scripts.gemini_client import (
     AgencyResponse,
     RESPONSE_TRACKING_PROMPT,
+    GROUNDED_RESPONSE_PROMPT,
 )
 
 logger = get_logger(__name__)
@@ -234,6 +235,126 @@ class XAIResponseTracker:
             ).normalized(),
             "ERROR: retries_exhausted",
         )
+
+    def _track_grounded_sync(
+        self,
+        comment_text: str,
+        grounding_text: str,
+        metadata: Dict[str, str],
+    ) -> Tuple[str, Dict[str, str], str]:
+        """Grounded classification: classify the agency's disposition of THIS comment
+        using ONLY the supplied primary-source response text (no web search)."""
+        max_chars = 20000
+        if len(comment_text) > max_chars:
+            comment_text = comment_text[:max_chars] + "\n\n[... truncated ...]"
+
+        prompt = GROUNDED_RESPONSE_PROMPT.format(
+            comment_id=metadata.get("comment_id", "N/A"),
+            document_number=metadata.get("document_number", "N/A"),
+            agency=metadata.get("agency", "N/A"),
+            commenter_type=metadata.get("commenter_type", "N/A"),
+            submission_date=metadata.get("submission_date", "N/A"),
+            full_comment_text=comment_text,
+            grounded_text=grounding_text,
+        )
+        comment_id = metadata.get("comment_id", "unknown")
+        backoff = 2.0
+
+        for attempt in range(self.max_retries):
+            try:
+                response = self._client.responses.parse(
+                    model=self.model,
+                    instructions=(
+                        "You are studying U.S. notice-and-comment rulemaking. Classify the agency's "
+                        "disposition of THIS public comment using ONLY the provided primary-source "
+                        "response text. Do not search the web. Return structured JSON matching the schema."
+                    ),
+                    input=prompt,
+                    tools=[],  # NO web search on the grounded path
+                    text_format=AgencyResponse,
+                )
+                parsed = response.output_parsed
+                if parsed is not None:
+                    return (comment_id, parsed.normalized(), (response.output_text or "")[:500] or "OK_JSON")
+                if response.output_text:
+                    try:
+                        manual = AgencyResponse.model_validate_json(response.output_text)
+                        return (comment_id, manual.normalized(), response.output_text[:500])
+                    except (ValidationError, Exception):
+                        pass
+                return (
+                    comment_id,
+                    AgencyResponse(
+                        response_found="uncertain", agency_decision="uncertain",
+                        response_text="N/A", response_location="N/A",
+                        reasoning="Empty model response",
+                    ).normalized(),
+                    "EMPTY_RESPONSE",
+                )
+            except Exception as e:
+                if attempt >= self.max_retries - 1 or not self._is_retryable_error(e):
+                    return (
+                        comment_id,
+                        AgencyResponse(
+                            response_found="uncertain", agency_decision="uncertain",
+                            response_text="N/A", response_location="N/A",
+                            reasoning=f"API error: {type(e).__name__}",
+                        ).normalized(),
+                        f"ERROR: {e}",
+                    )
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 60.0)
+
+        return (
+            comment_id,
+            AgencyResponse(
+                response_found="uncertain", agency_decision="uncertain",
+                response_text="N/A", response_location="N/A",
+                reasoning="API retries exhausted",
+            ).normalized(),
+            "ERROR: retries_exhausted",
+        )
+
+    async def track_response_grounded(
+        self,
+        comment_text: str,
+        grounding_text: str,
+        metadata: Dict[str, str],
+        semaphore: Optional[asyncio.Semaphore] = None,
+    ) -> Tuple[str, Dict[str, str], str]:
+        """Async wrapper for grounded (no-search) classification of a single comment."""
+        async def do_request():
+            return await asyncio.to_thread(
+                self._track_grounded_sync, comment_text, grounding_text, metadata
+            )
+
+        if semaphore:
+            async with semaphore:
+                return await do_request()
+        return await do_request()
+
+    async def track_grounded_batch(
+        self,
+        items: List[Tuple[str, str, Dict[str, str]]],
+        max_concurrency: int = 50,
+    ) -> List[Tuple[str, Dict[str, str], str]]:
+        """items: list of (comment_text, grounding_text, metadata) tuples."""
+        if not items:
+            return []
+        semaphore = asyncio.Semaphore(max_concurrency)
+
+        async def run_single(c, g, m):
+            return await self.track_response_grounded(c, g, m, semaphore)
+
+        tasks = [asyncio.create_task(run_single(c, g, m)) for c, g, m in items]
+        results: List[Tuple[str, Dict[str, str], str]] = []
+        for task in tqdm(
+            asyncio.as_completed(tasks),
+            total=len(tasks),
+            desc="Tracking responses (xAI grounded)",
+        ):
+            results.append(await task)
+        return results
 
     async def track_response(
         self,
