@@ -339,9 +339,33 @@ def sample_comments_for_response_tracking(
                 df_sampled = pl.concat([df_sampled, df_force])
                 logger.info(f"  Force-included {len(force_rows)} comments for document coverage ({len(missing_docs)} docs)")
 
+    # ------------------------------------------------------------------
+    # POST-STRATIFICATION CALIBRATION (2026-06-15)
+    # The doc-coverage force-include above adds 1 comment per missing document weighted by that doc's
+    # FULL comment count, ON TOP of the category-stratification weights -- which double-counts the missing
+    # docs and makes sum(weights) overshoot the universe (observed: 2014 response weighted N was ~1.6x the
+    # actual comment total, i.e. non-physical). Fix: scale each category's weights so they sum to that
+    # category's true size N_cat. Result: sum(weights) == canonical universe, category-level HT estimates
+    # are exact (post-stratification), and the force-include now only buys coverage, not extra weight mass.
+    cat_N = {c: len(df_work.filter(pl.col("category") == c)) for c in categories}
+    samp_cat = {
+        str(r["comment_id"]): (r["category"] if r["category"] is not None else FALLBACK_CAT)
+        for r in df_sampled.with_columns(pl.col("category").fill_null(FALLBACK_CAT))
+        .select(["comment_id", "category"]).iter_rows(named=True)
+    }
+    cur_sum: Dict[str, float] = {}
+    for cid, wgt in weight_map.items():
+        c = samp_cat.get(cid, FALLBACK_CAT)
+        cur_sum[c] = cur_sum.get(c, 0.0) + wgt
+    for cid in list(weight_map.keys()):
+        c = samp_cat.get(cid, FALLBACK_CAT)
+        if cur_sum.get(c, 0.0) > 0 and cat_N.get(c, 0) > 0:
+            weight_map[cid] *= cat_N[c] / cur_sum[c]
+
     total_N = len(df_unprocessed)
     total_n = len(df_sampled)
-    logger.info(f"Sampling complete: {total_N} -> {total_n} comments ({total_n/total_N*100:.1f}% of total)")
+    logger.info(f"Sampling complete: {total_N} -> {total_n} comments ({total_n/total_N*100:.1f}% of total); "
+                f"post-stratification calibration -> sum(weights)={sum(weight_map.values()):.0f} (== universe {total_N})")
 
     return df_sampled, weight_map
 
