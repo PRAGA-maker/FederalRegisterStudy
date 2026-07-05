@@ -1,0 +1,105 @@
+Agency Decision Distribution Report (2015)
+================================================================================
+
+TABLE 1: DECISION COUNTS AND PROPORTIONS
+--------------------------------------------------
+Decision             |      Count |   Proportion
+--------------------------------------------------
+Accept               |     29,888 |        37.2%
+Reject               |     34,719 |        43.2%
+Partial              |     13,783 |        17.1%
+Uncertain            |      1,998 |         2.5%
+--------------------------------------------------
+TOTAL                |     80,388 |       100.0%
+
+
+TABLE 2: CONDITIONAL PROBABILITIES
+--------------------------------------------------
+Given that a response was found:
+  P(accept | response) = 37.2%
+  P(reject | response) = 43.2%
+  P(partial | response) = 17.1%
+  P(uncertain | response) = 2.5%
+
+
+TABLE 3: DECISION RATES BY COMMENTER TYPE
+--------------------------------------------------------------------------------
+Commenter Type                                |   Accept % |   Reject % |  Partial % |  Uncertain %
+-----------------------------------------------------------------------------------------------
+Undecided/Anonymous                           |      49.5% |      20.3% |      11.4% |        18.7%
+Ordinary Citizen                              |      35.4% |      55.4% |       8.2% |         1.0%
+Large Organization/Corporation                |      51.0% |      21.7% |      20.2% |         7.1%
+Academic/Industry/Expert                      |      30.9% |      18.8% |      49.9% |         0.4%
+Political Consultant/Lobbyist                 |      12.1% |      43.9% |      34.0% |        10.0%
+--------------------------------------------------------------------------------
+
+
+TABLE 4: AGENCIES BY DECISION RATE
+----------------------------------------------------------------------------------------------------
+Agencies with >50% Acceptance Rate:
+----------------------------------------------------------------------------------------------------
+Agency                                             |   Accept % | Total Responses
+----------------------------------------------------------------------------------------------------
+Corporation for National and Community Service     |     100.0% |              15
+Energy Department, Energy Efficiency and Renewab   |     100.0% |               1
+Labor Department, Federal Contract Compliance Pr   |     100.0% |             135
+Health and Human Services Department, Indian Hea   |     100.0% |              31
+Transportation Department, Transportation Statis   |     100.0% |               2
+Treasury Department, Alcohol and Tobacco Tax and   |     100.0% |              44
+Labor Department, Mine Safety and Health Adminis   |     100.0% |              17
+Defense Department, General Services Administrat   |      99.1% |              93
+Treasury Department, Internal Revenue Service      |      98.0% |          18,718
+Interior Department, National Park Service         |      97.8% |              39
+Transportation Department, National Highway Traf   |      97.0% |             270
+Interior Department, Fish and Wildlife Service     |      76.9% |           2,092
+Labor Department, Occupational Safety and Health   |      76.9% |              67
+Agriculture Department, Agricultural Marketing S   |      75.1% |             417
+Treasury Department                                |      74.9% |           1,452
+Health and Human Services Department, Children a   |      72.7% |              56
+Transportation Department, Federal Motor Carrier   |      69.4% |           1,166
+Interior Department, Fish and Wildlife Service,    |      57.2% |               6
+Transportation Department, Federal Aviation Admi   |      54.7% |           1,909
+Transportation Department, Maritime Administrati   |      51.3% |              33
+
+Agencies with >50% Rejection Rate:
+----------------------------------------------------------------------------------------------------
+Agency                                             |   Reject % | Total Responses
+----------------------------------------------------------------------------------------------------
+Agriculture Department, Farm Service Agency        |     100.0% |               1
+Agriculture Department, Rural Utilities Service    |     100.0% |               3
+Architectural and Transportation Barriers Compli   |     100.0% |               3
+Health and Human Services Department, Agency for   |     100.0% |               2
+Health and Human Services Department, Substance    |     100.0% |             109
+Defense Department, Navy Department                |     100.0% |               1
+Defense Department, Army Department                |     100.0% |               1
+Interior Department, Safety and Environmental En   |     100.0% |             244
+Justice Department, Alcohol, Tobacco, Firearms,    |     100.0% |               1
+Justice Department, Executive Office for Immigra   |     100.0% |               2
+Labor Department, Employment and Training Admini   |     100.0% |              28
+Homeland Security Department, U.S. Customs and B   |     100.0% |               7
+Interior Department                                |     100.0% |              65
+Interior Department, Natural Resources Revenue O   |     100.0% |              18
+Interior Department, Safety and Environmental En   |     100.0% |               3
+Agriculture Department, Animal and Plant Health    |      96.5% |           3,078
+Agriculture Department, Commodity Credit Corpora   |      96.2% |              44
+Agriculture Department, Forest Service             |      95.3% |              54
+Homeland Security Department                       |      93.7% |          19,989
+Homeland Security Department, Transportation Sec   |      88.7% |               7
+Homeland Security Department, Coast Guard          |      77.6% |             433
+Library of Congress, Copyright Office, Library o   |      77.0% |              60
+Commerce Department, National Oceanic and Atmosp   |      74.3% |           3,536
+Federal Trade Commission                           |      72.3% |             810
+Homeland Security Department, U.S. Citizenship a   |      71.7% |             157
+Labor Department, Workers' Compensation Programs   |      68.3% |              59
+Agriculture Department, Food Safety and Inspecti   |      62.6% |              81
+Labor Department, Wage and Hour Division           |      61.0% |           1,379
+Labor Department                                   |      60.7% |             166
+Health and Human Services Department, Centers fo   |      60.4% |           2,482
+Health and Human Services Department, Centers fo   |      54.7% |             258
+----------------------------------------------------------------------------------------------------
+
+Notes:
+- All percentages are conditional on response being found
+- All counts and percentages use WEIGHTED statistics to account for sampling
+- Agencies shown have >50% acceptance or rejection rate
+- Only agencies with at least 1 response are included

@@ -1,0 +1,124 @@
+Agency Clustering Report (2025)
+================================================================================
+
+TABLE 1: AGENCIES BY DOMINANT COMMENTER CATEGORY
+--------------------------------------------------
+Dominant Category                             | # Agencies
+--------------------------------------------------
+Undecided/Anonymous                           |          4
+Ordinary Citizen                              |         58
+Large Organization/Corporation                |         21
+Academic/Industry/Expert (incl. small/local business) |          8
+Political Consultant/Lobbyist                 |          0
+--------------------------------------------------
+TOTAL                                         |         91
+
+
+TABLE 2: DETAILED AGENCY BREAKDOWN
+------------------------------------------------------------------------------------------------------------------------
+Agency                                             | Dominant Category         |   Share |    Delta |   Comments
+------------------------------------------------------------------------------------------------------------------------
+--- Undecided/Anonymous ---
+Homeland Security Department, U.S. Customs and B   | Undecided/Anonymous       |   52.4% |   +25.6pp |         51
+Interior Department, Geological Survey             | Undecided/Anonymous       |   42.6% |   +19.1pp |        163
+Housing and Urban Development Department           | Undecided/Anonymous       |   35.4% |   +11.2pp |        412
+Homeland Security Department, U.S. Customs and B   | Undecided/Anonymous       |   31.2% |    +0.0pp |        218
+
+--- Ordinary Citizen ---
+Transportation Department, Maritime Administrati   | Ordinary Citizen          |   99.2% |   +98.8pp |      9,088
+Interior Department, Land Management Bureau        | Ordinary Citizen          |   98.9% |   +98.4pp |    201,453
+Social Security Administration                     | Ordinary Citizen          |   98.7% |   +97.6pp |     21,330
+Interior Department, National Park Service         | Ordinary Citizen          |   98.1% |   +97.2pp |      6,958
+Interior Department, Fish and Wildlife Service     | Ordinary Citizen          |   97.8% |   +95.9pp |    147,887
+Justice Department                                 | Ordinary Citizen          |   97.6% |   +96.6pp |     15,570
+Agriculture Department, Animal and Plant Health    | Ordinary Citizen          |   97.2% |   +95.7pp |     11,144
+Agriculture Department, Forest Service             | Ordinary Citizen          |   96.9% |   +94.3pp |    223,866
+Election Assistance Commission                     | Ordinary Citizen          |   96.3% |   +93.2pp |    135,362
+Veterans Affairs Department                        | Ordinary Citizen          |   95.1% |   +93.1pp |     21,637
+Council on Environmental Quality                   | Ordinary Citizen          |   94.3% |   +91.1pp |     88,806
+Treasury Department, Alcohol and Tobacco Tax and   | Ordinary Citizen          |   94.0% |   +91.2pp |      4,484
+Transportation Department, Pipeline and Hazardou   | Ordinary Citizen          |   94.0% |   +90.6pp |     10,051
+Interior Department, Ocean Energy Management Bur   | Ordinary Citizen          |   93.6% |   +91.3pp |     63,849
+Agriculture Department                             | Ordinary Citizen          |   93.5% |   +90.1pp |      6,666
+Labor Department, Labor-Management Standards Off   | Ordinary Citizen          |   93.5% |   +90.0pp |        300
+Transportation Department, National Highway Traf   | Ordinary Citizen          |   92.7% |   +89.9pp |      5,149
+Interior Department, Fish and Wildlife Service,    | Ordinary Citizen          |   92.1% |   +84.6pp |    289,038
+Health and Human Services Department, Food and D   | Ordinary Citizen          |   91.9% |   +86.0pp |      5,104
+Health and Human Services Department, Food and D   | Ordinary Citizen          |   88.7% |   +78.9pp |    113,678
+Commerce Department, National Oceanic and Atmosp   | Ordinary Citizen          |   88.4% |   +84.2pp |      5,334
+Management and Budget Office                       | Ordinary Citizen          |   87.5% |   +76.3pp |      8,486
+Personnel Management Office                        | Ordinary Citizen          |   83.5% |   +68.0pp |     37,645
+Justice Department, Executive Office for Immigra   | Ordinary Citizen          |   82.1% |   +65.6pp |      1,096
+Homeland Security Department, U.S. Citizenship a   | Ordinary Citizen          |   81.4% |   +74.0pp |      1,500
+Consumer Financial Protection Bureau               | Ordinary Citizen          |   80.9% |   +65.3pp |     79,339
+Agriculture Department, Agricultural Marketing S   | Ordinary Citizen          |   80.8% |   +62.8pp |     17,733
+Labor Department, Wage and Hour Division           | Ordinary Citizen          |   80.1% |   +67.9pp |      5,570
+Homeland Security Department                       | Ordinary Citizen          |   78.8% |   +60.9pp |     82,188
+Labor Department                                   | Ordinary Citizen          |   78.5% |   +70.3pp |      1,973
+Health and Human Services Department, Children a   | Ordinary Citizen          |   78.0% |   +69.2pp |        431
+Labor Department, Employment and Training Admini   | Ordinary Citizen          |   77.9% |   +69.2pp |      1,705
+Justice Department, Drug Enforcement Administrat   | Ordinary Citizen          |   77.5% |   +61.3pp |     11,646
+Health and Human Services Department, Centers fo   | Ordinary Citizen          |   75.6% |   +59.2pp |     96,625
+Transportation Department, Federal Motor Carrier   | Ordinary Citizen          |   74.4% |   +56.1pp |      9,036
+State Department                                   | Ordinary Citizen          |   73.9% |   +59.7pp |        697
+Education Department                               | Ordinary Citizen          |   73.1% |   +54.8pp |     27,037
+Health and Human Services Department, Centers fo   | Ordinary Citizen          |   72.4% |   +48.9pp |      9,112
+Defense Department, Engineers Corps, Environment   | Ordinary Citizen          |   71.8% |   +58.7pp |     19,603
+Commerce Department, Patent and Trademark Office   | Ordinary Citizen          |   69.2% |   +50.5pp |      2,931
+Energy Department                                  | Ordinary Citizen          |   69.0% |   +53.3pp |     31,942
+Labor Department, Occupational Safety and Health   | Ordinary Citizen          |   68.4% |   +50.2pp |      2,130
+Health and Human Services Department               | Ordinary Citizen          |   61.7% |   +31.7pp |     42,033
+Homeland Security Department, Coast Guard          | Ordinary Citizen          |   60.5% |   +36.9pp |        711
+Environmental Protection Agency                    | Ordinary Citizen          |   57.8% |   +30.6pp |     52,552
+Treasury Department                                | Ordinary Citizen          |   57.2% |   +30.4pp |        425
+Federal Trade Commission                           | Ordinary Citizen          |   56.6% |   +36.8pp |        398
+Agriculture Department, Forest Service, Interior   | Ordinary Citizen          |   56.0% |   +19.8pp |      1,693
+Transportation Department, Federal Aviation Admi   | Ordinary Citizen          |   55.8% |   +37.3pp |      4,938
+Transportation Department, Federal Highway Admin   | Ordinary Citizen          |   53.1% |   +21.5pp |        286
+Agriculture Department, Natural Resources Conser   | Ordinary Citizen          |   49.2% |   +16.7pp |        100
+Transportation Department                          | Ordinary Citizen          |   49.0% |   +21.3pp |      5,108
+Transportation Department, Federal Railroad Admi   | Ordinary Citizen          |   48.7% |    +7.8pp |        446
+Interior Department, Surface Mining Reclamation    | Ordinary Citizen          |   45.5% |    +4.7pp |        110
+Transportation Department, Federal Aviation Admi   | Ordinary Citizen          |   41.8% |   +10.2pp |      3,101
+Labor Department, Federal Contract Compliance Pr   | Ordinary Citizen          |   41.4% |    +5.4pp |         62
+Interior Department                                | Ordinary Citizen          |   38.4% |    +8.4pp |      1,737
+Nuclear Regulatory Commission                      | Ordinary Citizen          |   36.6% |    +7.6pp |        278
+
+--- Large Organization/Corporation ---
+Trade Representative, Office of United States      | Large Organization/Corp   |   82.1% |   +74.8pp |        397
+Health and Human Services Department, Health Res   | Large Organization/Corp   |   78.3% |   +61.5pp |      1,116
+Commerce Department, International Trade Adminis   | Large Organization/Corp   |   71.9% |   +60.8pp |        261
+Treasury Department, Comptroller of the Currency   | Large Organization/Corp   |   69.0% |   +56.4pp |        288
+Federal Maritime Commission                        | Large Organization/Corp   |   67.9% |   +53.3pp |         66
+Treasury Department, Comptroller of the Currency   | Large Organization/Corp   |   67.0% |   +55.6pp |        158
+Transportation Department, Federal Transit Admin   | Large Organization/Corp   |   66.0% |   +45.8pp |         73
+National Credit Union Administration               | Large Organization/Corp   |   59.6% |   +41.5pp |        247
+Commerce Department, Industry and Security Burea   | Large Organization/Corp   |   59.3% |   +42.7pp |      2,781
+Labor Department, Mine Safety and Health Adminis   | Large Organization/Corp   |   59.2% |   +44.4pp |        139
+Labor Department, Employment and Training Admini   | Large Organization/Corp   |   57.7% |   +38.0pp |         85
+Treasury Department, Comptroller of the Currency   | Large Organization/Corp   |   52.4% |   +36.9pp |         79
+Treasury Department, Internal Revenue Service, L   | Large Organization/Corp   |   52.1% |   +20.8pp |        130
+Agriculture Department, Food and Nutrition Servi   | Large Organization/Corp   |   48.3% |   +19.2pp |        266
+Defense Department, General Services Administrat   | Large Organization/Corp   |   48.1% |   +14.6pp |        119
+Small Business Administration                      | Large Organization/Corp   |   43.0% |   +18.7pp |         72
+Defense Department, Engineers Corps                | Large Organization/Corp   |   42.9% |   +16.5pp |        461
+Consumer Product Safety Commission                 | Large Organization/Corp   |   42.2% |   +12.1pp |         88
+Commerce Department, Census Bureau                 | Large Organization/Corp   |   37.7% |   +12.5pp |         60
+Transportation Department, Federal Highway Admin   | Large Organization/Corp   |   36.7% |   +10.0pp |         70
+Treasury Department, Financial Crimes Enforcemen   | Large Organization/Corp   |   33.5% |    +4.5pp |        219
+
+--- Academic/Industry/Expert (incl. small/local business) ---
+Library of Congress, Copyright Office, Library o   | Academic/Industry/Exper   |   96.8% |   +94.9pp |      5,050
+Agriculture Department, Federal Crop Insurance C   | Academic/Industry/Exper   |   82.0% |   +65.4pp |        317
+National Aeronautics and Space Administration      | Academic/Industry/Exper   |   55.6% |   +29.6pp |         78
+Treasury Department, Internal Revenue Service      | Academic/Industry/Exper   |   44.1% |   +20.8pp |        482
+Agriculture Department, Food Safety and Inspecti   | Academic/Industry/Exper   |   42.8% |   +14.9pp |         78
+Science and Technology Policy Office               | Academic/Industry/Exper   |   41.1% |   +10.5pp |        503
+Homeland Security Department, U.S. Immigration a   | Academic/Industry/Exper   |   40.1% |    +9.1pp |        191
+Defense Department                                 | Academic/Industry/Exper   |   32.7% |    +2.1pp |        377
+------------------------------------------------------------------------------------------------------------------------
+
+Notes:
+- Share: Percentage of comments from the dominant category
+- Delta: Difference in percentage points between dominant and second-largest category
+- pp = percentage points

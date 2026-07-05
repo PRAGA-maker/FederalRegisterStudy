@@ -5,32 +5,32 @@ TABLE 1: DECISION COUNTS AND PROPORTIONS
 --------------------------------------------------
 Decision             |      Count |   Proportion
 --------------------------------------------------
-Accept               |     54,158 |         4.0%
-Reject               |  1,263,814 |        93.2%
-Partial              |     37,308 |         2.8%
-Uncertain            |        742 |         0.1%
+Accept               |     21,313 |        23.8%
+Reject               |     44,537 |        49.7%
+Partial              |     14,401 |        16.1%
+Uncertain            |      9,396 |        10.5%
 --------------------------------------------------
-TOTAL                |  1,356,022 |       100.0%
+TOTAL                |     89,646 |       100.0%
 
 
 TABLE 2: CONDITIONAL PROBABILITIES
 --------------------------------------------------
 Given that a response was found:
-  P(accept | response) = 4.0%
-  P(reject | response) = 93.2%
-  P(partial | response) = 2.8%
-  P(uncertain | response) = 0.1%
+  P(accept | response) = 23.8%
+  P(reject | response) = 49.7%
+  P(partial | response) = 16.1%
+  P(uncertain | response) = 10.5%
 
 
 TABLE 3: DECISION RATES BY COMMENTER TYPE
 --------------------------------------------------------------------------------
 Commenter Type                                |   Accept % |   Reject % |  Partial % |  Uncertain %
 -----------------------------------------------------------------------------------------------
-Undecided/Anonymous                           |      29.7% |      52.0% |       4.7% |        13.5%
-Ordinary Citizen                              |       2.6% |      97.2% |       0.2% |         0.0%
-Large Organization/Corporation                |      17.2% |      68.0% |      14.3% |         0.5%
-Academic/Industry/Expert                      |       4.9% |      47.7% |      46.8% |         0.7%
-Political Consultant/Lobbyist                 |      88.9% |       6.0% |       5.1% |         0.0%
+Undecided/Anonymous                           |       4.0% |       5.5% |      11.7% |        78.8%
+Ordinary Citizen                              |      25.6% |      57.6% |      16.0% |         0.8%
+Large Organization/Corporation                |      32.2% |      40.1% |      24.1% |         3.5%
+Academic/Industry/Expert                      |      27.7% |      46.7% |      15.3% |        10.4%
+Political Consultant/Lobbyist                 |      27.1% |      43.1% |      19.2% |        10.6%
 --------------------------------------------------------------------------------
 
 
@@ -40,77 +40,66 @@ Agencies with >50% Acceptance Rate:
 ----------------------------------------------------------------------------------------------------
 Agency                                             |   Accept % | Total Responses
 ----------------------------------------------------------------------------------------------------
-Commerce Department, National Institute of Stand   |     100.0% |              35
-Commerce Department                                |     100.0% |              37
-Council on Environmental Quality                   |     100.0% |               2
-Health and Human Services Department               |     100.0% |             111
-Science and Technology Policy Office               |     100.0% |              33
-Transportation Department, Pipeline and Hazardou   |     100.0% |             101
-U.S. Committee on the Marine Transportation Syst   |     100.0% |              23
-Labor Department, Occupational Safety and Health   |      99.4% |           2,505
-Agriculture Department, Food Safety and Inspecti   |      98.8% |           2,368
-Health and Human Services Department, Food and D   |      94.9% |           6,245
-Health and Human Services Department, Centers fo   |      93.6% |              36
-Treasury Department, Investment Security Office    |      92.3% |             776
-Environmental Protection Agency                    |      89.0% |          21,620
-Transportation Department, Federal Transit Admin   |      80.0% |             812
-Personnel Management Office                        |      77.6% |             783
-Homeland Security Department, Coast Guard          |      72.4% |           1,648
-Defense Department                                 |      69.5% |              77
-Labor Department, Wage and Hour Division           |      69.0% |          13,745
-Transportation Department, Federal Motor Carrier   |      65.4% |           1,043
-Corporation for National and Community Service     |      64.9% |             119
-Health and Human Services Department, Children a   |      63.6% |              83
-Transportation Department, Federal Aviation Admi   |      60.2% |           1,089
-State Department                                   |      57.6% |              92
-Agriculture Department, Animal and Plant Health    |      52.4% |             243
+Agriculture Department, Procurement and Property   |     100.0% |              12
+Equal Employment Opportunity Commission            |     100.0% |               3
+Health and Human Services Department               |     100.0% |              17
+Treasury Department, Comptroller of the Currency   |     100.0% |               6
+Treasury Department, Comptroller of the Currency   |     100.0% |               4
+Labor Department, Mine Safety and Health Adminis   |     100.0% |               1
+Labor Department, Employment and Training Admini   |     100.0% |              72
+Interior Department, Indian Affairs Bureau         |     100.0% |              69
+Interior Department, National Park Service         |      93.9% |             426
+Labor Department, Wage and Hour Division           |      84.1% |           4,860
+Federal Maritime Commission                        |      80.5% |              28
+Trade Representative, Office of United States      |      79.6% |              80
+Agriculture Department, Food Safety and Inspecti   |      72.6% |           7,328
+Treasury Department, Internal Revenue Service      |      71.3% |             280
+Energy Department                                  |      70.9% |             181
+Defense Department, Engineers Corps                |      68.1% |              43
+Labor Department, Federal Contract Compliance Pr   |      67.3% |               5
+Transportation Department, Federal Transit Admin   |      67.2% |             756
+Health and Human Services Department, Children a   |      62.8% |              42
+Transportation Department, Federal Railroad Admi   |      60.3% |             215
+Transportation Department, Federal Aviation Admi   |      59.0% |           1,516
+Treasury Department, Investment Security Office    |      55.2% |             243
+Management and Budget Office                       |      54.0% |              37
+Justice Department                                 |      50.6% |             153
 
 Agencies with >50% Rejection Rate:
 ----------------------------------------------------------------------------------------------------
 Agency                                             |   Reject % | Total Responses
 ----------------------------------------------------------------------------------------------------
-Agriculture Department, Procurement and Property   |     100.0% |              22
-Agriculture Department, National Agricultural St   |     100.0% |               6
+Agriculture Department, Food and Nutrition Servi   |     100.0% |               8
+Agriculture Department, Rural Housing Service      |     100.0% |              18
 Architectural and Transportation Barriers Compli   |     100.0% |               1
-Agriculture Department, Rural Utilities Service    |     100.0% |               4
-Agriculture Department, Rural Housing Service      |     100.0% |              15
+Commerce Department, National Telecommunications   |     100.0% |               9
+Homeland Security Department, Federal Emergency    |     100.0% |               8
+Health and Human Services Department, Centers fo   |     100.0% |              41
+Homeland Security Department, Justice Department   |     100.0% |              98
+Justice Department, Alcohol, Tobacco, Firearms,    |     100.0% |              30
+Treasury Department                                |     100.0% |               4
+Transportation Department, Maritime Administrati   |     100.0% |             221
+Treasury Department, Foreign Assets Control Offi   |     100.0% |               6
+Homeland Security Department, Transportation Sec   |     100.0% |           7,199
 Homeland Security Department, U.S. Immigration a   |     100.0% |               1
-Export-Import Bank                                 |     100.0% |               1
-Health and Human Services Department, Indian Hea   |     100.0% |              24
-Defense Department, Engineers Corps                |     100.0% |              78
-Commerce Department, National Oceanic and Atmosp   |     100.0% |               2
-Labor Department, Federal Contract Compliance Pr   |     100.0% |              12
-Treasury Department                                |     100.0% |               6
-Treasury Department, United States Mint            |     100.0% |              33
-Labor Department, Mine Safety and Health Adminis   |     100.0% |               1
-Justice Department, Drug Enforcement Administrat   |     100.0% |           1,203
-Interior Department, National Park Service         |     100.0% |              16
-Homeland Security Department, Transportation Sec   |     100.0% |           4,235
-Homeland Security Department, Justice Department   |     100.0% |             240
-Justice Department, Alcohol, Tobacco, Firearms,    |     100.0% |             144
-Justice Department, Prisons Bureau                 |     100.0% |               6
-Transportation Department, Maritime Administrati   |     100.0% |         118,679
-Interior Department, Fish and Wildlife Service     |      99.9% |         256,538
-Commerce Department, Industry and Security Burea   |      98.5% |          15,927
-Agriculture Department, Agricultural Marketing S   |      97.9% |          31,803
-Health and Human Services Department, Centers fo   |      95.8% |         828,385
-Consumer Financial Protection Bureau               |      94.5% |          21,513
-Commerce Department, Census Bureau                 |      92.5% |             126
-Nuclear Regulatory Commission                      |      90.2% |             502
-Commerce Department, National Oceanic and Atmosp   |      88.2% |           6,746
-Interior Department, Ocean Energy Management Bur   |      87.6% |           3,013
-Federal Maritime Commission                        |      87.2% |             802
-Homeland Security Department                       |      80.0% |             556
-Homeland Security Department, U.S. Citizenship a   |      72.0% |              21
-Agriculture Department                             |      71.6% |             157
-Interior Department, Indian Affairs Bureau         |      67.9% |             172
-Transportation Department, National Highway Traf   |      61.0% |             151
-Library of Congress, Copyright Office, Library o   |      58.8% |              34
-Treasury Department, Internal Revenue Service      |      58.5% |             928
-Treasury Department, Alcohol and Tobacco Tax and   |      57.9% |             589
-Education Department                               |      56.7% |           1,620
-Small Business Administration                      |      56.1% |             254
-Transportation Department, Federal Railroad Admi   |      56.1% |             109
+Interior Department, Fish and Wildlife Service     |      97.0% |          15,673
+National Aeronautics and Space Administration      |      95.1% |              69
+Consumer Product Safety Commission                 |      84.0% |             416
+Library of Congress, Copyright Office, Library o   |      82.3% |              46
+Defense Department, General Services Administrat   |      81.1% |             102
+Federal Trade Commission                           |      76.7% |             375
+Treasury Department, United States Mint            |      76.4% |             116
+Justice Department, Drug Enforcement Administrat   |      76.3% |           1,489
+Agriculture Department, Forest Service, Interior   |      68.7% |              27
+Health and Human Services Department, Centers fo   |      67.3% |          16,741
+Commerce Department, National Oceanic and Atmosp   |      65.5% |           2,036
+Defense Department, Defense Acquisition Regulati   |      63.9% |              94
+Education Department                               |      60.2% |           1,590
+Transportation Department, Federal Motor Carrier   |      58.6% |             847
+Transportation Department                          |      56.9% |             516
+Personnel Management Office                        |      54.5% |             413
+Homeland Security Department, U.S. Citizenship a   |      51.0% |              58
+General Services Administration                    |      50.1% |               8
 ----------------------------------------------------------------------------------------------------
 
 Notes:
