@@ -1,0 +1,85 @@
+{
+  "snapshot_id": "2026-07-15-ce44ac5",
+  "created_at": "2026-07-15T23:12:18Z",
+  "source_git_commit": "ce44ac5b6ae7b6d5752216a65b1f5dd02d85096d",
+  "source_git_dirty": false,
+  "years": [
+    2014,
+    2024
+  ],
+  "tool_version": "1",
+  "files": [
+    {
+      "path": "makeup/data/agency_responses_2014.csv",
+      "sha256": "886d6b9e9725b9250d9ebcdab34810739b24ea53488e2aa311fb8f3bcd6651cc",
+      "row_count": 2934,
+      "byte_size": 2306805
+    },
+    {
+      "path": "makeup/data/makeup_results_2014.csv",
+      "sha256": "175a90bf53a095ff919777b383209f1c3b993afffa78baa36bd21b4cd5e2824c",
+      "row_count": 18349,
+      "byte_size": 64428083
+    },
+    {
+      "path": "makeup/data/comments_raw_2014.csv",
+      "sha256": "c26f84e22fb6e32f2c39b1425fc893011f600a920d39e07ebea246f62a107aee",
+      "row_count": 18332,
+      "byte_size": 45848179
+    },
+    {
+      "path": "makeup/data/rin_lifecycle_2014.csv",
+      "sha256": "cefaa276923732ea0d47d6e6271678f8cf60d5739ad63575c7c9fcc49ef31b31",
+      "row_count": 1011,
+      "byte_size": 152721
+    },
+    {
+      "path": "output/federal_register_2014_comments.csv",
+      "sha256": "1f3d5c081ff5cf9083233b9387f72a03e0d012cae44ad6e0628b0888f02ad8b5",
+      "row_count": 10374,
+      "byte_size": 11595560
+    },
+    {
+      "path": "output/makeup_data_2014.csv",
+      "sha256": "6139d322fe385dcd1a0270c1631c51a6c11a59f3e8212b651e0a4796223bd162",
+      "row_count": 20335,
+      "byte_size": 3142026
+    },
+    {
+      "path": "makeup/data/agency_responses_2024.csv",
+      "sha256": "220c236c9ecf9d97b5d3dbec7e95c65991172eea4abb16a7b04c0778b934db27",
+      "row_count": 2159,
+      "byte_size": 1539593
+    },
+    {
+      "path": "makeup/data/makeup_results_2024.csv",
+      "sha256": "1a67871ddf4596301abaf32f623c018ec873773ab2d7340511c49c5453e7f2b7",
+      "row_count": 40482,
+      "byte_size": 139219479
+    },
+    {
+      "path": "makeup/data/comments_raw_2024.csv",
+      "sha256": "6f82fe60fad4a86e6ca908f0c305dde6e0f60a08589c3e55f750d7a4f786798c",
+      "row_count": 40482,
+      "byte_size": 97691471
+    },
+    {
+      "path": "makeup/data/rin_lifecycle_2024.csv",
+      "sha256": "e6289896b39cb0a2fa85c80f27b58cee8fadd03c14d2716a6353a9878716c1a7",
+      "row_count": 1447,
+      "byte_size": 207241
+    },
+    {
+      "path": "output/federal_register_2024_comments.csv",
+      "sha256": "aa6c38fd6154137e65b615bea0644458a98eb18d2f799aa7c3f84b768d28ef04",
+      "row_count": 24433,
+      "byte_size": 21024898
+    },
+    {
+      "path": "output/makeup_data_2024.csv",
+      "sha256": "a29bdd48ddad671f6a021c32e176d93a1a2a32924aab6992adf53f2d700e7074",
+      "row_count": 40482,
+      "byte_size": 6217311
+    }
+  ]
+}
