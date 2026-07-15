@@ -332,6 +332,37 @@ def get_lifecycle_csv_path(year: int) -> Path:
     return get_data_dir() / f"rin_lifecycle_{year}.csv"
 
 
+def get_frozen_dir() -> Path:
+    """
+    Get the repo-root frozen/ directory holding immutable CSV snapshots.
+
+    Deliberately at the project root (one level above the package data dirs)
+    for extra separation from the re-runnable pipeline path.
+
+    Returns:
+        Path to frozen/ directory.
+
+    Side Effects:
+        Creates the directory if it doesn't exist.
+    """
+    path = get_project_root() / "frozen"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def get_frozen_snapshot_path(snapshot_id: str) -> Path:
+    """
+    Get the directory for a specific frozen snapshot.
+
+    Args:
+        snapshot_id: Snapshot identifier, e.g. "2026-07-15-17958e6".
+
+    Returns:
+        Path to frozen/<snapshot_id>/.
+    """
+    return get_frozen_dir() / snapshot_id
+
+
 @dataclass
 class PipelineConfig:
     """

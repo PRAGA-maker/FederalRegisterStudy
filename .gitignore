@@ -45,3 +45,6 @@ nul
 *.pre_retry_backup.csv
 *.pre_tier2_backup.csv
 failed_rins_*.txt
+
+# Frozen snapshot CSV bytes stay local — manifests are committed, bytes are not
+frozen/**/*.csv
