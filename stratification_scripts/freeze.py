@@ -10,12 +10,14 @@ Frozen CSV bytes stay local (gitignored); only manifest.json is committed.
 
 from __future__ import annotations
 
+import argparse
 import hashlib
 import json
 import os
 import shutil
 import stat
 import subprocess
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -267,3 +269,62 @@ def list_snapshots(*, frozen_dir=None) -> list[dict]:
             }
         )
     return out
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(
+        prog="freeze",
+        description="Create/verify/list immutable frozen snapshots of the pipeline CSVs.",
+    )
+    sub = parser.add_subparsers(dest="cmd", required=True)
+
+    p_create = sub.add_parser("create", help="Create a new frozen snapshot.")
+    p_create.add_argument(
+        "--year", type=int, action="append", dest="years",
+        help="Year to freeze (repeatable). Default: 2014 and 2024.",
+    )
+    p_create.add_argument("--label", default=None, help="Optional snapshot-id suffix.")
+
+    p_verify = sub.add_parser("verify", help="Verify a snapshot against its manifest.")
+    p_verify.add_argument("snapshot_id")
+
+    sub.add_parser("list", help="List valid snapshots.")
+
+    args = parser.parse_args(argv)
+
+    if args.cmd == "create":
+        years = tuple(args.years) if args.years else DEFAULT_YEARS
+        try:
+            manifest = create_snapshot(years, args.label)
+        except (FileNotFoundError, ValueError, FileExistsError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        print(f"created snapshot {manifest['snapshot_id']} ({len(manifest['files'])} files)")
+        if manifest["source_git_dirty"]:
+            print(
+                "WARNING: frozen from a DIRTY tree — not restorable from history; "
+                "back up the local CSVs out-of-band.",
+                file=sys.stderr,
+            )
+        return 0
+
+    if args.cmd == "verify":
+        report = verify_snapshot(args.snapshot_id)
+        for problem in report.problems:
+            print(f"FAIL {problem}")
+        print(f"{'OK' if report.ok else 'FAILED'}: {report.snapshot_id} ({report.checked} files)")
+        return 0 if report.ok else 1
+
+    if args.cmd == "list":
+        for snap in list_snapshots():
+            print(
+                f"{snap['snapshot_id']}\t{snap['created_at']}\t"
+                f"{snap['source_git_commit']}\t{snap['file_count']} files"
+            )
+        return 0
+
+    return 1  # unreachable: subparser is required
+
+
+if __name__ == "__main__":
+    sys.exit(main())

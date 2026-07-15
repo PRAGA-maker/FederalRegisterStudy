@@ -241,3 +241,20 @@ def test_list_snapshots_skips_tmp_and_manifestless(tmp_path):
 
 def test_list_snapshots_empty_when_no_dir(tmp_path):
     assert freeze.list_snapshots(frozen_dir=tmp_path / "nope") == []
+
+
+def test_main_verify_missing_returns_1(capsys):
+    rc = freeze.main(["verify", "definitely-not-a-real-snapshot-id"])
+    assert rc == 1
+    out = capsys.readouterr().out
+    assert "FAILED" in out
+
+
+def test_main_list_returns_0(capsys):
+    rc = freeze.main(["list"])
+    assert rc == 0
+
+
+def test_main_requires_subcommand():
+    with pytest.raises(SystemExit):
+        freeze.main([])
