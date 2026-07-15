@@ -1,3 +1,4 @@
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -167,3 +168,76 @@ def test_create_snapshot_atomic_on_failure(tmp_path, monkeypatch):
     manifest = freeze.create_snapshot((2024,), frozen_dir=frozen, resolver=resolver, git_info=gi, moment=moment)
     assert (frozen / manifest["snapshot_id"] / "d.csv").exists()
     assert not (frozen / ".tmp-2026-07-15-c0ffee1").exists()
+
+
+def test_verify_passes_clean(tmp_path):
+    frozen = tmp_path / "frozen"
+    spec = [("d.csv", 'id,text\n1,"a\nb"\n2,c\n')]  # embedded newline, exercises row_count
+    manifest = _clean_create(tmp_path, spec, frozen_dir=frozen)
+    report = freeze.verify_snapshot(manifest["snapshot_id"], frozen_dir=frozen)
+    assert report.ok is True
+    assert report.problems == []
+    assert report.checked == 1
+
+
+def test_verify_fails_on_flipped_byte(tmp_path):
+    frozen = tmp_path / "frozen"
+    spec = [("d.csv", "x\nhello\n")]
+    manifest = _clean_create(tmp_path, spec, frozen_dir=frozen)
+    target = frozen / manifest["snapshot_id"] / "d.csv"
+    os.chmod(target, 0o644)
+    target.write_text("x\nHELLO\n")
+    report = freeze.verify_snapshot(manifest["snapshot_id"], frozen_dir=frozen)
+    assert report.ok is False
+    assert any("SHA256" in p for p in report.problems)
+
+
+def test_verify_fails_on_missing_file(tmp_path):
+    frozen = tmp_path / "frozen"
+    spec = [("d.csv", "x\n1\n")]
+    manifest = _clean_create(tmp_path, spec, frozen_dir=frozen)
+    target = frozen / manifest["snapshot_id"] / "d.csv"
+    os.chmod(target, 0o644)
+    target.unlink()
+    report = freeze.verify_snapshot(manifest["snapshot_id"], frozen_dir=frozen)
+    assert report.ok is False
+    assert any("MISSING" in p for p in report.problems)
+
+
+def test_verify_fails_on_appended_row(tmp_path):
+    frozen = tmp_path / "frozen"
+    spec = [("d.csv", "x\n1\n")]
+    manifest = _clean_create(tmp_path, spec, frozen_dir=frozen)
+    target = frozen / manifest["snapshot_id"] / "d.csv"
+    os.chmod(target, 0o644)
+    with open(target, "a") as fh:
+        fh.write("2\n")  # keep same first byte so size/sha catch it too; row_count differs
+    report = freeze.verify_snapshot(manifest["snapshot_id"], frozen_dir=frozen)
+    assert report.ok is False
+    assert any("ROWCOUNT" in p for p in report.problems)
+
+
+def test_verify_fails_when_manifest_missing(tmp_path):
+    frozen = tmp_path / "frozen"
+    (frozen / "2026-01-01-deadbee").mkdir(parents=True)
+    report = freeze.verify_snapshot("2026-01-01-deadbee", frozen_dir=frozen)
+    assert report.ok is False
+    assert any("manifest" in p.lower() for p in report.problems)
+
+
+def test_list_snapshots_skips_tmp_and_manifestless(tmp_path):
+    frozen = tmp_path / "frozen"
+    spec = [("d.csv", "x\n1\n")]
+    manifest = _clean_create(tmp_path, spec, frozen_dir=frozen)
+    (frozen / ".tmp-2099-01-01-abc").mkdir(parents=True)          # staging leftover
+    (frozen / "2098-01-01-nomani").mkdir(parents=True)            # no manifest
+    listed = freeze.list_snapshots(frozen_dir=frozen)
+    ids = {s["snapshot_id"] for s in listed}
+    assert ids == {manifest["snapshot_id"]}
+    entry = listed[0]
+    assert entry["file_count"] == 1
+    assert entry["source_git_commit"] == "c0ffee123456"
+
+
+def test_list_snapshots_empty_when_no_dir(tmp_path):
+    assert freeze.list_snapshots(frozen_dir=tmp_path / "nope") == []

@@ -203,3 +203,67 @@ def create_snapshot(
     _write_manifest(staging / "manifest.json", manifest)  # LAST — validity sentinel
     os.replace(staging, target)  # atomic on one filesystem
     return manifest
+
+
+@dataclass
+class VerifyReport:
+    ok: bool
+    snapshot_id: str
+    problems: list
+    checked: int
+
+
+def verify_snapshot(snapshot_id, *, frozen_dir=None) -> VerifyReport:
+    """Re-hash + re-count every file in a snapshot against its manifest."""
+    frozen_dir = frozen_dir if frozen_dir is not None else config.get_frozen_dir()
+    snap = frozen_dir / snapshot_id
+    manifest_path = snap / "manifest.json"
+
+    if not manifest_path.exists():
+        return VerifyReport(False, snapshot_id, [f"manifest.json missing at {snap}"], 0)
+    try:
+        manifest = json.loads(manifest_path.read_text())
+    except (json.JSONDecodeError, OSError) as exc:
+        return VerifyReport(False, snapshot_id, [f"manifest unreadable: {exc}"], 0)
+
+    problems: list[str] = []
+    for rec in manifest["files"]:
+        dest = snap / rec["path"]
+        if not dest.exists():
+            problems.append(f"MISSING {rec['path']}")
+            continue
+        if dest.stat().st_size != rec["byte_size"]:
+            problems.append(f"SIZE {rec['path']}")
+        if _sha256(dest) != rec["sha256"]:
+            problems.append(f"SHA256 {rec['path']}")
+        if _count_csv_records(dest) != rec["row_count"]:
+            problems.append(f"ROWCOUNT {rec['path']}")
+
+    return VerifyReport(not problems, snapshot_id, problems, len(manifest["files"]))
+
+
+def list_snapshots(*, frozen_dir=None) -> list[dict]:
+    """Summaries of valid snapshots; skips .tmp-* and manifest-less dirs."""
+    frozen_dir = frozen_dir if frozen_dir is not None else config.get_frozen_dir()
+    out: list[dict] = []
+    if not frozen_dir.exists():
+        return out
+    for child in sorted(frozen_dir.iterdir()):
+        if not child.is_dir() or child.name.startswith(".tmp-"):
+            continue
+        manifest_path = child / "manifest.json"
+        if not manifest_path.exists():
+            continue
+        try:
+            manifest = json.loads(manifest_path.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+        out.append(
+            {
+                "snapshot_id": manifest.get("snapshot_id", child.name),
+                "created_at": manifest.get("created_at"),
+                "source_git_commit": manifest.get("source_git_commit"),
+                "file_count": len(manifest.get("files", [])),
+            }
+        )
+    return out
