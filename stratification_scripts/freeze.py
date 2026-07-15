@@ -228,6 +228,9 @@ def verify_snapshot(snapshot_id, *, frozen_dir=None) -> VerifyReport:
     except (json.JSONDecodeError, OSError) as exc:
         return VerifyReport(False, snapshot_id, [f"manifest unreadable: {exc}"], 0)
 
+    if "files" not in manifest:
+        return VerifyReport(False, snapshot_id, ["manifest missing 'files' key"], 0)
+
     problems: list[str] = []
     for rec in manifest["files"]:
         dest = snap / rec["path"]
@@ -296,7 +299,12 @@ def main(argv=None) -> int:
         years = tuple(args.years) if args.years else DEFAULT_YEARS
         try:
             manifest = create_snapshot(years, args.label)
-        except (FileNotFoundError, ValueError, FileExistsError) as exc:
+        except (
+            FileNotFoundError,
+            ValueError,
+            FileExistsError,
+            subprocess.CalledProcessError,
+        ) as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1
         print(f"created snapshot {manifest['snapshot_id']} ({len(manifest['files'])} files)")

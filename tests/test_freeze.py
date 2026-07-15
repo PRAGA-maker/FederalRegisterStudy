@@ -1,4 +1,5 @@
 import os
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -258,3 +259,23 @@ def test_main_list_returns_0(capsys):
 def test_main_requires_subcommand():
     with pytest.raises(SystemExit):
         freeze.main([])
+
+
+def test_main_create_handles_git_error(monkeypatch, capsys):
+    def boom(*args, **kwargs):
+        raise subprocess.CalledProcessError(128, ["git", "rev-parse", "HEAD"])
+
+    monkeypatch.setattr(freeze, "create_snapshot", boom)
+    rc = freeze.main(["create"])
+    assert rc == 1
+    assert "error:" in capsys.readouterr().err
+
+
+def test_verify_fails_on_manifest_missing_files_key(tmp_path):
+    frozen = tmp_path / "frozen"
+    snap = frozen / "2026-01-01-deadbee"
+    snap.mkdir(parents=True)
+    (snap / "manifest.json").write_text("{}")
+    report = freeze.verify_snapshot("2026-01-01-deadbee", frozen_dir=frozen)
+    assert report.ok is False
+    assert any("files" in p for p in report.problems)
