@@ -144,3 +144,30 @@ def test_contrast_present():
     )
     stats = grade.compute_stats(labels, key, _manifest())
     assert "contrast_web_minus_fr" in stats
+
+
+def _stats_fixture():
+    return {
+        "strata": {
+            "web_search": {"n": 15, "yes": 4, "uncertain": 1, "fn_unweighted": 4 / 15,
+                           "fn_unweighted_ci95": [0.1, 0.5], "fn_weighted": 0.30,
+                           "frame_weight_mass": 2615.0, "projected_missed": 784.5},
+            "fr_preamble": {"n": 15, "yes": 2, "uncertain": 0, "fn_unweighted": 2 / 15,
+                            "fn_unweighted_ci95": [0.03, 0.4], "fn_weighted": 0.13,
+                            "frame_weight_mass": 1719.0, "projected_missed": 223.5},
+        },
+        "contrast_web_minus_fr": 4 / 15 - 2 / 15,
+    }
+
+
+def test_report_embeds_honesty_caveats():
+    md = grade.render_report(_stats_fixture(), n_per_stratum=15)
+    assert "directional" in md.lower()  # not-publishable caveat
+    assert "final rule provably exists" in md.lower()  # frame caveat
+    assert "web_search" in md and "fr_preamble" in md
+
+
+def test_write_results_creates_both_files(tmp_path):
+    grade.write_results(_stats_fixture(), tmp_path, n_per_stratum=15)
+    assert (tmp_path / "results.json").exists()
+    assert (tmp_path / "results.md").exists()

@@ -12,7 +12,9 @@ Validation fails loud: a "yes" without an evidence quote is a guess, not a label
 
 from __future__ import annotations
 
+import json
 import math
+from pathlib import Path
 
 import polars as pl
 
@@ -108,3 +110,45 @@ def compute_stats(labels: pl.DataFrame, key: pl.DataFrame, manifest: dict) -> di
 
     contrast = per_source["web_search"]["fn_unweighted"] - per_source["fr_preamble"]["fn_unweighted"]
     return {"strata": per_source, "contrast_web_minus_fr": contrast}
+
+
+def render_report(stats: dict, *, n_per_stratum: int) -> str:
+    """A short human-facing table with the honesty caveats emitted inline (not just in docs)."""
+    lines = ["# Gold-set seed — web-search false-negative rates", ""]
+    lines.append(
+        f"n = {n_per_stratum}/stratum. Results are **directional, not publishable** "
+        f"(Wilson CI half-width ≈ ±25pp at this size)."
+    )
+    lines.append(
+        "Scope: the **\"final rule provably exists\"** subpopulation (FINAL_EFFECTIVE ∧ "
+        "checkable \"no\"), **not** the 26,159 population — and not the NO_RIN mass "
+        "(72% of web-search \"no\"s) where underestimation is most suspected."
+    )
+    lines.append("")
+    lines.append("| source | n | yes (missed) | uncertain | FN unweighted | 95% CI | FN weighted | projected missed |")
+    lines.append("|---|---|---|---|---|---|---|---|")
+    for src, s in stats["strata"].items():
+        lo, hi = s["fn_unweighted_ci95"]
+        lines.append(
+            f"| {src} | {s['n']} | {s['yes']} | {s['uncertain']} | "
+            f"{s['fn_unweighted']:.1%} | [{lo:.1%}, {hi:.1%}] | {s['fn_weighted']:.1%} | "
+            f"{s['projected_missed']:.0f} |"
+        )
+    lines.append("")
+    lines.append(
+        f"**Contrast (web_search − fr_preamble, unweighted):** "
+        f"{stats['contrast_web_minus_fr']:+.1%} — the claim under test (is grounded's FN lower?)."
+    )
+    lines.append("")
+    lines.append(
+        "The weighted estimate ships **without** a CI: a design-based variance estimator "
+        "for a weighted proportion is not credible at n=15. It is a point estimate, stated as such."
+    )
+    return "\n".join(lines) + "\n"
+
+
+def write_results(stats: dict, seed_dir, *, n_per_stratum: int) -> None:
+    """Write results.json (machine) + results.md (humans) into the seed run directory."""
+    seed_dir = Path(seed_dir)
+    (seed_dir / "results.json").write_text(json.dumps(stats, indent=2) + "\n")
+    (seed_dir / "results.md").write_text(render_report(stats, n_per_stratum=n_per_stratum))
