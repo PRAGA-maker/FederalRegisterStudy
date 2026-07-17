@@ -59,3 +59,88 @@ def test_validate_rejects_yes_without_evidence():
     bad = _labels(evidence_quote=["", ""])  # a1 is yes but has no evidence
     with pytest.raises(ValueError, match="evidence"):
         grade.validate_labels(bad, _key())
+
+
+def test_wilson_ci_bounded_nondegenerate():
+    lo0, hi0 = grade.wilson_ci(0, 15)
+    assert lo0 == 0.0 and 0.0 < hi0 < 1.0
+    lo1, hi1 = grade.wilson_ci(15, 15)
+    assert hi1 == 1.0 and 0.0 < lo1 < 1.0
+    lo, hi = grade.wilson_ci(5, 15)
+    assert 0.0 < lo < 5 / 15 < hi < 1.0
+
+
+def _manifest():
+    return {
+        "strata": {
+            "web_search": {"frame_weight_mass": 2615.0},
+            "fr_preamble": {"frame_weight_mass": 1719.0},
+        }
+    }
+
+
+def _key_ws(n=4):
+    return pl.DataFrame(
+        {
+            "label_row_id": [f"w{i}" for i in range(n)],
+            "comment_id": [f"C{i}" for i in range(n)],
+            "response_source": ["web_search"] * n,
+            "response_sample_weight": [100.0, 1.0, 1.0, 1.0][:n],
+        }
+    )
+
+
+def test_fn_rate_unweighted_and_weighted():
+    key = _key_ws(4)
+    # only the heavy row (w0) is a true "yes"
+    labels = pl.DataFrame(
+        {
+            "label_row_id": ["w0", "w1", "w2", "w3"],
+            "true_response_found": ["yes", "no", "no", "no"],
+            "evidence_quote": ["q", "", "", ""],
+            "true_agency_decision": ["accept", "", "", ""],
+        }
+    )
+    stats = grade.compute_stats(labels, key, _manifest())
+    ws = stats["strata"]["web_search"]
+    assert ws["n"] == 4 and ws["yes"] == 1
+    assert abs(ws["fn_unweighted"] - 0.25) < 1e-9
+    # weighted: 100 / (100+1+1+1) = 0.9709...
+    assert abs(ws["fn_weighted"] - 100 / 103) < 1e-9
+    # projection = fn_weighted * frame_weight_mass
+    assert abs(ws["projected_missed"] - (100 / 103) * 2615.0) < 1e-6
+
+
+def test_weighted_equals_unweighted_under_uniform_weights():
+    key = pl.DataFrame(
+        {
+            "label_row_id": ["w0", "w1", "w2", "w3"],
+            "comment_id": ["C0", "C1", "C2", "C3"],
+            "response_source": ["web_search"] * 4,
+            "response_sample_weight": [5.0, 5.0, 5.0, 5.0],
+        }
+    )
+    labels = pl.DataFrame(
+        {
+            "label_row_id": ["w0", "w1", "w2", "w3"],
+            "true_response_found": ["yes", "yes", "no", "no"],
+            "evidence_quote": ["q", "q", "", ""],
+            "true_agency_decision": ["", "", "", ""],
+        }
+    )
+    ws = grade.compute_stats(labels, key, _manifest())["strata"]["web_search"]
+    assert abs(ws["fn_unweighted"] - ws["fn_weighted"]) < 1e-9
+
+
+def test_contrast_present():
+    key = _key_ws(2)
+    labels = pl.DataFrame(
+        {
+            "label_row_id": ["w0", "w1"],
+            "true_response_found": ["yes", "no"],
+            "evidence_quote": ["q", ""],
+            "true_agency_decision": ["", ""],
+        }
+    )
+    stats = grade.compute_stats(labels, key, _manifest())
+    assert "contrast_web_minus_fr" in stats
