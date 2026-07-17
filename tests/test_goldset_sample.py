@@ -139,3 +139,18 @@ def test_sample_manifest_records_frame_mass_and_sampled_rows():
 def test_make_seed_id_uses_date_and_snapshot_short():
     moment = datetime(2026, 7, 17, 3, 0, tzinfo=timezone.utc)
     assert sample.make_seed_id("2026-07-15-ce44ac5", moment) == "2026-07-17-ce44ac5"
+
+
+def test_sample_refuses_to_overwrite_existing_seed_dir(tmp_path, monkeypatch):
+    from stratification_scripts.goldset import cli
+
+    seed_dir = tmp_path / "2026-07-17-ce44ac5"
+    seed_dir.mkdir(parents=True)
+    monkeypatch.setattr(cli.config, "get_goldset_seed_path", lambda sid: seed_dir)
+    with pytest.raises(FileExistsError, match="already exists"):
+        cli.write_seed_run(
+            packet=pl.DataFrame({"label_row_id": ["a"]}),
+            key=pl.DataFrame({"label_row_id": ["a"]}),
+            manifest={"seed_id": "2026-07-17-ce44ac5"},
+            seed_id="2026-07-17-ce44ac5",
+        )

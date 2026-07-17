@@ -102,7 +102,12 @@ def build_links(sampled: pl.DataFrame) -> pl.DataFrame:
 
 
 def _guarded_join(left: pl.DataFrame, right: pl.DataFrame, on: str) -> pl.DataFrame:
-    """Left-join after deduping `right` on the key; assert no row fan-out (the F22 guard)."""
+    """Left-join after deduping `right` on the key; assert no row fan-out.
+
+    An unguarded many-to-many join on a non-unique key silently fabricates rows.
+    Both keys are unique in the 2024 snapshot, so this guards against a future
+    dirty input, not a present bug.
+    """
     right1 = right.unique(subset=on, keep="first")
     out = left.join(right1, on=on, how="left")
     if out.height != left.height:
@@ -133,7 +138,7 @@ def build_packet_and_key(
     """Split a sampled frame into (blind packet, hidden prediction key).
 
     context injects (comments_raw, fr) for tests; otherwise they are read from
-    the pinned snapshot. Joins are one-to-one guarded (the F22 lesson).
+    the pinned snapshot. Joins are one-to-one guarded (see _guarded_join).
     """
     comments_raw, fr = context if context is not None else _load_context(snapshot_id, year)
 

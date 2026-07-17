@@ -1,0 +1,233 @@
+{
+  "snapshot_id": "2026-07-15-ce44ac5",
+  "created_at": "2026-07-17T21:17:34Z",
+  "seed": 0,
+  "n_per_stratum": 15,
+  "overlap": 10,
+  "frame_total_rows": 378,
+  "strata": {
+    "web_search": {
+      "frame_rows": 150,
+      "frame_weight_mass": 2615.4154,
+      "allocated": 15
+    },
+    "fr_preamble": {
+      "frame_rows": 228,
+      "frame_weight_mass": 1719.0573,
+      "allocated": 15
+    }
+  },
+  "sampled": [
+    {
+      "label_row_id": "2c526c4019a3",
+      "comment_id": "BLM-2024-0001-0003",
+      "response_source": "fr_preamble",
+      "response_sample_weight": 15.549315998914567,
+      "overlap_candidate": false
+    },
+    {
+      "label_row_id": "173ec12298ea",
+      "comment_id": "FBI-2024-0002-0006",
+      "response_source": "web_search",
+      "response_sample_weight": 3.237606976644356,
+      "overlap_candidate": false
+    },
+    {
+      "label_row_id": "50a1acb309f1",
+      "comment_id": "NOAA-NMFS-2023-0125-0016",
+      "response_source": "fr_preamble",
+      "response_sample_weight": 0.7874983126965197,
+      "overlap_candidate": true
+    },
+    {
+      "label_row_id": "0f0fb057aa12",
+      "comment_id": "NOAA-NOS-2021-0114-0332",
+      "response_source": "fr_preamble",
+      "response_sample_weight": 25.871233162906986,
+      "overlap_candidate": false
+    },
+    {
+      "label_row_id": "cbd24fbaffb9",
+      "comment_id": "EPA-HQ-OAR-2022-0491-0022",
+      "response_source": "web_search",
+      "response_sample_weight": 14.800460282380264,
+      "overlap_candidate": true
+    },
+    {
+      "label_row_id": "6d212d19ec08",
+      "comment_id": "DOT-OST-2024-0090-0049",
+      "response_source": "fr_preamble",
+      "response_sample_weight": 15.549315998914567,
+      "overlap_candidate": false
+    },
+    {
+      "label_row_id": "af43c872313e",
+      "comment_id": "CMS-2024-0131-6043",
+      "response_source": "fr_preamble",
+      "response_sample_weight": 15.549315998914567,
+      "overlap_candidate": true
+    },
+    {
+      "label_row_id": "a5be97f52af5",
+      "comment_id": "IRS-2024-0011-0004",
+      "response_source": "web_search",
+      "response_sample_weight": 60.72115743709478,
+      "overlap_candidate": true
+    },
+    {
+      "label_row_id": "a8ca7165ba48",
+      "comment_id": "BIS-2024-0047-0047",
+      "response_source": "web_search",
+      "response_sample_weight": 3.237606976644356,
+      "overlap_candidate": false
+    },
+    {
+      "label_row_id": "e1eb54bc1796",
+      "comment_id": "NOAA-NMFS-2024-0074-0014",
+      "response_source": "web_search",
+      "response_sample_weight": 7.304295652340426,
+      "overlap_candidate": false
+    },
+    {
+      "label_row_id": "6093d5c02951",
+      "comment_id": "FWS-R7-SM-2024-0017-0045",
+      "response_source": "fr_preamble",
+      "response_sample_weight": 5.7493678531382315,
+      "overlap_candidate": true
+    },
+    {
+      "label_row_id": "7f473bf45b64",
+      "comment_id": "BIS-2024-0005-0002",
+      "response_source": "fr_preamble",
+      "response_sample_weight": 5.7493678531382315,
+      "overlap_candidate": false
+    },
+    {
+      "label_row_id": "e8600630fae3",
+      "comment_id": "CMS-2024-0119-0069",
+      "response_source": "fr_preamble",
+      "response_sample_weight": 15.549315998914567,
+      "overlap_candidate": false
+    },
+    {
+      "label_row_id": "81f4bf64a3df",
+      "comment_id": "EERE-2024-BT-STD-0002-0021",
+      "response_source": "fr_preamble",
+      "response_sample_weight": 7.643994337479165,
+      "overlap_candidate": false
+    },
+    {
+      "label_row_id": "929744cb7e8a",
+      "comment_id": "VA-2024-VHA-0031-0006",
+      "response_source": "web_search",
+      "response_sample_weight": 5.612401794789251,
+      "overlap_candidate": false
+    },
+    {
+      "label_row_id": "fb0314f61eec",
+      "comment_id": "FNS-2024-0005-0330",
+      "response_source": "web_search",
+      "response_sample_weight": 11.076082760200663,
+      "overlap_candidate": false
+    },
+    {
+      "label_row_id": "26026d800a75",
+      "comment_id": "PHMSA-2021-0092-0030",
+      "response_source": "fr_preamble",
+      "response_sample_weight": 0.8321786289848122,
+      "overlap_candidate": false
+    },
+    {
+      "label_row_id": "eb9ce106e570",
+      "comment_id": "NRC-2017-0227-0053",
+      "response_source": "web_search",
+      "response_sample_weight": 20.805120554697364,
+      "overlap_candidate": true
+    },
+    {
+      "label_row_id": "e37d88f3cf8f",
+      "comment_id": "DOC-2021-0007-0224",
+      "response_source": "web_search",
+      "response_sample_weight": 25.871233162906986,
+      "overlap_candidate": true
+    },
+    {
+      "label_row_id": "8116bd3ccd91",
+      "comment_id": "IRS-2024-0033-0028",
+      "response_source": "web_search",
+      "response_sample_weight": 13.494071518582034,
+      "overlap_candidate": false
+    },
+    {
+      "label_row_id": "e7882f3a2ac9",
+      "comment_id": "PTO-T-2022-0034-0015",
+      "response_source": "fr_preamble",
+      "response_sample_weight": 15.549315998914567,
+      "overlap_candidate": false
+    },
+    {
+      "label_row_id": "6474f8c86203",
+      "comment_id": "FCIC-24-0003-0005",
+      "response_source": "fr_preamble",
+      "response_sample_weight": 15.549315998914567,
+      "overlap_candidate": false
+    },
+    {
+      "label_row_id": "ee1387ff9c26",
+      "comment_id": "FAR-2021-0020-0007",
+      "response_source": "web_search",
+      "response_sample_weight": 4.339008364457333,
+      "overlap_candidate": true
+    },
+    {
+      "label_row_id": "579a690c7eaa",
+      "comment_id": "BOEM-2023-0005-0228",
+      "response_source": "fr_preamble",
+      "response_sample_weight": 0.8450345716569847,
+      "overlap_candidate": true
+    },
+    {
+      "label_row_id": "38d6b5980f58",
+      "comment_id": "HHSIG-2024-0002-0002",
+      "response_source": "web_search",
+      "response_sample_weight": 1.6900691433139694,
+      "overlap_candidate": false
+    },
+    {
+      "label_row_id": "4d7ce04919f7",
+      "comment_id": "FSIS-2022-0016-0012",
+      "response_source": "fr_preamble",
+      "response_sample_weight": 8.450345716569847,
+      "overlap_candidate": false
+    },
+    {
+      "label_row_id": "b87897f31e4f",
+      "comment_id": "FAA-2024-2142-0301",
+      "response_source": "web_search",
+      "response_sample_weight": 16.109916834646143,
+      "overlap_candidate": false
+    },
+    {
+      "label_row_id": "f970390acb4d",
+      "comment_id": "NOAA-NMFS-2024-0009-0003",
+      "response_source": "fr_preamble",
+      "response_sample_weight": 2.535103714970954,
+      "overlap_candidate": false
+    },
+    {
+      "label_row_id": "115f644d5bbe",
+      "comment_id": "RHS-24-MFH-0016-0003",
+      "response_source": "web_search",
+      "response_sample_weight": 3.4712066915658664,
+      "overlap_candidate": false
+    },
+    {
+      "label_row_id": "ccb62a57bb8c",
+      "comment_id": "SBA-2024-0002-0089",
+      "response_source": "web_search",
+      "response_sample_weight": 15.549315998914567,
+      "overlap_candidate": true
+    }
+  ],
+  "seed_id": "2026-07-17-ce44ac5"
+}

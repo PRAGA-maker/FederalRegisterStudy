@@ -1,2 +1,7 @@
 *.csv filter=lfs diff=lfs merge=lfs -text
 *.png filter=lfs diff=lfs merge=lfs -text
+
+# Gold-set label CSVs are tiny, human-edited, and irreplaceable — the ruler
+# everything else is graded by. Keep them as plain diffable blobs, NOT Git-LFS
+# (LFS would bill quota against the parent repo and hide 30-row diffs).
+goldset/**/*.csv -filter diff merge text
