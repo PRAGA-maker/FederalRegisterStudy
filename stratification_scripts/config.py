@@ -363,6 +363,38 @@ def get_frozen_snapshot_path(snapshot_id: str) -> Path:
     return get_frozen_dir() / snapshot_id
 
 
+def get_goldset_dir() -> Path:
+    """
+    Get the repo-root goldset/ directory holding gold-set seed runs.
+
+    Mirrors get_frozen_dir(): a top-level sibling of the re-runnable pipeline,
+    holding human-labeled ground-truth artifacts that are committed as plain
+    blobs (see the goldset/**/*.csv .gitattributes override).
+
+    Returns:
+        Path to goldset/ directory.
+
+    Side Effects:
+        Creates the directory if it doesn't exist.
+    """
+    path = get_project_root() / "goldset"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def get_goldset_seed_path(seed_id: str) -> Path:
+    """
+    Get the directory for a specific gold-set seed run.
+
+    Args:
+        seed_id: Seed identifier, e.g. "2026-07-17-ce44ac5".
+
+    Returns:
+        Path to goldset/<seed_id>/.
+    """
+    return get_goldset_dir() / seed_id
+
+
 @dataclass
 class PipelineConfig:
     """
