@@ -49,5 +49,8 @@ failed_rins_*.txt
 # Frozen snapshot CSV bytes stay local — manifests are committed, bytes are not
 frozen/**/*.csv
 
-# Source RTC PDF bytes stay local — parse_manifest.json records sha256 + source
-rtc/inputs/
+# RTC parser I/O stays local: source PDF bytes under rtc/inputs/, and the
+# derived crosswalk outputs under rtc/<slug>/ (regenerable from the parser + PDF;
+# provenance is in each run's parse_manifest.json). The parser + committed text
+# fixture (tests/fixtures/rtc_ccl5_slice.txt) define behavior.
+rtc/
