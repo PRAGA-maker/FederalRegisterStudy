@@ -8,7 +8,9 @@ infer the model's answer will unconsciously ratify it, and the gold set stops
 being an independent ruler.
 
 Links are layered so every row has a working path to the primary source; the
-rin_url fallback is 100% populated. docket_id is prose — it is NEVER a URL.
+rin_url fallback is 100% populated (a regulation_id_number document search, the
+route that resolves — not /r/<RIN>, which 404s). docket_id is prose — it is
+NEVER a URL.
 """
 
 from __future__ import annotations
@@ -74,6 +76,11 @@ KEY_COLUMNS = ["label_row_id", "comment_id", "response_source", "response_sample
 _FR_BASE = "https://www.federalregister.gov"
 _REGS_BASE = "https://www.regulations.gov"
 
+# federalregister.gov/r/<RIN> 404s — that route does not exist. The document
+# search filtered on regulation_id_number is the path that actually resolves to
+# the FR documents under a RIN (verified against the live site + FR API).
+_RIN_SEARCH_PREFIX = f"{_FR_BASE}/documents/search?conditions%5Bregulation_id_number%5D="
+
 
 def _url_or_blank(prefix: str, value: str | None) -> str:
     return f"{prefix}{value}" if value not in (None, "") else ""
@@ -84,7 +91,7 @@ def build_links(sampled: pl.DataFrame) -> pl.DataFrame:
     has_frdn = "final_rule_document_number" in sampled.columns
     rin_url, nprm_url, final_url, comment_url = [], [], [], []
     for r in sampled.iter_rows(named=True):
-        rin_url.append(_url_or_blank(f"{_FR_BASE}/r/", r.get("rin")))
+        rin_url.append(_url_or_blank(_RIN_SEARCH_PREFIX, r.get("rin")))
         nprm_url.append(_url_or_blank(f"{_FR_BASE}/d/", r.get("document_number")))
         final_url.append(
             _url_or_blank(f"{_FR_BASE}/d/", r.get("final_rule_document_number")) if has_frdn else ""

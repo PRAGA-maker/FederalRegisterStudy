@@ -47,10 +47,13 @@ def _context_fixture():
 
 def test_links_layer_correctly():
     linked = packet.build_links(_sampled_fixture())
+    # /r/<RIN> 404s (route does not exist); the documents/search query on
+    # regulation_id_number is the pattern that actually resolves.
+    _search = "https://www.federalregister.gov/documents/search?conditions%5Bregulation_id_number%5D="
     assert linked["rin_url"].to_list() == [
-        "https://www.federalregister.gov/r/2060-AV12",
-        "https://www.federalregister.gov/r/2120-AL55",
-        "https://www.federalregister.gov/r/3245-AH99",
+        f"{_search}2060-AV12",
+        f"{_search}2120-AL55",
+        f"{_search}3245-AH99",
     ]
     assert linked["nprm_url"][0] == "https://www.federalregister.gov/d/2024-00001"
     assert linked["comment_url"][0] == "https://www.regulations.gov/comment/EPA-2024-0001-0001"
