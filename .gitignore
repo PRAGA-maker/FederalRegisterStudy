@@ -48,3 +48,6 @@ failed_rins_*.txt
 
 # Frozen snapshot CSV bytes stay local — manifests are committed, bytes are not
 frozen/**/*.csv
+
+# Source RTC PDF bytes stay local — parse_manifest.json records sha256 + source
+rtc/inputs/

@@ -395,6 +395,32 @@ def get_goldset_seed_path(seed_id: str) -> Path:
     return get_goldset_dir() / seed_id
 
 
+def get_rtc_dir() -> Path:
+    """
+    Get the repo-root rtc/ directory holding RTC-parser outputs.
+
+    Mirrors get_goldset_dir(): a top-level sibling of the re-runnable pipeline.
+    Source RTC PDFs live under rtc/inputs/ and are gitignored (bytes local,
+    manifest committed); parsed crosswalks live under rtc/<slug>/.
+
+    Side Effects:
+        Creates the directory if it doesn't exist.
+    """
+    path = get_project_root() / "rtc"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def get_rtc_output_path(slug: str) -> Path:
+    """Get the output directory for one parsed RTC document: rtc/<slug>/."""
+    return get_rtc_dir() / slug
+
+
+def get_rtc_inputs_dir() -> Path:
+    """Get rtc/inputs/ — the gitignored home for source RTC PDF bytes."""
+    return get_rtc_dir() / "inputs"
+
+
 @dataclass
 class PipelineConfig:
     """
