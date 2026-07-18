@@ -70,3 +70,67 @@ def split_topic_discussions(text: str) -> dict[str, str]:
         body = strip_running_headers(text[body_start:body_end]).strip()
         out[topic] = body
     return out
+
+
+# High-confidence expansions for short forms substring-matching would also catch;
+# kept explicit to document intent. Everything else resolves by exact match or a
+# unique substring, or stays unresolved.
+_ALIASES = {
+    "pfas": "Per- and Polyfluoroalkyl substances (PFAS)",
+    "dbps": "Disinfection Byproducts (DBPs)",
+}
+_CANON_BY_LOWER = {c.lower(): c for c in CANONICAL_TOPICS}
+
+# Split a cross-ref clause on commas that are NOT inside a number like "1,4"
+# (so the chemical name "1,4-Dioxane" survives).
+_COMMA_SEP = re.compile(r",(?!\d)")
+
+
+def _resolve_one(mention: str) -> str | None:
+    """Resolve one mention to a canonical topic, or None (never force-match)."""
+    low = mention.strip().lower()
+    if not low:
+        return None
+    if low in _CANON_BY_LOWER:
+        return _CANON_BY_LOWER[low]
+    if low in _ALIASES:
+        return _ALIASES[low]
+    subs = [c for c in CANONICAL_TOPICS if low in c.lower()]
+    return subs[0] if len(subs) == 1 else None
+
+
+def _split_mentions(clause: str) -> list[str]:
+    """Tokenize a cross-ref clause into individual topic mentions.
+
+    Commas separate (except inside numbers); a segment that does not itself
+    resolve but contains " and " is split further, so `EDCs and PPCPs` (a real
+    topic) stays whole while `General Comments and PFAS` splits into two.
+    """
+    norm = re.sub(r"\s+", " ", clause).strip()
+    if not norm:
+        return []
+    mentions: list[str] = []
+    for seg in _COMMA_SEP.split(norm):
+        seg = seg.strip()
+        if seg.lower().startswith("and "):  # Oxford "…, and X"
+            seg = seg[4:].strip()
+        if not seg:
+            continue
+        if _resolve_one(seg) is None and " and " in seg:
+            mentions.extend(s.strip() for s in seg.split(" and ") if s.strip())
+        else:
+            mentions.append(seg)
+    return mentions
+
+
+def resolve_refs(raw_clause: str) -> list[TopicRef]:
+    """Resolve an Individual-Response cross-ref clause to TopicRefs.
+
+    Every mention is preserved with its verbatim `raw`; `canonical`/`resolved`
+    record whether it mapped to one of the 22 topics. Nothing is dropped.
+    """
+    refs: list[TopicRef] = []
+    for mention in _split_mentions(raw_clause):
+        canonical = _resolve_one(mention)
+        refs.append(TopicRef(raw=mention, canonical=canonical, resolved=canonical is not None))
+    return refs
