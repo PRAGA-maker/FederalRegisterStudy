@@ -84,6 +84,76 @@ LIFECYCLE_STAGES = [
 # Inspect after pipeline completes: from stratification_scripts.reginfo.client import ALL_OBSERVED_ACTIONS
 ALL_OBSERVED_ACTIONS: set = set()
 
+# The timetable table region on a reginfo rule page.
+_TIMETABLE_TABLE = re.compile(r"<b>\s*Timetable:\s*</b>(.*?)</table>", re.S | re.I)
+_TIMETABLE_ROW = re.compile(r"<tr\b[^>]*>(.*?)</tr>", re.S | re.I)
+_TIMETABLE_CELL = re.compile(r"<t[dh]\b[^>]*>(.*?)</t[dh]>", re.S | re.I)
+# Non-date date-cells that carry the disconfirming signal: no final rule scheduled.
+_UNDETERMINED = re.compile(
+    r"to\s+be\s+determined|next\s+action\s+undetermined|^\s*tbd\s*$", re.I
+)
+
+
+def _cell_text(raw: str) -> str:
+    """Strip tags/entities from one <td> and collapse whitespace."""
+    txt = re.sub(r"<[^>]+>", " ", raw)
+    txt = txt.replace("&nbsp;", " ")
+    return re.sub(r"\s+", " ", txt).strip()
+
+
+def _parse_timetable_rows(html: str) -> Optional[List[dict]]:
+    """Row-wise parse of the scoped Timetable table.
+
+    Returns entries with action/date/date_raw/citation, or None when the page has
+    no recognizable Timetable block (caller falls back to the legacy scan).
+
+    Unlike the legacy two-cell regex, this keeps rows whose date cell is not a
+    date ("To Be Determined") — the one field that can falsify "a final rule
+    exists" — and reads the FR cite from the same row rather than "the next <td>".
+    """
+    block = _TIMETABLE_TABLE.search(html)
+    if not block:
+        return None
+    entries: List[dict] = []
+    for row in _TIMETABLE_ROW.finditer(block.group(1)):
+        cells = [_cell_text(c) for c in _TIMETABLE_CELL.findall(row.group(1))]
+        if len(cells) < 2:
+            continue
+        action, date_cell = cells[0], cells[1]
+        cite_cell = cells[2] if len(cells) > 2 else ""
+        if not action or action.lower() == "action":
+            continue
+        date_iso, date_raw = "", ""
+        parts = date_cell.split("/")
+        if len(parts) == 3 and parts[1] == "00":
+            date_cell = f"{parts[0]}/01/{parts[2]}"
+        try:
+            date_iso = datetime.strptime(date_cell, "%m/%d/%Y").strftime("%Y-%m-%d")
+        except ValueError:
+            date_raw = date_cell
+        fr_match = re.search(r"(\d+ FR \d+)", cite_cell)
+        entries.append({
+            "action": action.upper(),
+            "date": date_iso,
+            "date_raw": date_raw,
+            "citation": fr_match.group(1) if fr_match else "",
+        })
+    return entries
+
+
+def has_undetermined_final_rule(agenda: Optional[dict]) -> bool:
+    """True when the agenda itself says no final rule is scheduled."""
+    if not agenda:
+        return False
+    for entry in agenda.get("timetable") or []:
+        action = (entry.get("action") or "").upper()
+        raw = entry.get("date_raw") or ""
+        if action == "NEXT ACTION UNDETERMINED":
+            return True
+        if _UNDETERMINED.search(raw) and "FINAL" in action:
+            return True
+    return False
+
 
 class RegInfoClient:
     """
@@ -406,9 +476,19 @@ class RegInfoClient:
         if abstract_match:
             result["abstract"] = re.sub(r'<[^>]+>', '', abstract_match.group(1)).strip()
 
-        # Extract timetable entries from HTML table rows:
-        #   <td>Action</td><td>Date</td><td>Citation</td>
-        td_pattern = r"<td[^>]*>\s*([\w][^<]*?)\s*(?:&nbsp;)?\s*</td>\s*<td[^>]*>\s*(\d{1,2}/\d{1,2}/\d{4})\s*(?:&nbsp;)?\s*</td>"
+        # Preferred: scoped, row-wise timetable parse (keeps non-date rows).
+        scoped = _parse_timetable_rows(html)
+        if scoped is not None:
+            seen_keys = set()
+            for entry in scoped:
+                key = (entry["action"], entry["date"] or entry["date_raw"])
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
+                result["timetable"].append(entry)
+                if "WITHDRAWN" in entry["action"]:
+                    result["withdrawn"] = True
+
         # Reference set of action types the parser previously recognized.
         # Used ONLY for logging — no filtering. All valid <td>action</td><td>date</td>
         # pairs are now accepted regardless of action name.
@@ -428,53 +508,53 @@ class RegInfoClient:
             "notice of availability",
             "actions will continue through",
         }
-        existing_entries = set()
+        if not result["timetable"]:
+            # Legacy fallback for pages with no recognizable Timetable block.
+            td_pattern = r"<td[^>]*>\s*([\w][^<]*?)\s*(?:&nbsp;)?\s*</td>\s*<td[^>]*>\s*(\d{1,2}/\d{1,2}/\d{4})\s*(?:&nbsp;)?\s*</td>"
+            existing_entries = set()
 
-        for match in re.finditer(td_pattern, html, re.IGNORECASE | re.DOTALL):
-            raw_action = re.sub(r'<[^>]+>', '', match.group(1)).strip()
-            date_str = match.group(2).strip()
-
-            if not raw_action:
-                continue
-
-            action_lower = raw_action.lower()
-            ALL_OBSERVED_ACTIONS.add(raw_action.upper())
-
-            # Log previously-unknown action types at DEBUG level for tracking
-            if action_lower not in _previously_known_actions and not action_lower.startswith("duplicate of"):
-                logger.debug(f"Timetable action (new): {raw_action!r}")
-
-            # Handle 00-day placeholder (month-level precision from omnibus RINs)
-            date_parts = date_str.split("/")
-            if len(date_parts) == 3 and date_parts[1] == "00":
-                date_str = f"{date_parts[0]}/01/{date_parts[2]}"
-
-            try:
-                date_obj = datetime.strptime(date_str, "%m/%d/%Y")
-                date_iso = date_obj.strftime("%Y-%m-%d")
-            except ValueError:
-                logger.warning(f"Malformed date {date_str!r} for action {raw_action!r}, using raw string")
-                date_iso = date_str
-
-            key = (raw_action.upper(), date_iso)
-            if key not in existing_entries:
-                # Extract citation from the next <td> if present
-                remainder = html[match.end():]
-                cite_match = re.search(r'<td[^>]*>(.*?)</td>', remainder, re.DOTALL)
-                citation = ""
-                if cite_match:
-                    cite_text = re.sub(r'<[^>]+>', '', cite_match.group(1)).strip()
-                    cite_text = cite_text.replace('&nbsp;', '').strip()
-                    fr_match = re.search(r'(\d+ FR \d+)', cite_text)
-                    if fr_match:
-                        citation = fr_match.group(1)
-
-                existing_entries.add(key)
-                result["timetable"].append({
-                    "action": raw_action.upper(),
-                    "date": date_iso,
-                    "citation": citation,
-                })
+            for match in re.finditer(td_pattern, html, re.IGNORECASE | re.DOTALL):
+                raw_action = re.sub(r'<[^>]+>', '', match.group(1)).strip()
+                date_str = match.group(2).strip()
+                if not raw_action:
+                    continue
+                action_lower = raw_action.lower()
+                ALL_OBSERVED_ACTIONS.add(raw_action.upper())
+                if (
+                    action_lower not in _previously_known_actions
+                    and not action_lower.startswith("duplicate of")
+                ):
+                    logger.debug(f"Timetable action (new): {raw_action!r}")
+                date_parts = date_str.split("/")
+                if len(date_parts) == 3 and date_parts[1] == "00":
+                    date_str = f"{date_parts[0]}/01/{date_parts[2]}"
+                try:
+                    date_obj = datetime.strptime(date_str, "%m/%d/%Y")
+                    date_iso = date_obj.strftime("%Y-%m-%d")
+                except ValueError:
+                    logger.warning(
+                        f"Malformed date {date_str!r} for action "
+                        f"{raw_action!r}, using raw string"
+                    )
+                    date_iso = date_str
+                key = (raw_action.upper(), date_iso)
+                if key not in existing_entries:
+                    remainder = html[match.end():]
+                    cite_match = re.search(r'<td[^>]*>(.*?)</td>', remainder, re.DOTALL)
+                    citation = ""
+                    if cite_match:
+                        cite_text = re.sub(r'<[^>]+>', '', cite_match.group(1)).strip()
+                        cite_text = cite_text.replace('&nbsp;', '').strip()
+                        fr_match = re.search(r'(\d+ FR \d+)', cite_text)
+                        if fr_match:
+                            citation = fr_match.group(1)
+                    existing_entries.add(key)
+                    result["timetable"].append({
+                        "action": raw_action.upper(),
+                        "date": date_iso,
+                        "date_raw": "",
+                        "citation": citation,
+                    })
 
         # Check for withdrawal
         if "withdrawn" in html.lower():
@@ -487,11 +567,12 @@ class RegInfoClient:
         # Undetermined" text. These RINs have real data on reginfo.gov but the
         # timetable regex can't match them because there's no parseable date.
         # Store a synthetic entry so timetable_action_count > 0.
-        if result["stage"] == "LONG_TERM" and not result["timetable"]:
+        if result["stage"] == "LONG_TERM" and not has_undetermined_final_rule(result):
             if re.search(r"next\s+action\s+undetermined", html, re.IGNORECASE):
                 result["timetable"].append({
                     "action": "NEXT ACTION UNDETERMINED",
                     "date": "",
+                    "date_raw": "",
                     "citation": "",
                 })
                 logger.debug(f"RIN {rin}: Long-Term Actions with 'Next Action Undetermined' — stored synthetic entry")
@@ -499,6 +580,7 @@ class RegInfoClient:
                 result["timetable"].append({
                     "action": "NEXT ACTION UNDETERMINED",
                     "date": "",
+                    "date_raw": "",
                     "citation": "",
                 })
                 logger.debug(f"RIN {rin}: Long-Term Actions with 'To Be Determined' — stored synthetic entry")
@@ -564,6 +646,7 @@ class RegInfoClient:
                 result["timetable"].append({
                     "action": action.upper(),
                     "date": date,
+                    "date_raw": "",
                     "citation": citation,
                 })
 
