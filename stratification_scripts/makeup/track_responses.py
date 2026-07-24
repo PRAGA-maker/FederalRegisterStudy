@@ -50,10 +50,6 @@ from stratification_scripts.io_utils import extract_pdf_text
 from stratification_scripts.regulations_gov.client import RegsGovClient
 from stratification_scripts.config import get_regs_api_keys
 from stratification_scripts.makeup.mine_comments import calculate_sample_size
-from stratification_scripts.makeup.fr_response_extractor import (
-    extract_response_section,
-    ResponseExtract,
-)
 from stratification_scripts.federal_register.client import FederalRegisterClient
 from stratification_scripts.reginfo.client import RegInfoClient
 from stratification_scripts.resolution.resolver import DocumentResolver
@@ -491,161 +487,6 @@ def save_responses_incremental(
     logger.info(f"Saved {len(new_results)} new responses (total: {len(df_combined)})")
 
 
-async def process_responses_async(
-    tracker,
-    comments_to_process: List[Dict],
-    responses_csv: Path,
-    max_concurrency: int,
-    regs_client: Optional[RegsGovClient] = None,
-    max_comment_pages: int = 30,
-    df_comments: Optional[pl.DataFrame] = None,
-    batch_size: int = 1000,
-    weight_map: Optional[Dict[str, float]] = None,
-) -> None:
-    """
-    Process comments asynchronously in batches.
-
-    Args:
-        tracker: Response tracker instance (Gemini, OpenAI, or xAI)
-        comments_to_process: List of comment dicts to process
-        responses_csv: Path to save results
-        max_concurrency: Max concurrent API calls
-        regs_client: Optional RegsGovClient for re-downloading attachments
-        max_comment_pages: Max pages to extract from PDFs
-        df_comments: Optional DataFrame with comments (for duplicate propagation)
-        batch_size: Number of comments to process per batch (default: 1000)
-        weight_map: Optional dict mapping comment_id -> sampling weight
-    """
-    total_comments = len(comments_to_process)
-    
-    logger.info(f"Processing {total_comments} comments in batches of {batch_size}")
-    
-    for batch_start in range(0, total_comments, batch_size):
-        batch_end = min(batch_start + batch_size, total_comments)
-        batch = comments_to_process[batch_start:batch_end]
-        
-        logger.info(f"Processing batch {batch_start+1}-{batch_end} of {total_comments}")
-        
-        # Prepare batch for Gemini
-        gemini_batch = []
-        # Track full_text length per comment_id so we don't re-call
-        # extract_full_comment_text() later without regs_client (which
-        # would lose re-downloaded attachment text).
-        comment_text_lengths: Dict[str, int] = {}
-        for comment in batch:
-            # Extract full comment text
-            full_text = extract_full_comment_text(
-                comment,
-                client=regs_client,
-                max_pages=max_comment_pages,
-            )
-
-            cid = str(comment.get("comment_id", "unknown"))
-            comment_text_lengths[cid] = len(full_text)
-
-            metadata = {
-                "comment_id": cid,
-                "document_number": str(comment.get("document_number", "N/A")),
-                "agency": str(comment.get("agency", "N/A")),
-                "commenter_type": str(comment.get("category", "N/A")),
-                "submission_date": str(comment.get("posted_date", "N/A")),
-                # Lifecycle tracking fields
-                "lifecycle_stage": str(comment.get("lifecycle_stage", "UNKNOWN")),
-                "rin": str(comment.get("rin", "N/A")),
-            }
-
-            gemini_batch.append((full_text, metadata))
-        
-        # Track responses
-        results = await tracker.track_batch(gemini_batch, max_concurrency=max_concurrency)
-        
-        # Format results for CSV
-        csv_results = []
-        for comment_id, parsed_response, raw_response in results:
-            # Find original comment to get metadata
-            original_comment = next(
-                (c for c in batch if str(c.get("comment_id")) == comment_id),
-                {}
-            )
-            
-            row = {
-                "comment_id": comment_id,
-                "document_number": str(original_comment.get("document_number") or "N/A"),
-                "agency": str(original_comment.get("agency") or "N/A"),
-                "response_found": parsed_response.get("response_found", "uncertain"),
-                "agency_decision": parsed_response.get("agency_decision", "uncertain"),
-                "response_text": parsed_response.get("response_text", "N/A"),
-                "response_location": parsed_response.get("response_location", "N/A"),
-                "reasoning": parsed_response.get("reasoning", "N/A"),
-                "processed_at": datetime.now().isoformat(),
-                "model": tracker.model,
-                "comment_text_length": comment_text_lengths.get(comment_id, 0),
-                "has_attachment": bool(original_comment.get("attachment_text")),
-                # Lifecycle tracking fields
-                "lifecycle_stage": str(original_comment.get("lifecycle_stage") or "UNKNOWN"),
-                "rin": str(original_comment.get("rin") or "N/A"),
-                # Sampling weight (1.0 if no sampling or census)
-                "response_sample_weight": weight_map.get(comment_id, 1.0) if weight_map else 1.0,
-                # Provenance (web-search path)
-                "response_source": "web_search",
-                "response_citation": "",
-                "rtc_document_id": "",
-            }
-            csv_results.append(row)
-        
-        # Save incrementally (with duplicate propagation if df_comments provided)
-        save_responses_incremental(responses_csv, csv_results, df_comments)
-
-
-def _fetch_final_rule_xml(final_doc_number: str) -> Optional[str]:
-    """Fetch structured full_text_xml for one Final Rule (short-lived own client)."""
-    client = FederalRegisterClient(max_retries=4, sleep_between=0.3)
-    try:
-        return client.fetch_document_full_text_xml(final_doc_number)
-    finally:
-        client.close()
-
-
-def build_grounded_cache(
-    comment_doc_numbers,
-    df_fr: pl.DataFrame,
-    grounded_max_chars: int = 100_000,
-) -> Dict[str, ResponseExtract]:
-    """Map each comment ``document_number`` -> ResponseExtract for its linked Final Rule.
-
-    A comment's document may itself be the Final Rule (doc_type == "Rule") or link to
-    one via ``final_rule_document_number``. Fetches + extracts each unique Final Rule
-    once. Returns only docs with usable grounded_text. Best-effort: failures skipped.
-    """
-    cols = df_fr.columns
-    link: Dict[str, str] = {}
-    sel = [c for c in ["document_number", "final_rule_document_number", "doc_type"] if c in cols]
-    for row in df_fr.select(sel).iter_rows(named=True):
-        dn = str(row.get("document_number") or "")
-        if not dn:
-            continue
-        frn = str(row.get("final_rule_document_number") or "").strip()
-        if frn and frn.lower() not in ("none", "null", ""):
-            link[dn] = frn
-        elif str(row.get("doc_type") or "") == "Rule":
-            link[dn] = dn  # the comment's own doc is itself a final rule
-
-    targets = {dn: link[dn] for dn in {str(d) for d in comment_doc_numbers} if dn in link}
-    extract_by_final: Dict[str, ResponseExtract] = {}
-    for frn in sorted(set(targets.values())):
-        try:
-            xml = _fetch_final_rule_xml(frn)
-        except Exception as e:  # noqa: BLE001 — grounding is best-effort
-            logger.debug(f"Grounded fetch failed for {frn}: {e}")
-            continue
-        if not xml:
-            continue
-        ext = extract_response_section(xml)
-        if ext.grounded_text and len(ext.grounded_text) <= grounded_max_chars + 1000:
-            extract_by_final[frn] = ext
-    return {dn: extract_by_final[frn] for dn, frn in targets.items() if frn in extract_by_final}
-
-
 def _save_grounded_results(
     responses_csv: Path,
     results: List,
@@ -1036,6 +877,18 @@ def _print_response_summary(responses_csv: Path, label: str = "") -> None:
         count = df_responses.filter(pl.col("response_found") == value).shape[0]
         pct = 100.0 * count / total
         logger.info(f"  {value}: {count} ({pct:.1f}%)")
+
+    if "resolution_status" in df_responses.columns:
+        logger.info(f"\n{label} Resolution status breakdown:")
+        for value in ["FOUND", "CONFIDENTLY_ABSENT", "UNKNOWN"]:
+            count = df_responses.filter(pl.col("resolution_status") == value).shape[0]
+            logger.info(f"  {value}: {count}")
+        absents = df_responses.filter(pl.col("resolution_status") == "CONFIDENTLY_ABSENT")
+        if len(absents) > 0:
+            logger.info(f"{label} Absence reasons:")
+            for value in ["NO_VENUE_POSSIBLE", "RESPONSE_NOT_YET_PUBLISHED", "NO_FINAL_RULE_PLANNED"]:
+                count = absents.filter(pl.col("absence_reason") == value).shape[0]
+                logger.info(f"  {value}: {count}")
 
     # Agency decision breakdown (for responses found)
     responses_found = df_responses.filter(pl.col("response_found") == "yes")

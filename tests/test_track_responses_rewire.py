@@ -58,3 +58,17 @@ def test_appends_compatibly_onto_legacy_schema(tmp_path):
     df = pl.read_csv(str(csv), infer_schema_length=None)
     assert len(df) == 2
     assert set(["resolution_status", "absence_reason", "envelope_version"]).issubset(df.columns)
+
+
+def test_no_web_search_symbols_remain():
+    import stratification_scripts.makeup.track_responses as tr
+    assert not hasattr(tr, "process_responses_async")
+    assert not hasattr(tr, "build_grounded_cache")
+
+
+def test_source_vocabulary_has_no_web_search(tmp_path):
+    # The writable sources after the rewire; "web_search" must never be written again.
+    import inspect
+    import stratification_scripts.makeup.track_responses as tr
+    source = inspect.getsource(tr)
+    assert '"web_search"' not in source
