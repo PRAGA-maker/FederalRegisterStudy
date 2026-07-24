@@ -140,3 +140,8 @@ def test_empty_comment_date_short_circuits_to_unknown():
     assert result.absence_reason is None
     assert result.candidates == []
     assert all(s == "skipped:no comment date" for s in result.channels_run.values())
+
+
+def test_resolver_runs_fulltext_and_marks_it_ok():
+    result = DocumentResolver(fr_client=FakeFR(), reginfo_client=FakeRegInfo()).resolve(REF)
+    assert result.channels_run[Channel.FULLTEXT_SEARCH] == "ok"

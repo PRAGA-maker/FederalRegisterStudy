@@ -8,7 +8,8 @@ from typing import Dict, List
 from ..reginfo.client import has_undetermined_final_rule
 from .cache import DocumentCache
 from .channels import (
-    ChannelOutcome, run_docket_search, run_packet_link, run_rin_search,
+    ChannelOutcome, run_docket_search, run_fulltext_search, run_packet_link,
+    run_rin_search,
 )
 from .evidence import response_evidence_from_extract
 from .filters import relevance_of
@@ -124,7 +125,7 @@ class DocumentResolver:
         )
 
     def _run_fulltext(self, ref: CommentRef) -> ChannelOutcome:
-        return ChannelOutcome([], "skipped:not implemented")
+        return run_fulltext_search(ref, self._fr)
 
     def _apply_fetch_policy(
         self, candidates: List[CandidateDocument]

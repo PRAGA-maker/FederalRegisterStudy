@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import List, Optional, Sequence
 
+from ..federal_register.client import normalize_docket_id
 from .classify import rule_class_from_action
 from .filters import postdates_comment, relevance_of
 from .models import CandidateDocument, Channel, CommentRef
@@ -116,3 +117,31 @@ def run_docket_search(ref: CommentRef, fr_client) -> ChannelOutcome:
     if docs is None:
         return ChannelOutcome([], f"failed:docket search {ref.docket_id}")
     return ChannelOutcome(_collect(docs, ref, Channel.DOCKET_SEARCH), STATE_OK)
+
+
+def fulltext_identifiers(ref: CommentRef) -> List[str]:
+    """Identifier queries for channel 5, never subject terms."""
+    identifiers: List[str] = []
+    for value in [ref.docket_id, normalize_docket_id(ref.docket_id), *ref.rins]:
+        token = (value or "").strip()
+        if token and " " not in token and token not in identifiers:
+            identifiers.append(token)
+    return identifiers
+
+
+def run_fulltext_search(ref: CommentRef, fr_client) -> ChannelOutcome:
+    """Channel 5: full-text search keyed only on lineage identifiers."""
+    identifiers = fulltext_identifiers(ref)
+    if not identifiers:
+        return ChannelOutcome([], "skipped:no identifiers")
+    docs: List[dict] = []
+    for identifier in identifiers:
+        found = fr_client.search_full_text(identifier)
+        if found is None:
+            return ChannelOutcome(
+                [], f"failed:fulltext search {identifier}"
+            )
+        docs.extend(found)
+    return ChannelOutcome(
+        _collect(docs, ref, Channel.FULLTEXT_SEARCH), STATE_OK
+    )

@@ -1,6 +1,7 @@
 from stratification_scripts.resolution.cache import DocumentCache
 from stratification_scripts.resolution.channels import (
-    candidate_from_fr_doc, run_docket_search, run_packet_link, run_rin_search,
+    candidate_from_fr_doc, fulltext_identifiers, run_docket_search,
+    run_fulltext_search, run_packet_link, run_rin_search,
 )
 from stratification_scripts.resolution.models import (
     Channel, CommentRef, Relevance, RuleClass,
@@ -122,3 +123,61 @@ def test_multi_rin_search_is_deduplicated():
                      packet_final_document=None)
     outcome = run_rin_search(ref, FakeFR(rin_docs=[DOT_FINAL]))
     assert len(outcome.candidates) == 1
+
+
+CMS_REF = CommentRef(
+    comment_id="CMS-2024-0131-6043", comment_date="2024-12-03",
+    source_document="2024-22765", agency="Health and Human Services Department",
+    rins=("0938-AV34",), docket_id="CMS-1808-IFC", packet_final_document=None,
+)
+
+CMS_LATER = {
+    "document_number": "2025-14681",
+    "title": "Medicare Program; Hospital Inpatient Prospective Payment Systems",
+    "type": "Rule", "action": "Final rule.", "publication_date": "2025-08-04",
+    "agencies": [{"name": "Health and Human Services Department"},
+                 {"name": "Centers for Medicare & Medicaid Services"}],
+    "regulation_id_numbers": ["0938-AV53"], "docket_ids": ["CMS-1809-F"],
+}
+
+
+def test_fulltext_identifiers_are_identifiers_only():
+    identifiers = fulltext_identifiers(CMS_REF)
+    assert "CMS-1808-IFC" in identifiers
+    assert "0938-AV34" in identifiers
+    assert all(len(identifier.split()) == 1 for identifier in identifiers)
+
+
+def test_fulltext_recovers_the_cross_rin_response():
+    class FakeFullText:
+        def __init__(self):
+            self.terms = []
+
+        def search_full_text(self, identifier):
+            self.terms.append(identifier)
+            return [CMS_LATER] if identifier == "CMS-1808-IFC" else []
+
+    outcome = run_fulltext_search(CMS_REF, FakeFullText())
+    assert outcome.state == "ok"
+    assert [c.document_number for c in outcome.candidates] == ["2025-14681"]
+    assert outcome.candidates[0].relevance is Relevance.MATCH
+    assert outcome.candidates[0].discovered_by is Channel.FULLTEXT_SEARCH
+
+
+def test_fulltext_failure_on_any_identifier_is_failed():
+    class Failing:
+        def search_full_text(self, identifier):
+            return None
+
+    assert run_fulltext_search(CMS_REF, Failing()).state.startswith("failed:")
+
+
+def test_fulltext_without_identifiers_is_skipped():
+    ref = CommentRef(comment_id="x", comment_date="2024-01-01", source_document="d",
+                     agency="A", rins=(), docket_id=None, packet_final_document=None)
+
+    class Unused:
+        def search_full_text(self, identifier):
+            raise AssertionError("should not be called")
+
+    assert run_fulltext_search(ref, Unused()).state.startswith("skipped:")
