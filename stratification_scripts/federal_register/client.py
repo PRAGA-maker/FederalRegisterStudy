@@ -216,6 +216,10 @@ def fr_volume_to_year(volume: int) -> int:
 # API Endpoints
 FR_DOCS_URL = "https://www.federalregister.gov/api/v1/documents.json"
 FR_DOC_DETAIL_URL = "https://www.federalregister.gov/api/v1/documents/{document_number}.json"
+SEARCH_FIELDS = [
+    "document_number", "title", "type", "action", "publication_date",
+    "agencies", "regulation_id_numbers", "docket_ids", "citation",
+]
 
 
 class FederalRegisterClient:
@@ -650,6 +654,70 @@ class FederalRegisterClient:
 
         return None
 
+    def search_documents(
+        self,
+        conditions: Dict[str, str],
+        *,
+        per_page: int = 1000,
+    ) -> Optional[List[dict]]:
+        """Run one FR documents.json search; distinguish clean empty from failure."""
+        if not conditions or not all(str(value).strip() for value in conditions.values()):
+            return []
+        if self.sleep_between > 0:
+            time.sleep(self.sleep_between)
+        params: Dict[str, Any] = {
+            "per_page": per_page, "page": 1, "fields[]": SEARCH_FIELDS,
+        }
+        params.update(conditions)
+        backoff = 1.0
+        for attempt in range(self.max_retries):
+            try:
+                response = self.session.get(FR_DOCS_URL, params=params, timeout=30)
+            except requests.RequestException as exc:
+                if attempt == self.max_retries - 1:
+                    logger.warning(
+                        f"FR search failed for {conditions}: "
+                        f"{type(exc).__name__}: {exc}"
+                    )
+                    return None
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 16)
+                continue
+            if response.status_code == 200:
+                data = response.json() or {}
+                return list(data.get("results") or [])
+            if response.status_code == 404:
+                return []
+            if (
+                response.status_code in (403, 429, 500, 502, 503, 504)
+                and attempt < self.max_retries - 1
+            ):
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 16)
+                continue
+            logger.warning(f"FR search HTTP {response.status_code} for {conditions}")
+            return None
+        return None
+
+    def search_by_rin(self, rin: str) -> Optional[List[dict]]:
+        """All FR documents filed under a RIN."""
+        return self.search_documents({
+            "conditions[regulation_id_number]": (rin or "").strip()
+        })
+
+    def search_by_docket(self, docket_id: Optional[str]) -> Optional[List[dict]]:
+        """All FR documents filed under an agency docket id."""
+        return self.search_documents({
+            "conditions[docket_id]": (docket_id or "").strip()
+        })
+
+    def search_full_text(self, identifier: str) -> Optional[List[dict]]:
+        """Full-text search on an identifier, never a subject term."""
+        term = (identifier or "").strip()
+        if not term:
+            return []
+        return self.search_documents({"conditions[term]": f'"{term}"'})
+
     def iter_documents_by_day(
         self,
         year: int,
@@ -786,4 +854,3 @@ def classify_submission_channel(
         return "other-portal"
     
     return "unknown"
-
