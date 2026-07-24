@@ -55,8 +55,10 @@ from stratification_scripts.makeup.fr_response_extractor import (
     ResponseExtract,
 )
 from stratification_scripts.federal_register.client import FederalRegisterClient
+from stratification_scripts.reginfo.client import RegInfoClient
+from stratification_scripts.resolution.resolver import DocumentResolver
 from stratification_scripts.makeup.resolution_routing import (
-    ENVELOPE_VERSION, partition_by_resolution, ref_from_row, typed_fields,
+    ENVELOPE_VERSION, partition_by_resolution, typed_fields,
 )
 
 logger = get_logger(__name__)
@@ -916,14 +918,12 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
 
         # --- Resolution-layer routing (spec §6 row 5): resolver finds the venue;
         # grounded judgment reads it; everything else is typed, never web-searched. ---
-        from stratification_scripts.federal_register.client import FederalRegisterClient
-        from stratification_scripts.reginfo.client import RegInfoClient
-        from stratification_scripts.resolution.resolver import DocumentResolver
-
-        fr_client = FederalRegisterClient(max_retries=6, sleep_between=0.4)
-        reginfo_client = RegInfoClient()
-        resolver = DocumentResolver(fr_client=fr_client, reginfo_client=reginfo_client)
+        fr_client = None
+        reginfo_client = None
         try:
+            fr_client = FederalRegisterClient(max_retries=6, sleep_between=0.4)
+            reginfo_client = RegInfoClient()
+            resolver = DocumentResolver(fr_client=fr_client, reginfo_client=reginfo_client)
             grounded, absent_items, unknown_items = partition_by_resolution(
                 comments_to_process, resolver
             )
@@ -968,8 +968,10 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
                     df_raw if has_deduplication else None, "unknown",
                 )
         finally:
-            fr_client.close()
-            reginfo_client.close()
+            if fr_client:
+                fr_client.close()
+            if reginfo_client:
+                reginfo_client.close()
             if regs_client:
                 regs_client.close()
 
