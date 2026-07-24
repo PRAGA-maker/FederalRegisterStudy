@@ -73,15 +73,21 @@ def partition_by_resolution(comments, resolver):
     Returns (grounded, absent, unknown); each item is (comment_row, RoutedOutcome).
     The resolver's cross-row cache makes repeated documents cheap; repeated
     comment_ids (shouldn't happen, but joins have surprised us before — F22)
-    are resolved once and reuse the outcome.
+    are resolved once and reuse the outcome. Rows with an empty/missing
+    comment_id are never memoized together — they'd otherwise collapse onto a
+    shared "" key and each subsequent one would silently inherit the first
+    row's outcome instead of being resolved on its own merits.
     """
     grounded, absent, unknown = [], [], []
     outcomes = {}
     for row in comments:
         cid = str(row.get("comment_id") or "")
-        if cid not in outcomes:
-            outcomes[cid] = route_resolution(resolver.resolve(ref_from_row(row)), resolver.cache)
-        outcome = outcomes[cid]
+        if cid:
+            if cid not in outcomes:
+                outcomes[cid] = route_resolution(resolver.resolve(ref_from_row(row)), resolver.cache)
+            outcome = outcomes[cid]
+        else:
+            outcome = route_resolution(resolver.resolve(ref_from_row(row)), resolver.cache)
         {"grounded": grounded, "absent": absent, "unknown": unknown}[outcome.kind].append((row, outcome))
     return grounded, absent, unknown
 

@@ -189,3 +189,10 @@ def test_partition_resolves_each_comment_id_once():
     resolver = FakeResolver({"A": res}, FakeCache({}))
     partition_by_resolution([_row(comment_id="A"), _row(comment_id="A")], resolver)
     assert resolver.calls == ["A"]        # second row reuses the first resolution
+
+
+def test_partition_does_not_collapse_empty_comment_ids():
+    res = _result(Status.UNKNOWN)
+    resolver = FakeResolver({"": res}, FakeCache({}))
+    partition_by_resolution([_row(comment_id=""), _row(comment_id="")], resolver)
+    assert len(resolver.calls) == 2       # each empty-id row resolved individually, no inheritance
