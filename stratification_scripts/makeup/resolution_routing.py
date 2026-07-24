@@ -5,9 +5,11 @@ Pure functions only — no I/O, no clients. track_responses injects the resolver
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Optional
 
-from stratification_scripts.resolution import CommentRef
+from stratification_scripts.resolution import CommentRef, ResolutionResult, Status
+from stratification_scripts.resolution.resolver import qualifying_candidates
 
 # The declared search envelope this routing implements. Bump ONLY when a new
 # discovery channel ships (spec §6 row 5: envelope-relative absence).
@@ -37,3 +39,42 @@ def ref_from_row(row: dict) -> CommentRef:
         docket_id=_clean(row.get("docket_id")),
         packet_final_document=_clean(row.get("final_rule_document_number")),
     )
+
+
+@dataclass
+class RoutedOutcome:
+    """Where one comment goes after resolution: grounded LLM read, typed absence, or unknown."""
+    kind: str                      # "grounded" | "absent" | "unknown"
+    result: ResolutionResult
+    candidate: object = None       # CandidateDocument for grounded, else None
+    extract: object = None         # ResponseExtract for grounded, else None
+
+
+def route_resolution(result: ResolutionResult, cache) -> RoutedOutcome:
+    """Map a ResolutionResult to its processing route.
+
+    FOUND -> grounded on the first qualifying candidate whose extract is readable.
+    A FOUND whose extract cannot be read degrades to UNKNOWN — never to absence.
+    """
+    if result.status is Status.FOUND:
+        for candidate in qualifying_candidates(result):
+            extract = cache.extract(candidate.document_number)
+            if extract is not None and extract.grounded_text:
+                return RoutedOutcome("grounded", result, candidate, extract)
+        return RoutedOutcome("unknown", result)
+    if result.status is Status.CONFIDENTLY_ABSENT:
+        return RoutedOutcome("absent", result)
+    return RoutedOutcome("unknown", result)
+
+
+def typed_fields(outcome: RoutedOutcome) -> dict:
+    """The typed CSV columns, schema-identical across all three routes."""
+    r = outcome.result
+    return {
+        "resolution_status": r.status.value,
+        "absence_reason": r.absence_reason.value if r.absence_reason else "",
+        "envelope_version": ENVELOPE_VERSION,
+        "resolved_document_number": outcome.candidate.document_number if outcome.candidate else "",
+        "discovered_by": outcome.candidate.discovered_by.value if outcome.candidate else "",
+        "resolution_channels": ";".join(f"{k.value}:{v}" for k, v in r.channels_run.items()),
+    }

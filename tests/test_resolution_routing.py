@@ -1,5 +1,21 @@
 # tests/test_resolution_routing.py
-from stratification_scripts.makeup.resolution_routing import ENVELOPE_VERSION, ref_from_row
+from stratification_scripts.makeup.resolution_routing import (
+    ENVELOPE_VERSION,
+    RoutedOutcome,  # noqa: F401 -- imported to assert the type is exported
+    ref_from_row,
+    route_resolution,
+    typed_fields,
+)
+from stratification_scripts.resolution import (
+    AbsenceReason,
+    CandidateDocument,
+    Channel,
+    Relevance,
+    ResolutionResult,
+    ResponseEvidence,
+    RuleClass,
+    Status,
+)
 
 
 def _row(**kw):
@@ -48,3 +64,92 @@ def test_none_and_null_strings_are_cleaned():
     assert ref.packet_final_document is None
     assert ref.docket_id is None
     assert ref.rins == ()
+
+
+def _cand(**kw):
+    base = dict(
+        document_number="2024-29990", publication_date="2024-12-18", type="Rule",
+        action="Final rule.", title="t", agency_names=("Transportation Department",),
+        rule_class=RuleClass.FINAL, rins=("2105-AF05",), docket_id=None,
+        discovered_by=Channel.RIN_SEARCH, postdates_comment=True,
+        relevance=Relevance.MATCH, response_evidence=ResponseEvidence.STRONG,
+    )
+    base.update(kw)
+    return CandidateDocument(**base)
+
+
+def _result(status, reason=None, candidates=(), channels=None):
+    return ResolutionResult(
+        comment_id="X-1", comment_date="2024-09-23", source_document="d",
+        status=status, absence_reason=reason, candidates=list(candidates),
+        agenda=None, channels_run=channels or {c: "ok" for c in Channel},
+        resolved_at="2026-07-24T00:00:00",
+    )
+
+
+class FakeCache:
+    def __init__(self, extracts):
+        self._e = extracts
+
+    def extract(self, document_number):
+        return self._e.get(document_number)
+
+
+class FakeExtract:
+    grounded_text = "Comment: x Response: we agree"
+    matched_header = "Comments and Responses"
+    found_response_hd = True
+
+
+def test_found_routes_to_grounded_with_first_qualifying_candidate():
+    res = _result(Status.FOUND, candidates=[_cand()])
+    out = route_resolution(res, FakeCache({"2024-29990": FakeExtract()}))
+    assert out.kind == "grounded"
+    assert out.candidate.document_number == "2024-29990"
+    assert out.extract.grounded_text
+
+
+def test_found_with_unreadable_extract_degrades_to_unknown_not_absent():
+    res = _result(Status.FOUND, candidates=[_cand()])
+    out = route_resolution(res, FakeCache({}))          # cache miss
+    assert out.kind == "unknown"
+
+
+def test_confidently_absent_routes_to_absent():
+    res = _result(Status.CONFIDENTLY_ABSENT, reason=AbsenceReason.NO_VENUE_POSSIBLE,
+                  candidates=[_cand(rule_class=RuleClass.DIRECT_FINAL, postdates_comment=False,
+                                    response_evidence=ResponseEvidence.NONE)])
+    out = route_resolution(res, FakeCache({}))
+    assert out.kind == "absent"
+
+
+def test_unknown_routes_to_unknown():
+    res = _result(Status.UNKNOWN)
+    assert route_resolution(res, FakeCache({})).kind == "unknown"
+
+
+def test_typed_fields_grounded():
+    res = _result(Status.FOUND, candidates=[_cand()])
+    fields = typed_fields(route_resolution(res, FakeCache({"2024-29990": FakeExtract()})))
+    assert fields["resolution_status"] == "FOUND"
+    assert fields["absence_reason"] == ""
+    assert fields["envelope_version"] == "v1"
+    assert fields["resolved_document_number"] == "2024-29990"
+    assert fields["discovered_by"] == "RIN_SEARCH"
+    assert "PACKET_LINK:ok" in fields["resolution_channels"]
+
+
+def test_typed_fields_absent_carries_reason():
+    res = _result(Status.CONFIDENTLY_ABSENT, reason=AbsenceReason.RESPONSE_NOT_YET_PUBLISHED)
+    fields = typed_fields(route_resolution(res, FakeCache({})))
+    assert fields["resolution_status"] == "CONFIDENTLY_ABSENT"
+    assert fields["absence_reason"] == "RESPONSE_NOT_YET_PUBLISHED"
+    assert fields["resolved_document_number"] == ""
+
+
+def test_unknown_never_renders_as_no():
+    # The invariant, tested at the field level: unknown kind carries UNKNOWN status,
+    # and (Task 4) only CONFIDENTLY_ABSENT rows may write response_found="no".
+    res = _result(Status.UNKNOWN)
+    fields = typed_fields(route_resolution(res, FakeCache({})))
+    assert fields["resolution_status"] == "UNKNOWN"
