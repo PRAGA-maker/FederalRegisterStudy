@@ -2,6 +2,7 @@
 from stratification_scripts.makeup.resolution_routing import (
     ENVELOPE_VERSION,
     RoutedOutcome,  # noqa: F401 -- imported to assert the type is exported
+    partition_by_resolution,
     ref_from_row,
     route_resolution,
     typed_fields,
@@ -153,3 +154,38 @@ def test_unknown_never_renders_as_no():
     res = _result(Status.UNKNOWN)
     fields = typed_fields(route_resolution(res, FakeCache({})))
     assert fields["resolution_status"] == "UNKNOWN"
+
+
+class FakeResolver:
+    """Resolves by comment_id via a fixed table; counts calls for the dedup test."""
+    def __init__(self, table, cache):
+        self.table, self.cache, self.calls = table, cache, []
+
+    def resolve(self, ref):
+        self.calls.append(ref.comment_id)
+        return self.table[ref.comment_id]
+
+
+def test_partition_routes_each_comment_and_shares_the_cache():
+    found = _result(Status.FOUND, candidates=[_cand()])
+    absent = _result(Status.CONFIDENTLY_ABSENT, reason=AbsenceReason.NO_FINAL_RULE_PLANNED)
+    unknown = _result(Status.UNKNOWN)
+    resolver = FakeResolver(
+        {"A": found, "B": absent, "C": unknown},
+        FakeCache({"2024-29990": FakeExtract()}),
+    )
+    comments = [
+        _row(comment_id="A"), _row(comment_id="B"), _row(comment_id="C"),
+    ]
+    grounded, absent_rows, unknown_rows = partition_by_resolution(comments, resolver)
+    assert [c["comment_id"] for c, _ in grounded] == ["A"]
+    assert [c["comment_id"] for c, _ in absent_rows] == ["B"]
+    assert [c["comment_id"] for c, _ in unknown_rows] == ["C"]
+    assert grounded[0][1].extract.grounded_text
+
+
+def test_partition_resolves_each_comment_id_once():
+    res = _result(Status.UNKNOWN)
+    resolver = FakeResolver({"A": res}, FakeCache({}))
+    partition_by_resolution([_row(comment_id="A"), _row(comment_id="A")], resolver)
+    assert resolver.calls == ["A"]        # second row reuses the first resolution

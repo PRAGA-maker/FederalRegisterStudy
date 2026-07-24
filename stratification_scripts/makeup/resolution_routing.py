@@ -67,6 +67,25 @@ def route_resolution(result: ResolutionResult, cache) -> RoutedOutcome:
     return RoutedOutcome("unknown", result)
 
 
+def partition_by_resolution(comments, resolver):
+    """Resolve every comment once and split by route.
+
+    Returns (grounded, absent, unknown); each item is (comment_row, RoutedOutcome).
+    The resolver's cross-row cache makes repeated documents cheap; repeated
+    comment_ids (shouldn't happen, but joins have surprised us before — F22)
+    are resolved once and reuse the outcome.
+    """
+    grounded, absent, unknown = [], [], []
+    outcomes = {}
+    for row in comments:
+        cid = str(row.get("comment_id") or "")
+        if cid not in outcomes:
+            outcomes[cid] = route_resolution(resolver.resolve(ref_from_row(row)), resolver.cache)
+        outcome = outcomes[cid]
+        {"grounded": grounded, "absent": absent, "unknown": unknown}[outcome.kind].append((row, outcome))
+    return grounded, absent, unknown
+
+
 def typed_fields(outcome: RoutedOutcome) -> dict:
     """The typed CSV columns, schema-identical across all three routes."""
     r = outcome.result
