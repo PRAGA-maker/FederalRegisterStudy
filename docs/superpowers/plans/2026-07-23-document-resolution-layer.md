@@ -21,7 +21,7 @@
 - **The declared envelope is the five channels.** Every result records `channels_run` per row so the claim is reproducible and falsifiable.
 - **Frozen snapshot `2026-07-15-ce44ac5` is read-only.** This module writes only under `resolution/`.
 - **`*.csv` is Git-LFS-filtered in this repo** (`.gitattributes`). Test fixtures are `.json` / `.xml.gz` — never commit a `.csv` fixture.
-- Commit messages end with the `Co-Authored-By: Claude Opus 4.8 (1M context)` trailer.
+- Commit messages are plain — no Co-Authored-By trailers (repo convention).
 
 ## Verified facts this plan is built on (checked live, 2026-07-23)
 
@@ -788,7 +788,7 @@ def rule_class_from_action(action: Optional[str], doc_type: Optional[str] = None
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_resolution_classify.py -v`
-Expected: 23 passed.
+Expected: 21 passed (19 parametrized cases + 2 functions).
 
 - [ ] **Step 5: Commit**
 
@@ -2193,6 +2193,8 @@ def qualifying_candidates(result: ResolutionResult) -> List[CandidateDocument]
 
 **Chosen-candidate policy for consumers:** `qualifying_candidates()` returns **all** qualifying candidates, earliest-publication-first. Do not pre-select one — a final rule plus its correction, or two finals under different RINs, are all plausibly the venue, and judgment is already reading text. If a caller needs exactly one, the documented default is the first element.
 
+**Comment-date guard (plan-review finding):** an empty or unparseable `comment_date` makes `postdates_comment` False for every candidate, which silently converts a FOUND row into a false `CONFIDENTLY_ABSENT` (the true final rule stops qualifying while an undated NPRM still corroborates `RESPONSE_NOT_YET_PUBLISHED`). That is the exact silent-failure class this layer exists to kill, so `resolve()` short-circuits: no channels run, every channel recorded as `"skipped:no comment date"`, status `UNKNOWN`.
+
 - [ ] **Step 1: Write the failing test**
 
 ```python
@@ -2329,6 +2331,19 @@ def test_agenda_failure_is_recorded_and_forces_unknown_on_absence():
     assert result.status is Status.UNKNOWN
     assert result.agenda is not None and result.agenda.ok is False
     assert result.channels_run[Channel.AGENDA].startswith("failed:")
+
+
+def test_empty_comment_date_short_circuits_to_unknown():
+    # An undated ref cannot support any chronology claim; without this guard it
+    # would degrade into a false CONFIDENTLY_ABSENT via the pending-NPRM path.
+    undated = CommentRef(comment_id="X-1", comment_date="", source_document="d",
+                         agency="Transportation Department", rins=("2105-AF05",),
+                         docket_id=None, packet_final_document=None)
+    result = DocumentResolver(fr_client=FakeFR(), reginfo_client=FakeRegInfo()).resolve(undated)
+    assert result.status is Status.UNKNOWN
+    assert result.absence_reason is None
+    assert result.candidates == []
+    assert all(s == "skipped:no comment date" for s in result.channels_run.values())
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -2348,7 +2363,7 @@ API responses offline.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Dict, List, Optional
 
 from ..reginfo.client import has_undetermined_final_rule
@@ -2382,6 +2397,15 @@ _CHANNEL_PRECEDENCE = {
     Channel.AGENDA: 3,
     Channel.FULLTEXT_SEARCH: 4,
 }
+
+
+def _valid_comment_date(value: str) -> bool:
+    """An undated comment cannot support chronology, so it cannot be resolved."""
+    try:
+        date.fromisoformat((value or "")[:10])
+        return True
+    except ValueError:
+        return False
 
 
 def merge_candidates(groups: List[List[CandidateDocument]]) -> List[CandidateDocument]:
@@ -2473,6 +2497,21 @@ class DocumentResolver:
                 candidate.response_section_ref = extract.matched_header
 
     def resolve(self, ref: CommentRef) -> ResolutionResult:
+        if not _valid_comment_date(ref.comment_date):
+            # Every chronology check would be False, and a false chronology can
+            # manufacture a confident absence. Refuse loudly instead.
+            return ResolutionResult(
+                comment_id=ref.comment_id,
+                comment_date=ref.comment_date,
+                source_document=ref.source_document,
+                status=Status.UNKNOWN,
+                absence_reason=None,
+                candidates=[],
+                agenda=None,
+                channels_run={c: "skipped:no comment date" for c in Channel},
+                resolved_at=datetime.now().isoformat(),
+            )
+
         channels_run: Dict[Channel, str] = {}
 
         packet = run_packet_link(ref, self._cache)
@@ -2523,7 +2562,7 @@ class DocumentResolver:
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `pytest tests/test_resolution_resolver.py -v`
-Expected: 6 passed.
+Expected: 7 passed.
 
 - [ ] **Step 5: Commit**
 
@@ -2632,12 +2671,9 @@ Expected: FAIL — `ImportError: cannot import name 'fulltext_identifiers'`, and
 
 - [ ] **Step 3: Implement**
 
-Append to `stratification_scripts/resolution/channels.py`:
+Add `normalize_docket_id` to the import block at the **top** of `stratification_scripts/resolution/channels.py` (`from ..federal_register.client import normalize_docket_id`), then append:
 
 ```python
-from ..federal_register.client import normalize_docket_id
-
-
 def fulltext_identifiers(ref: CommentRef) -> List[str]:
     """Identifier queries for channel 5 — never subject terms.
 
@@ -2682,7 +2718,7 @@ In `stratification_scripts/resolution/resolver.py`, import `run_fulltext_search`
 - [ ] **Step 4: Run tests to verify they pass**
 
 Run: `pytest tests/test_resolution_channels.py tests/test_resolution_resolver.py -v`
-Expected: 13 + 7 passed.
+Expected: 13 + 8 passed.
 
 - [ ] **Step 5: Commit**
 
@@ -2846,7 +2882,15 @@ if __name__ == "__main__":
 
 - [ ] **Step 2: Record the fixtures and write the fixture README**
 
-Run: `python tests/fixtures/resolution/_record.py`
+**First, verify the CMS full-text term live** — the verified-facts table proves `"1808-IFC"` finds `2025-14681`, but the term the code actually sends is `"CMS-1808-IFC"`, which was never measured:
+
+```bash
+curl -s 'https://www.federalregister.gov/api/v1/documents.json?conditions%5Bterm%5D=%22CMS-1808-IFC%22&fields%5B%5D=document_number&per_page=20' | python3 -m json.tool
+```
+
+If `2025-14681` is **not** in the results, extend `fulltext_identifiers` before recording: also emit the docket id's agency-stripped tail (strip through the first hyphen when the remainder still contains a hyphen and a digit, e.g. `CMS-1808-IFC` → `1808-IFC`), add a unit test for it, and record the measured counts in the decision ledger. Do not record fixtures until the CMS term provably recovers the cross-RIN rule.
+
+Then run: `python tests/fixtures/resolution/_record.py`
 Expected: six `recorded <comment_id>: N documents` lines, no traceback.
 
 Then create `tests/fixtures/resolution/README.md`:
@@ -3086,6 +3130,7 @@ Expected: 8 passed.
 If a row fails, fix the **layer**, not the expectation — each expectation is a hand-traced ground truth. The two most likely genuine surprises, and what to do:
 - The BLM agenda shows a completed final action, so `NO_VENUE_POSSIBLE` depends only on the structural candidate and `withdrawn == False`. If the recorded agenda has `withdrawn: true`, verify on reginfo.gov before touching the corroboration rule.
 - The EPA row needs `has_undetermined_final_rule` to be true in the recorded agenda. If it is false, the Task 1 fix did not take — re-run `pytest tests/test_reginfo_timetable.py` before changing anything here.
+- **Exception to "fix the layer": agenda drift.** Agendas are time-varying (the spec's defect 2). If a *recorded agenda* contradicts a hand-traced expectation — e.g. the FBI RIN has moved to TBD/Long-Term since the trace, which precedence L7 would correctly land on `NO_FINAL_RULE_PLANNED` — verify on reginfo.gov, re-trace the row, update `expected.json`, and document the re-trace in the fixture README. Expectations are ground truth *as of their trace date*, not eternal.
 
 - [ ] **Step 5: Run the full suite**
 
@@ -3115,6 +3160,8 @@ git commit -m "test(resolution): six-topology offline acceptance suite + recorde
 - Outputs: `resolution/<run-id>/resolutions.jsonl`, `resolution/<run-id>/summary.csv`, `resolution/<run-id>/manifest.json`
 
 **Why a `--seed-id` path:** the resolver is dual-use. Resolving exactly the goldset seed's rows is what turns it into an annotation-cost reduction — the packet can then show candidates, rule class, and evidence instead of making the labeler do RIN enumeration by hand.
+
+**Seed rows can be undated (verified):** `labeling_packet.csv` has no date column, so `comment_date` comes only from the snapshot backfill — and a packet row absent from `comments_raw_2024` (DOT is one) stays undated. The resolver's comment-date guard turns those into loud `UNKNOWN`s instead of silent false absences; the CLI additionally warns with the affected comment ids. Packet v2 should carry `posted_date` so this path closes (noted under "Not in this plan").
 
 - [ ] **Step 1: Write the failing test**
 
@@ -3342,6 +3389,12 @@ def cmd_resolve(args) -> int:
             )
         }
         refs = [dated.get(r.comment_id, r) for r in seed_refs]
+        undated = [r.comment_id for r in refs if not r.comment_date]
+        if undated:
+            logger.warning(
+                f"{len(undated)} packet row(s) have no comment_date (absent from "
+                f"the snapshot) and will resolve UNKNOWN: {', '.join(undated)}"
+            )
     else:
         refs = refs_from_snapshot(
             args.snapshot, year=args.year,
@@ -3449,6 +3502,8 @@ Each is a separate spec/plan; none blocks this one.
 - **L8. Merge keeps the most precise channel, then re-derives relevance.** Without re-derivation, a document found by both `FULLTEXT_SEARCH` and `PACKET_LINK` would keep the packet-link classification and could be falsely rescued (or falsely rejected). Reopen if per-channel provenance for *every* discovering channel becomes necessary — the model currently records one.
 - **L9. `None` vs `[]` from the search methods is the channel-state signal.** `[]` is a clean run (`"ok"`), `None` is a failure (`"failed:…"`). Zero-result docket queries are common and legitimate (NOAA files under a docket string the FR API does not index) and must never block an absence claim on their own. Reopen never — collapsing these is the silent-failure mode in miniature.
 - **L10. Oversized fixture XML is trimmed to its `<SUPLINF>` container.** CMS `2025-14681` is 5.5 MB raw / 1.1 MB gzipped; `extract_response_section` only reads the `<SUPLINF>` container, so a trimmed fixture exercises the same code path. Documented in `tests/fixtures/resolution/README.md` with the 600 KB threshold. Rejected committing the full XML (repo bloat) and skipping the CMS fixture (it is the cross-RIN topology). Reopen if a test needs structure outside `SUPLINF`.
+- **L11. `resolve()` refuses undated refs (plan-review finding, 2026-07-23).** An empty `comment_date` makes every chronology check False, which converts a hand-confirmed FOUND row (DOT via `--seed-id`, whose packet has no date column) into a false `CONFIDENTLY_ABSENT` through the pending-NPRM corroboration. Guard: short-circuit to `UNKNOWN` with all channels `"skipped:no comment date"`; the CLI warns per row. Rejected silently resolving with dateless chronology (the silent-failure class this layer exists to kill). Reopen when packet v2 ships `posted_date`.
+- **L12. The CMS full-text term must be verified as `"CMS-1808-IFC"` before fixtures are recorded (plan-review finding, 2026-07-23).** The measured fact covers `"1808-IFC"` only; the code sends the full docket id. Task 12 Step 2 now gates recording on a live check, with an agency-stripped-tail fallback specified if the full id misses.
 
 ## Self-Review
 

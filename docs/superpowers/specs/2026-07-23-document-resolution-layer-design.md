@@ -175,3 +175,14 @@ Live-network tests are `skipif`-gated, never required for CI.
 - Whether `lifecycle_stage` should be **retired** from the pipeline outputs or kept as an advisory field with a "time-varying, not a fact" caveat. Its reproducibility hazard (same comments → different values on re-run) may deserve its own `AUDIT_FINDINGS` entry.
 - Whether packet v2 ships resolver candidates in the same change as `attachment_text` (already banked). Packet v2 is where the **goldset-harness walkthrough debt gates**, since it stacks on unwalked packet design decisions.
 - Marginal-yield thresholds for the stopping rule — measurable only once gold-set labels exist.
+
+## Amendments (2026-07-23, post plan-review — approved by Jonathan)
+
+Supersede the Status-semantics block above where they conflict; the plan's Task 6 is the operative derivation.
+
+1. **Evidence never gates qualification.** Qualification is `rule_class == FINAL ∧ postdates_comment ∧ relevance == MATCH`. `has_response_section` is replaced by graded `response_evidence` (`NONE`/`WEAK`/`STRONG`) derived from the extract's text, not the header-regex flag (which is False on real responses — DOT `2024-29990`).
+2. **`FOUND` = ≥1 qualifying candidate with `response_evidence != NONE`** — including `WEAK`. FOUND asserts a readable venue was resolved, not that a response exists; judgment reads the text. A qualifying candidate whose text is unreadable (`NONE`) yields `UNKNOWN`, never absence.
+3. **Corroboration is per-`absence_reason`, not one global agenda clause** (the global TBD clause could never let the BLM fixture reach `NO_VENUE_POSSIBLE`): structural reasons corroborate from the candidate (`DIRECT_FINAL`/`CONFIRMATION_OF_EFFECTIVE_DATE`, un-withdrawn, own evidence non-`STRONG`); `NO_FINAL_RULE_PLANNED` from the agenda (TBD/Long-Term); `RESPONSE_NOT_YET_PUBLISHED` from a matching `PROPOSED`/`INTERIM_FINAL` candidate.
+4. **A non-FINAL candidate that postdates the comment with `STRONG` evidence blocks any absence claim** (IFC preambles can answer earlier-stage comments) → `UNKNOWN`.
+5. **`FOUND` needs only its own evidence; only absence claims require all five channels clean.** Precedence: FOUND → qualifying-but-unreadable UNKNOWN → blocked-absence UNKNOWN → envelope/agenda UNKNOWN → corroborated CONFIDENTLY_ABSENT.
+6. **An undated comment is unresolvable:** empty/unparseable `comment_date` → `UNKNOWN` with all channels skipped (chronology is load-bearing for both FOUND and absence).
