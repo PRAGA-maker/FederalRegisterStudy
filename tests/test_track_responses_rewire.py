@@ -72,3 +72,12 @@ def test_source_vocabulary_has_no_web_search(tmp_path):
     import stratification_scripts.makeup.track_responses as tr
     source = inspect.getsource(tr)
     assert '"web_search"' not in source
+
+
+def test_non_xai_provider_fails_fast():
+    import pytest
+    from stratification_scripts.config import PipelineConfig
+    from stratification_scripts.makeup.track_responses import track_responses_for_year
+
+    with pytest.raises(ValueError, match="requires provider 'xai'"):
+        track_responses_for_year(PipelineConfig(year=2024, response_provider="gemini"))

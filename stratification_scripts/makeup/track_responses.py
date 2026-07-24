@@ -595,6 +595,13 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
 
     provider = getattr(config, "response_provider", "xai")
 
+    if provider != "xai":
+        raise ValueError(
+            f"Tier 1 response tracking is grounded-only and currently requires provider 'xai' "
+            f"(got {provider!r}): only XAIResponseTracker implements track_grounded_batch. "
+            f"Tier 2 alone cannot run without Tier 1."
+        )
+
     # Always strip error rows so they get reprocessed
     stripped = strip_error_rows(responses_csv)
     if stripped > 0:
@@ -692,7 +699,7 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
             api_key=api_key,
             model=config.xai_model,
             max_retries=5,
-            enable_search=True,
+            enable_search=False,  # Tier 1 is grounded-only; no search tools
         )
         max_concurrency = config.xai_max_concurrency
         logger.info(f"XAIResponseTracker initialized successfully with model={tracker.model}")
@@ -702,7 +709,7 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
             api_key=api_key,
             model="gpt-5-mini",
             max_retries=5,
-            enable_search=True,
+            enable_search=False,  # Tier 1 is grounded-only; no search tools
         )
         max_concurrency = config.max_concurrency
         logger.info(f"OpenAIResponseTracker initialized successfully with model={tracker.model}")
@@ -786,7 +793,7 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
                     "commenter_type": str(c.get("category", "N/A")),
                     "submission_date": str(c.get("posted_date", "N/A")),
                 }
-                grounded_items.append((full_text, outcome.extract.grounded_text, meta))
+                grounded_items.append((full_text, outcome.extract.grounded_text[: getattr(config, "grounded_max_chars", 100_000)], meta))
                 grounded_meta.append((c, outcome.extract))
                 typed_by_id[str(c.get("comment_id"))] = typed_fields(outcome)
 
