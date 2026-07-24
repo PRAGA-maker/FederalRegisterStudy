@@ -1,0 +1,36 @@
+[
+  {
+    "action": "Direct final rule.",
+    "agencies": [
+      {
+        "id": 253,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/253",
+        "name": "Interior Department",
+        "parent_id": null,
+        "raw_name": "DEPARTMENT OF THE INTERIOR",
+        "slug": "interior-department",
+        "url": "https://www.federalregister.gov/agencies/interior-department"
+      },
+      {
+        "id": 275,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/275",
+        "name": "Land Management Bureau",
+        "parent_id": 253,
+        "raw_name": "Bureau of Land Management",
+        "slug": "land-management-bureau",
+        "url": "https://www.federalregister.gov/agencies/land-management-bureau"
+      }
+    ],
+    "citation": "89 FR 92602",
+    "docket_ids": [
+      "BLM_HQ_FRN_MO4500181705"
+    ],
+    "document_number": "2024-27333",
+    "publication_date": "2024-11-22",
+    "regulation_id_numbers": [
+      "1004-AF01"
+    ],
+    "title": "Waste Prevention, Production Subject to Royalties, and Resource Conservation",
+    "type": "Rule"
+  }
+]

@@ -1,0 +1,207 @@
+{
+  "abstract": "NMFS issues this final rule to implement amendment 126 to the Fishery Management Plan (FMP) for Groundfish of the Bering Sea and Aleutian Islands Management Area (BSAI) and amendment 114 to the FMP for Groundfish of the Gulf of Alaska (GOA). Amendments 126/114 implement an electronic monitoring (EM) program for pelagic trawl pollock catcher vessels and tender vessels delivering to shoreside processors and stationary floating processors in the Bering Sea (BS), Aleutian Islands (AI), and GOA. This final rule is intended to promote the goals and objectives of the Magnuson-Stevens Fishery Conservation and Management Act (Magnuson-Stevens Act), amendments 126/114, the BSAI FMP, the GOA FMP, and other applicable laws.",
+  "action": "Final rule.",
+  "agencies": [
+    {
+      "id": 54,
+      "json_url": "https://www.federalregister.gov/api/v1/agencies/54",
+      "name": "Commerce Department",
+      "parent_id": null,
+      "raw_name": "DEPARTMENT OF COMMERCE",
+      "slug": "commerce-department",
+      "url": "https://www.federalregister.gov/agencies/commerce-department"
+    },
+    {
+      "id": 361,
+      "json_url": "https://www.federalregister.gov/api/v1/agencies/361",
+      "name": "National Oceanic and Atmospheric Administration",
+      "parent_id": 54,
+      "raw_name": "National Oceanic and Atmospheric Administration",
+      "slug": "national-oceanic-and-atmospheric-administration",
+      "url": "https://www.federalregister.gov/agencies/national-oceanic-and-atmospheric-administration"
+    }
+  ],
+  "body_html_url": "https://www.federalregister.gov/documents/full_text/html/2024/07/29/2024-15931.html",
+  "cfr_references": [
+    {
+      "chapter": null,
+      "citation_url": null,
+      "part": "902",
+      "title": 15
+    },
+    {
+      "chapter": null,
+      "citation_url": null,
+      "part": "679",
+      "title": 50
+    }
+  ],
+  "citation": "89 FR 60796",
+  "comment_url": null,
+  "comments_close_on": null,
+  "correction_of": null,
+  "corrections": [],
+  "dates": "Effective August 28, 2024.",
+  "disposition_notes": null,
+  "docket_id": "Docket No. 240715-0195",
+  "docket_ids": [
+    "Docket No. 240715-0195"
+  ],
+  "dockets": [
+    {
+      "agency_name": "NOAA",
+      "documents": [
+        {
+          "allow_late_comments": null,
+          "comment_count": null,
+          "comment_end_date": null,
+          "comment_start_date": null,
+          "comment_url": "https://www.regulations.gov/commenton/NOAA-NMFS-2023-0125-0024",
+          "id": "NOAA-NMFS-2023-0125-0024",
+          "regulations_dot_gov_open_for_comment": false,
+          "updated_at": "2024-07-29T12:56:16.923-04:00"
+        }
+      ],
+      "id": "NOAA-NMFS-2023-0125",
+      "supporting_documents": [
+        {
+          "document_id": "NOAA-NMFS-2023-0125-0028",
+          "title": "GOA 114 FMP Trawl EM_508"
+        },
+        {
+          "document_id": "NOAA-NMFS-2023-0125-0027",
+          "title": "BSAI 126 FMP Trawl EM_508"
+        },
+        {
+          "document_id": "NOAA-NMFS-2023-0125-0026",
+          "title": "0648-BM40_Trawl EM_Analysis_FINAL"
+        },
+        {
+          "document_id": "NOAA-NMFS-2023-0125-0025",
+          "title": "0648-BM40_FMP_Decision_FONSI_signed"
+        },
+        {
+          "document_id": "NOAA-NMFS-2023-0125-0005",
+          "title": "NOAA-NMFS-2023-0125 0648-BM40_Trawl EM_Analysis"
+        },
+        {
+          "document_id": "NOAA-NMFS-2023-0125-0004",
+          "title": "NOAA-NMFS-2023-0125 0648-BM40_PR_FONSI"
+        },
+        {
+          "document_id": "NOAA-NMFS-2023-0125-0003",
+          "title": "NOAA-NMFS-2023-0125 GOA 114 FMP Trawl EM Draft"
+        },
+        {
+          "document_id": "NOAA-NMFS-2023-0125-0002",
+          "title": "NOAA-NMFS-2023-0125 BSAI 126 FMP Trawl EM Draft"
+        }
+      ],
+      "supporting_documents_count": 8,
+      "title": "Amendment 126 to the Fishery Management Plans for Groundfish of the Bering Sea / Aleutian Islands Management Area and Amendment 114 to the Fishery Management Plan for Groundfish of the Gulf of Alaska to Integrate Electronic Monitoring on Pollock Catcher Vessels"
+    }
+  ],
+  "document_number": "2024-15931",
+  "effective_on": "2024-08-28",
+  "end_page": 60817,
+  "executive_order_notes": null,
+  "executive_order_number": null,
+  "full_text_xml_url": "https://www.federalregister.gov/documents/full_text/xml/2024/07/29/2024-15931.xml",
+  "html_url": "https://www.federalregister.gov/documents/2024/07/29/2024-15931/fisheries-of-the-exclusive-economic-zone-off-alaska-amendment-126-to-the-fishery-management-plans",
+  "images": {},
+  "images_metadata": {},
+  "json_url": "https://www.federalregister.gov/api/v1/documents/2024-15931?publication_date=2024-07-29",
+  "mods_url": "https://www.govinfo.gov/metadata/granule/FR-2024-07-29/2024-15931/mods.xml",
+  "not_received_for_publication": null,
+  "page_length": 22,
+  "page_views": {
+    "count": 603,
+    "last_updated": "2026-07-24 00:15:03 -0400"
+  },
+  "pdf_url": "https://www.govinfo.gov/content/pkg/FR-2024-07-29/pdf/2024-15931.pdf",
+  "presidential_document_number": null,
+  "proclamation_number": null,
+  "public_inspection_pdf_url": "https://public-inspection.federalregister.gov/2024-15931.pdf?1721997912",
+  "publication_date": "2024-07-29",
+  "raw_text_url": "https://www.federalregister.gov/documents/full_text/text/2024/07/29/2024-15931.txt",
+  "regulation_id_number_info": {
+    "0648-BM40": {
+      "html_url": "https://www.federalregister.gov/regulations/0648-BM40/amendment-126-to-the-fishery-management-plans-for-groundfish-of-the-bering-sea-aleutian-islands-mana",
+      "issue": "202404",
+      "priority_category": "Substantive, Nonsignificant",
+      "title": "Amendment 126 to the Fishery Management Plans for Groundfish of the Bering Sea / Aleutian Islands Management Area and Amendment 114 to the Fishery Management Plan for Groundfish of the Gulf of Alaska ",
+      "xml_url": "http://www.reginfo.gov/public/do/eAgendaViewRule?pubId=202404&RIN=0648-BM40&operation=OPERATION_EXPORT_XML"
+    }
+  },
+  "regulation_id_numbers": [
+    "0648-BM40"
+  ],
+  "regulations_dot_gov_info": {
+    "agency_id": "NOAA",
+    "checked_regulationsdotgov_at": "2024-07-30T15:55:09Z",
+    "comments_count": 0,
+    "comments_url": "https://www.regulations.gov/docketBrowser?rpp=50&so=DESC&sb=postedDate&po=0&dct=PS&D=NOAA-NMFS-2023-0125",
+    "docket_id": "NOAA-NMFS-2023-0125",
+    "document_id": "NOAA-NMFS-2023-0125-0024",
+    "regulation_id_number": "0648-BM40",
+    "regulatory_plan": {
+      "html_url": "https://www.federalregister.gov/regulations/0648-BM40/amendment-126-to-the-fishery-management-plans-for-groundfish-of-the-bering-sea-aleutian-islands-mana",
+      "title": "Amendment 126 to the Fishery Management Plans for Groundfish of the Bering Sea / Aleutian Islands Management Area and Amendment 114 to the Fishery Management Plan for Groundfish of the Gulf of Alaska "
+    },
+    "supporting_documents": [
+      {
+        "document_id": "NOAA-NMFS-2023-0125-0028",
+        "title": "GOA 114 FMP Trawl EM_508"
+      },
+      {
+        "document_id": "NOAA-NMFS-2023-0125-0027",
+        "title": "BSAI 126 FMP Trawl EM_508"
+      },
+      {
+        "document_id": "NOAA-NMFS-2023-0125-0026",
+        "title": "0648-BM40_Trawl EM_Analysis_FINAL"
+      },
+      {
+        "document_id": "NOAA-NMFS-2023-0125-0025",
+        "title": "0648-BM40_FMP_Decision_FONSI_signed"
+      },
+      {
+        "document_id": "NOAA-NMFS-2023-0125-0005",
+        "title": "NOAA-NMFS-2023-0125 0648-BM40_Trawl EM_Analysis"
+      },
+      {
+        "document_id": "NOAA-NMFS-2023-0125-0004",
+        "title": "NOAA-NMFS-2023-0125 0648-BM40_PR_FONSI"
+      },
+      {
+        "document_id": "NOAA-NMFS-2023-0125-0003",
+        "title": "NOAA-NMFS-2023-0125 GOA 114 FMP Trawl EM Draft"
+      },
+      {
+        "document_id": "NOAA-NMFS-2023-0125-0002",
+        "title": "NOAA-NMFS-2023-0125 BSAI 126 FMP Trawl EM Draft"
+      }
+    ],
+    "supporting_documents_count": 8,
+    "title": "Amendment 126 to the Fishery Management Plans for Groundfish of the Bering Sea / Aleutian Islands Management Area and Amendment 114 to the Fishery Management Plan for Groundfish of the Gulf of Alaska to Integrate Electronic Monitoring on Pollock Catcher Vessels"
+  },
+  "regulations_dot_gov_url": null,
+  "rin": "0648-BM40",
+  "rin_all": [
+    "0648-BM40"
+  ],
+  "significant": false,
+  "signing_date": null,
+  "start_page": 60796,
+  "subtype": null,
+  "title": "Fisheries of the Exclusive Economic Zone Off Alaska; Amendment 126 to the Fishery Management Plans for Groundfish of the Bering Sea and Aleutian Islands Management Area and Amendment 114 to the Fishery Management Plan for Groundfish of the Gulf of Alaska To Expand Electronic Monitoring to the Pollock Fisheries",
+  "toc_doc": "Amendment 126 to the Fishery Management Plans for Groundfish of the Bering Sea and Aleutian Islands Management Area and Amendment 114 to the Fishery Management Plan for Groundfish of the Gulf of Alaska to Expand Electronic Monitoring to the Pollock Fisheries",
+  "toc_subject": "Fisheries of the Exclusive Economic Zone off Alaska:\n",
+  "topics": [
+    "Alaska",
+    "Fisheries",
+    "Reporting and recordkeeping requirements"
+  ],
+  "type": "Rule",
+  "volume": 89
+}

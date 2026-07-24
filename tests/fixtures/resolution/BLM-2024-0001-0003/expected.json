@@ -1,0 +1,9 @@
+{
+  "status": "CONFIDENTLY_ABSENT",
+  "absence_reason": "NO_VENUE_POSSIBLE",
+  "qualifying_document_numbers": [],
+  "candidate_assertions": [
+    {"document_number": "2024-27333", "rule_class": "DIRECT_FINAL",
+     "relevance": "MATCH"}
+  ]
+}

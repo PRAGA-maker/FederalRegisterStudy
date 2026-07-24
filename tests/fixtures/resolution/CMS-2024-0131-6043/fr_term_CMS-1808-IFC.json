@@ -1,0 +1,105 @@
+[
+  {
+    "action": "Interim final action with comment period.",
+    "agencies": [
+      {
+        "id": 221,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/221",
+        "name": "Health and Human Services Department",
+        "parent_id": null,
+        "raw_name": "DEPARTMENT OF HEALTH AND HUMAN SERVICES",
+        "slug": "health-and-human-services-department",
+        "url": "https://www.federalregister.gov/agencies/health-and-human-services-department"
+      },
+      {
+        "id": 45,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/45",
+        "name": "Centers for Medicare & Medicaid Services",
+        "parent_id": 221,
+        "raw_name": "Centers for Medicare & Medicaid Services",
+        "slug": "centers-for-medicare-medicaid-services",
+        "url": "https://www.federalregister.gov/agencies/centers-for-medicare-medicaid-services"
+      }
+    ],
+    "citation": "89 FR 80405",
+    "docket_ids": [
+      "CMS-1808-IFC"
+    ],
+    "document_number": "2024-22765",
+    "publication_date": "2024-10-03",
+    "regulation_id_numbers": [
+      "0938-AV34"
+    ],
+    "title": "Medicare Program; Changes to the Fiscal Year 2025 Hospital Inpatient Prospective Payment System (IPPS) Rates Due to Court Decision",
+    "type": "Rule"
+  },
+  {
+    "action": "Final rules.",
+    "agencies": [
+      {
+        "id": 221,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/221",
+        "name": "Health and Human Services Department",
+        "parent_id": null,
+        "raw_name": "DEPARTMENT OF HEALTH AND HUMAN SERVICES",
+        "slug": "health-and-human-services-department",
+        "url": "https://www.federalregister.gov/agencies/health-and-human-services-department"
+      },
+      {
+        "id": 45,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/45",
+        "name": "Centers for Medicare & Medicaid Services",
+        "parent_id": 221,
+        "raw_name": "Centers for Medicare & Medicaid Services",
+        "slug": "centers-for-medicare-medicaid-services",
+        "url": "https://www.federalregister.gov/agencies/centers-for-medicare-medicaid-services"
+      },
+      {
+        "raw_name": "Office of the Secretary"
+      }
+    ],
+    "citation": "90 FR 36536",
+    "docket_ids": [
+      "CMS-1833-F and CMS-1808-F"
+    ],
+    "document_number": "2025-14681",
+    "publication_date": "2025-08-04",
+    "regulation_id_numbers": [],
+    "title": "Medicare Program; Hospital Inpatient Prospective Payment Systems for Acute Care Hospitals (IPPS) and the Long-Term Care Hospital Prospective Payment System and Policy Changes and Fiscal Year (FY) 2026 Rates; Changes to the FY 2025 IPPS Rates Due to Court Decision; Requirements for Quality Programs; and Other Policy Changes; Health Data, Technology, and Interoperability: Electronic Prescribing, Real-Time Prescription Benefit and Electronic Prior Authorization",
+    "type": "Rule"
+  },
+  {
+    "action": "Final rule with comment period.",
+    "agencies": [
+      {
+        "id": 221,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/221",
+        "name": "Health and Human Services Department",
+        "parent_id": null,
+        "raw_name": "DEPARTMENT OF HEALTH AND HUMAN SERVICES",
+        "slug": "health-and-human-services-department",
+        "url": "https://www.federalregister.gov/agencies/health-and-human-services-department"
+      },
+      {
+        "id": 45,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/45",
+        "name": "Centers for Medicare & Medicaid Services",
+        "parent_id": 221,
+        "raw_name": "Centers for Medicare & Medicaid Services",
+        "slug": "centers-for-medicare-medicaid-services",
+        "url": "https://www.federalregister.gov/agencies/centers-for-medicare-medicaid-services"
+      }
+    ],
+    "citation": "89 FR 93912",
+    "docket_ids": [
+      "CMS-1809-FC"
+    ],
+    "document_number": "2024-25521",
+    "publication_date": "2024-11-27",
+    "regulation_id_numbers": [
+      "0938-AV35"
+    ],
+    "title": "Medicare and Medicaid Programs: Hospital Outpatient Prospective Payment and Ambulatory Surgical Center Payment Systems; Quality Reporting Programs, Including the Hospital Inpatient Quality Reporting Program; Health and Safety Standards for Obstetrical Services in Hospitals and Critical Access Hospitals; Prior Authorization; Requests for Information; Medicaid and CHIP Continuous Eligibility; Medicaid Clinic Services Four Walls Exceptions; Individuals Currently or Formerly in Custody of Penal Authorities; Revision to Medicare Special Enrollment Period for Formerly Incarcerated Individuals; and All-Inclusive Rate Add-On Payment for High-Cost Drugs Provided by Indian Health Service and Tribal Facilities",
+    "type": "Rule"
+  }
+]

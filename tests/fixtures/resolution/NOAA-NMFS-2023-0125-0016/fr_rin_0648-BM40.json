@@ -1,0 +1,102 @@
+[
+  {
+    "action": "Final rule.",
+    "agencies": [
+      {
+        "id": 54,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/54",
+        "name": "Commerce Department",
+        "parent_id": null,
+        "raw_name": "DEPARTMENT OF COMMERCE",
+        "slug": "commerce-department",
+        "url": "https://www.federalregister.gov/agencies/commerce-department"
+      },
+      {
+        "id": 361,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/361",
+        "name": "National Oceanic and Atmospheric Administration",
+        "parent_id": 54,
+        "raw_name": "National Oceanic and Atmospheric Administration",
+        "slug": "national-oceanic-and-atmospheric-administration",
+        "url": "https://www.federalregister.gov/agencies/national-oceanic-and-atmospheric-administration"
+      }
+    ],
+    "citation": "89 FR 60796",
+    "docket_ids": [
+      "Docket No. 240715-0195"
+    ],
+    "document_number": "2024-15931",
+    "publication_date": "2024-07-29",
+    "regulation_id_numbers": [
+      "0648-BM40"
+    ],
+    "title": "Fisheries of the Exclusive Economic Zone Off Alaska; Amendment 126 to the Fishery Management Plans for Groundfish of the Bering Sea and Aleutian Islands Management Area and Amendment 114 to the Fishery Management Plan for Groundfish of the Gulf of Alaska To Expand Electronic Monitoring to the Pollock Fisheries",
+    "type": "Rule"
+  },
+  {
+    "action": "Proposed rule; request for comments.",
+    "agencies": [
+      {
+        "id": 54,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/54",
+        "name": "Commerce Department",
+        "parent_id": null,
+        "raw_name": "DEPARTMENT OF COMMERCE",
+        "slug": "commerce-department",
+        "url": "https://www.federalregister.gov/agencies/commerce-department"
+      },
+      {
+        "id": 361,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/361",
+        "name": "National Oceanic and Atmospheric Administration",
+        "parent_id": 54,
+        "raw_name": "National Oceanic and Atmospheric Administration",
+        "slug": "national-oceanic-and-atmospheric-administration",
+        "url": "https://www.federalregister.gov/agencies/national-oceanic-and-atmospheric-administration"
+      }
+    ],
+    "citation": "89 FR 7660",
+    "docket_ids": [
+      "Docket No. 240126-0024"
+    ],
+    "document_number": "2024-01952",
+    "publication_date": "2024-02-05",
+    "regulation_id_numbers": [
+      "0648-BM40"
+    ],
+    "title": "Fisheries of the Exclusive Economic Zone Off Alaska; Amendment 126 to the Fishery Management Plans for Groundfish of the Bering Sea and Aleutian Islands Management Area and Amendment 114 to the Fishery Management Plan for Groundfish of the Gulf of Alaska To Expand Electronic Monitoring To the Pollock Fisheries",
+    "type": "Proposed Rule"
+  },
+  {
+    "action": "Notice of availability of fishery management plan amendment; request for comments.",
+    "agencies": [
+      {
+        "id": 54,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/54",
+        "name": "Commerce Department",
+        "parent_id": null,
+        "raw_name": "DEPARTMENT OF COMMERCE",
+        "slug": "commerce-department",
+        "url": "https://www.federalregister.gov/agencies/commerce-department"
+      },
+      {
+        "id": 361,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/361",
+        "name": "National Oceanic and Atmospheric Administration",
+        "parent_id": 54,
+        "raw_name": "National Oceanic and Atmospheric Administration",
+        "slug": "national-oceanic-and-atmospheric-administration",
+        "url": "https://www.federalregister.gov/agencies/national-oceanic-and-atmospheric-administration"
+      }
+    ],
+    "citation": "89 FR 3902",
+    "docket_ids": [],
+    "document_number": "2024-01120",
+    "publication_date": "2024-01-22",
+    "regulation_id_numbers": [
+      "0648-BM40"
+    ],
+    "title": "Fisheries of the Exclusive Economic Zone Off Alaska; Amendment 126 to the Fishery Management Plans for Groundfish of the Bering Sea/Aleutian Islands Management Area and Amendment 114 to the Fishery Management Plan for Groundfish of the Gulf of Alaska To Expand Electronic Monitoring to the Pollock Fisheries",
+    "type": "Proposed Rule"
+  }
+]

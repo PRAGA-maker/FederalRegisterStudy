@@ -1,0 +1,36 @@
+[
+  {
+    "action": "Interim final action with comment period.",
+    "agencies": [
+      {
+        "id": 221,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/221",
+        "name": "Health and Human Services Department",
+        "parent_id": null,
+        "raw_name": "DEPARTMENT OF HEALTH AND HUMAN SERVICES",
+        "slug": "health-and-human-services-department",
+        "url": "https://www.federalregister.gov/agencies/health-and-human-services-department"
+      },
+      {
+        "id": 45,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/45",
+        "name": "Centers for Medicare & Medicaid Services",
+        "parent_id": 221,
+        "raw_name": "Centers for Medicare & Medicaid Services",
+        "slug": "centers-for-medicare-medicaid-services",
+        "url": "https://www.federalregister.gov/agencies/centers-for-medicare-medicaid-services"
+      }
+    ],
+    "citation": "89 FR 80405",
+    "docket_ids": [
+      "CMS-1808-IFC"
+    ],
+    "document_number": "2024-22765",
+    "publication_date": "2024-10-03",
+    "regulation_id_numbers": [
+      "0938-AV34"
+    ],
+    "title": "Medicare Program; Changes to the Fiscal Year 2025 Hospital Inpatient Prospective Payment System (IPPS) Rates Due to Court Decision",
+    "type": "Rule"
+  }
+]

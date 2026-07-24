@@ -1,0 +1,9 @@
+{
+  "status": "FOUND",
+  "absence_reason": null,
+  "qualifying_document_numbers": ["2024-15931"],
+  "candidate_assertions": [
+    {"document_number": "2024-15931", "rule_class": "FINAL",
+     "relevance": "MATCH", "response_evidence": "STRONG"}
+  ]
+}

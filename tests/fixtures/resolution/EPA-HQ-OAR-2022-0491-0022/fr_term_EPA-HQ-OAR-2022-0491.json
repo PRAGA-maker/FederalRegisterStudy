@@ -1,0 +1,28 @@
+[
+  {
+    "action": "Proposed rule.",
+    "agencies": [
+      {
+        "id": 145,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/145",
+        "name": "Environmental Protection Agency",
+        "parent_id": null,
+        "raw_name": "ENVIRONMENTAL PROTECTION AGENCY",
+        "slug": "environmental-protection-agency",
+        "url": "https://www.federalregister.gov/agencies/environmental-protection-agency"
+      }
+    ],
+    "citation": "89 FR 15101",
+    "docket_ids": [
+      "EPA-HQ-OAR-2022-0491",
+      "FRL-9992-01-OAR"
+    ],
+    "document_number": "2024-04359",
+    "publication_date": "2024-03-01",
+    "regulation_id_numbers": [
+      "2060-AV81"
+    ],
+    "title": "EPA Method 320-Measurement of Vapor Phase Organic and Inorganic Emissions by Extractive Fourier Transform Infrared (FTIR) Spectroscopy",
+    "type": "Proposed Rule"
+  }
+]

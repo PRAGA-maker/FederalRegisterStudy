@@ -1,0 +1,11 @@
+{
+  "status": "FOUND",
+  "absence_reason": null,
+  "qualifying_document_numbers": ["2024-29990"],
+  "candidate_assertions": [
+    {"document_number": "2025-02747", "relevance": "AGENCY_MISMATCH"},
+    {"document_number": "2024-29990", "discovered_by": "RIN_SEARCH",
+     "rule_class": "FINAL", "response_header_matched": false,
+     "response_evidence": "STRONG"}
+  ]
+}

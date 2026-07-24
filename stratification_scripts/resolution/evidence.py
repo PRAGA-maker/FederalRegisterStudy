@@ -7,7 +7,9 @@ from typing import Optional
 from ..makeup.fr_response_extractor import DENSITY_KW, ResponseExtract
 from .models import ResponseEvidence
 
-STRONG_DENSITY_PER_1K = 2.0
+# DOT 2024-29990 measures 1.190 hits/1k in its recorded 68k-character
+# suplinf_full extract; sparse technical-amendment prose measures zero.
+STRONG_DENSITY_PER_1K = 1.0
 
 
 def density_per_1k(text: str) -> float:

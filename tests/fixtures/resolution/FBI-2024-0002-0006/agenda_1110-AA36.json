@@ -1,0 +1,30 @@
+{
+  "abstract": "",
+  "agency": "1110",
+  "cfr_citations": "",
+  "rin": "1110-AA36",
+  "stage": "FINAL",
+  "stage_raw": "Final Rule Stage",
+  "timetable": [
+    {
+      "action": "NPRM",
+      "citation": "89 FR 239",
+      "date": "2024-12-12",
+      "date_raw": ""
+    },
+    {
+      "action": "NPRM COMMENT PERIOD END",
+      "citation": "",
+      "date": "2025-02-10",
+      "date_raw": ""
+    },
+    {
+      "action": "FINAL ACTION",
+      "citation": "",
+      "date": "",
+      "date_raw": "To Be Determined"
+    }
+  ],
+  "title": "View Rule",
+  "withdrawn": false
+}

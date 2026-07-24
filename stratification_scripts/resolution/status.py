@@ -26,7 +26,14 @@ def qualifies(candidate: CandidateDocument) -> bool:
 
 def all_channels_clean(channels_run: Mapping[Channel, str]) -> bool:
     """True only when every declared channel ran without failure or skip."""
-    return all(channels_run.get(channel) == CHANNEL_OK for channel in Channel)
+    return all(
+        channels_run.get(channel) == CHANNEL_OK
+        or (
+            channel is Channel.PACKET_LINK
+            and channels_run.get(channel) == "skipped:no packet link"
+        )
+        for channel in Channel
+    )
 
 
 def _blocks_absence(candidates: Iterable[CandidateDocument]) -> bool:

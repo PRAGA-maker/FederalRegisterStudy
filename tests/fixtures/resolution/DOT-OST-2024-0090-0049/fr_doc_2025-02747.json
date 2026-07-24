@@ -1,0 +1,83 @@
+{
+  "abstract": "This document amends the Table of FM Allotments, of the Federal Communications Commission's (Commission) rules, by reinstating certain channels as a vacant FM allotment in various communities. The FM allotments were previously removed from the FM Table because a construction permit and/or license was granted. These FM allotments are now considered vacant because of the cancellation of the associated FM authorizations or the dismissal of long-form auction FM applications. A staff engineering analysis confirms that all of the vacant FM allotments complies with the minimum distance separation requirements and principle community coverage requirements of the Commission's rules. The window period for filing applications for these vacant FM allotments will not be opened at this time. Instead, the issue of opening these allotments for filing will be addressed by the Commission in subsequent order.",
+  "action": "Final rule.",
+  "agencies": [
+    {
+      "id": 161,
+      "json_url": "https://www.federalregister.gov/api/v1/agencies/161",
+      "name": "Federal Communications Commission",
+      "parent_id": null,
+      "raw_name": "FEDERAL COMMUNICATIONS COMMISSION",
+      "slug": "federal-communications-commission",
+      "url": "https://www.federalregister.gov/agencies/federal-communications-commission"
+    }
+  ],
+  "body_html_url": "https://www.federalregister.gov/documents/full_text/html/2025/02/19/2025-02747.html",
+  "cfr_references": [
+    {
+      "chapter": null,
+      "citation_url": null,
+      "part": "73",
+      "title": 47
+    }
+  ],
+  "citation": "90 FR 9846",
+  "comment_url": null,
+  "comments_close_on": null,
+  "correction_of": null,
+  "corrections": [],
+  "dates": "Effective February 19, 2025.",
+  "disposition_notes": null,
+  "docket_id": "DA 25-120",
+  "docket_ids": [
+    "DA 25-120",
+    "FR ID 280081"
+  ],
+  "dockets": [],
+  "document_number": "2025-02747",
+  "effective_on": "2025-02-19",
+  "end_page": 9846,
+  "executive_order_notes": null,
+  "executive_order_number": null,
+  "full_text_xml_url": "https://www.federalregister.gov/documents/full_text/xml/2025/02/19/2025-02747.xml",
+  "html_url": "https://www.federalregister.gov/documents/2025/02/19/2025-02747/radio-broadcasting-services-various-locations",
+  "images": {},
+  "images_metadata": {},
+  "json_url": "https://www.federalregister.gov/api/v1/documents/2025-02747?publication_date=2025-02-19",
+  "mods_url": "https://www.govinfo.gov/metadata/granule/FR-2025-02-19/2025-02747/mods.xml",
+  "not_received_for_publication": null,
+  "page_length": 1,
+  "page_views": {
+    "count": 119,
+    "last_updated": "2026-07-24 00:15:03 -0400"
+  },
+  "pdf_url": "https://www.govinfo.gov/content/pkg/FR-2025-02-19/pdf/2025-02747.pdf",
+  "presidential_document_number": null,
+  "proclamation_number": null,
+  "public_inspection_pdf_url": "https://public-inspection.federalregister.gov/2025-02747.pdf?1739886306",
+  "publication_date": "2025-02-19",
+  "raw_text_url": "https://www.federalregister.gov/documents/full_text/text/2025/02/19/2025-02747.txt",
+  "regulation_id_number_info": {},
+  "regulation_id_numbers": [],
+  "regulations_dot_gov_info": {
+    "agency_id": "FCC",
+    "checked_regulationsdotgov_at": "2025-02-20T11:55:03Z",
+    "comments_count": 0,
+    "document_id": "FCC-2025-0020-0001"
+  },
+  "regulations_dot_gov_url": null,
+  "rin": null,
+  "rin_all": [],
+  "significant": null,
+  "signing_date": null,
+  "start_page": 9846,
+  "subtype": null,
+  "title": "Radio Broadcasting Services; Various Locations",
+  "toc_doc": "Various Locations",
+  "toc_subject": "Radio Broadcasting Services",
+  "topics": [
+    "Radio"
+  ],
+  "type": "Rule",
+  "volume": 90
+}

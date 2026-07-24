@@ -1,0 +1,24 @@
+{
+  "abstract": "",
+  "agency": "2060",
+  "cfr_citations": "",
+  "rin": "2060-AV81",
+  "stage": "LONG_TERM",
+  "stage_raw": "Long-Term Actions",
+  "timetable": [
+    {
+      "action": "NPRM",
+      "citation": "89 FR 15101",
+      "date": "2024-03-01",
+      "date_raw": ""
+    },
+    {
+      "action": "FINAL RULE",
+      "citation": "",
+      "date": "",
+      "date_raw": "To Be Determined"
+    }
+  ],
+  "title": "View Rule",
+  "withdrawn": false
+}

@@ -1,0 +1,9 @@
+{
+  "status": "FOUND",
+  "absence_reason": null,
+  "qualifying_document_numbers": ["2025-14681"],
+  "candidate_assertions": [
+    {"document_number": "2025-14681", "discovered_by": "FULLTEXT_SEARCH",
+     "rule_class": "FINAL", "relevance": "MATCH"}
+  ]
+}

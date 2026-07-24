@@ -1,0 +1,36 @@
+{
+  "abstract": "",
+  "agency": "0648",
+  "cfr_citations": "",
+  "rin": "0648-BM40",
+  "stage": "COMPLETED",
+  "stage_raw": "Completed Actions",
+  "timetable": [
+    {
+      "action": "NPRM",
+      "citation": "89 FR 7660",
+      "date": "2024-02-05",
+      "date_raw": ""
+    },
+    {
+      "action": "NPRM COMMENT PERIOD END",
+      "citation": "",
+      "date": "2024-04-05",
+      "date_raw": ""
+    },
+    {
+      "action": "FINAL ACTION",
+      "citation": "89 FR 60796",
+      "date": "2024-07-29",
+      "date_raw": ""
+    },
+    {
+      "action": "FINAL ACTION EFFECTIVE",
+      "citation": "",
+      "date": "2024-08-28",
+      "date_raw": ""
+    }
+  ],
+  "title": "View Rule",
+  "withdrawn": false
+}

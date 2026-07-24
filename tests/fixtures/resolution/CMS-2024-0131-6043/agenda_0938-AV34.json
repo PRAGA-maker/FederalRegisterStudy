@@ -1,0 +1,54 @@
+{
+  "abstract": "",
+  "agency": "0938",
+  "cfr_citations": "",
+  "rin": "0938-AV34",
+  "stage": "COMPLETED",
+  "stage_raw": "Completed Actions",
+  "timetable": [
+    {
+      "action": "NPRM",
+      "citation": "89 FR 35934",
+      "date": "2024-05-02",
+      "date_raw": ""
+    },
+    {
+      "action": "NPRM COMMENT PERIOD END",
+      "citation": "",
+      "date": "2024-06-10",
+      "date_raw": ""
+    },
+    {
+      "action": "FINAL ACTION",
+      "citation": "89 FR 68986",
+      "date": "2024-08-28",
+      "date_raw": ""
+    },
+    {
+      "action": "FINAL ACTION EFFECTIVE",
+      "citation": "",
+      "date": "2024-10-01",
+      "date_raw": ""
+    },
+    {
+      "action": "INTERIM FINAL RULE",
+      "citation": "89 FR 80405",
+      "date": "2024-10-03",
+      "date_raw": ""
+    },
+    {
+      "action": "INTERIM FINAL RULE EFFECTIVE",
+      "citation": "",
+      "date": "2024-09-30",
+      "date_raw": ""
+    },
+    {
+      "action": "INTERIM FINAL RULE COMMENT PERIOD END",
+      "citation": "",
+      "date": "2024-11-29",
+      "date_raw": ""
+    }
+  ],
+  "title": "View Rule",
+  "withdrawn": false
+}

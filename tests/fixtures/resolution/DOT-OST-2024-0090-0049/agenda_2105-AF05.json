@@ -1,0 +1,42 @@
+{
+  "abstract": "",
+  "agency": "2105",
+  "cfr_citations": "",
+  "rin": "2105-AF05",
+  "stage": "COMPLETED",
+  "stage_raw": "Completed Actions",
+  "timetable": [
+    {
+      "action": "NPRM",
+      "citation": "89 FR 67922",
+      "date": "2024-08-22",
+      "date_raw": ""
+    },
+    {
+      "action": "NPRM COMMENT PERIOD END",
+      "citation": "",
+      "date": "2024-09-23",
+      "date_raw": ""
+    },
+    {
+      "action": "FINAL RULE",
+      "citation": "89 FR 102800",
+      "date": "2024-12-18",
+      "date_raw": ""
+    },
+    {
+      "action": "FINAL RULE NOTIFICATION OF ENFORCEMENT DISCRETION",
+      "citation": "90 FR 9846",
+      "date": "2025-02-19",
+      "date_raw": ""
+    },
+    {
+      "action": "FINAL RULE EFFECTIVE",
+      "citation": "",
+      "date": "2025-03-20",
+      "date_raw": ""
+    }
+  ],
+  "title": "View Rule",
+  "withdrawn": false
+}

@@ -1,0 +1,208 @@
+{
+  "abstract": "On April 10, 2024, the Bureau of Land Management (BLM) published a final rule that aims to reduce the waste of natural gas from venting, flaring, and leaks during oil and gas production activities on Federal and Indian leases. This direct final rule corrects technical errors in that final rule, including revisions to equations for consistency with, or to better reflect, the regulatory text. It separately lists definitions of the variables for those equations for increased clarity. It also corrects typographical errors and makes minor re-arrangements of provisions for better clarity.",
+  "action": "Direct final rule.",
+  "agencies": [
+    {
+      "id": 253,
+      "json_url": "https://www.federalregister.gov/api/v1/agencies/253",
+      "name": "Interior Department",
+      "parent_id": null,
+      "raw_name": "DEPARTMENT OF THE INTERIOR",
+      "slug": "interior-department",
+      "url": "https://www.federalregister.gov/agencies/interior-department"
+    },
+    {
+      "id": 275,
+      "json_url": "https://www.federalregister.gov/api/v1/agencies/275",
+      "name": "Land Management Bureau",
+      "parent_id": 253,
+      "raw_name": "Bureau of Land Management",
+      "slug": "land-management-bureau",
+      "url": "https://www.federalregister.gov/agencies/land-management-bureau"
+    }
+  ],
+  "body_html_url": "https://www.federalregister.gov/documents/full_text/html/2024/11/22/2024-27333.html",
+  "cfr_references": [
+    {
+      "chapter": null,
+      "citation_url": null,
+      "part": "3170",
+      "title": 43
+    }
+  ],
+  "citation": "89 FR 92602",
+  "comment_url": null,
+  "comments_close_on": "2024-12-23",
+  "correction_of": null,
+  "corrections": [],
+  "dates": "This direct final rule is effective on December 23, 2024, without further notice, unless the BLM receives significant adverse comment by December 23, 2024. If the BLM receives a significant adverse comment that leads it to conclude that the rule is controversial, the BLM will publish a timely withdrawal of this direct final rule in the Federal Register and the technical corrections described in this direct final rule will not go into effect. The incorporation by reference of certain material listed in the rule was approved by the Director of the Federal Register as of June 10, 2024.",
+  "disposition_notes": null,
+  "docket_id": "BLM_HQ_FRN_MO4500181705",
+  "docket_ids": [
+    "BLM_HQ_FRN_MO4500181705"
+  ],
+  "dockets": [
+    {
+      "agency_name": "BLM",
+      "documents": [
+        {
+          "allow_late_comments": false,
+          "comment_count": 2,
+          "comment_end_date": "2024-12-24",
+          "comment_start_date": "2024-11-22",
+          "comment_url": "https://www.regulations.gov/commenton/BLM-2024-0001-0001",
+          "id": "BLM-2024-0001-0001",
+          "regulations_dot_gov_open_for_comment": false,
+          "updated_at": "2024-12-24T00:01:19.190-05:00"
+        }
+      ],
+      "id": "BLM-2024-0001",
+      "supporting_documents": [],
+      "supporting_documents_count": 0,
+      "title": "Waste Prevention, Production Subject to Royalties, and Resource Conservation"
+    }
+  ],
+  "document_number": "2024-27333",
+  "effective_on": "2024-12-23",
+  "end_page": 92606,
+  "executive_order_notes": null,
+  "executive_order_number": null,
+  "full_text_xml_url": "https://www.federalregister.gov/documents/full_text/xml/2024/11/22/2024-27333.xml",
+  "html_url": "https://www.federalregister.gov/documents/2024/11/22/2024-27333/waste-prevention-production-subject-to-royalties-and-resource-conservation",
+  "images": {
+    "ER22NO24.000": {
+      "large": "https://img.federalregister.gov/ER22NO24.000/ER22NO24.000_large.png",
+      "medium": "https://img.federalregister.gov/ER22NO24.000/ER22NO24.000_medium.png",
+      "original_size": "https://img.federalregister.gov/ER22NO24.000/ER22NO24.000_original_size.png"
+    },
+    "ER22NO24.001": {
+      "large": "https://img.federalregister.gov/ER22NO24.001/ER22NO24.001_large.png",
+      "medium": "https://img.federalregister.gov/ER22NO24.001/ER22NO24.001_medium.png",
+      "original_size": "https://img.federalregister.gov/ER22NO24.001/ER22NO24.001_original_size.png"
+    }
+  },
+  "images_metadata": {
+    "ER22NO24.000": {
+      "large": {
+        "content_type": "image/png",
+        "height": 91,
+        "identifier": "ER22NO24.000",
+        "sha": "8d4c5fa1fe9a17408885afe5cffc005c",
+        "size": 1715,
+        "url": "https://img.federalregister.gov/ER22NO24.000/ER22NO24.000_large.png",
+        "width": 176
+      },
+      "medium": {
+        "content_type": "image/png",
+        "height": 43,
+        "identifier": "ER22NO24.000",
+        "sha": "6843363fdee08ffabd199f5453e0ddcb",
+        "size": 780,
+        "url": "https://img.federalregister.gov/ER22NO24.000/ER22NO24.000_medium.png",
+        "width": 83
+      },
+      "original_size": {
+        "content_type": "image/png",
+        "height": 323,
+        "identifier": "ER22NO24.000",
+        "sha": "9c4ba38a05f57663a363e2b0dd485a40",
+        "size": 2305,
+        "url": "https://img.federalregister.gov/ER22NO24.000/ER22NO24.000_original_size.png",
+        "width": 623
+      }
+    },
+    "ER22NO24.001": {
+      "large": {
+        "content_type": "image/png",
+        "height": 70,
+        "identifier": "ER22NO24.001",
+        "sha": "811150c25441cefd6751ae7d73e822e7",
+        "size": 1873,
+        "url": "https://img.federalregister.gov/ER22NO24.001/ER22NO24.001_large.png",
+        "width": 237
+      },
+      "medium": {
+        "content_type": "image/png",
+        "height": 33,
+        "identifier": "ER22NO24.001",
+        "sha": "0c8803ac8f9e75a8c53ae8331226b7d1",
+        "size": 772,
+        "url": "https://img.federalregister.gov/ER22NO24.001/ER22NO24.001_medium.png",
+        "width": 112
+      },
+      "original_size": {
+        "content_type": "image/png",
+        "height": 251,
+        "identifier": "ER22NO24.001",
+        "sha": "c96810abbdc62eeef5b87235e71c4498",
+        "size": 2290,
+        "url": "https://img.federalregister.gov/ER22NO24.001/ER22NO24.001_original_size.png",
+        "width": 851
+      }
+    }
+  },
+  "json_url": "https://www.federalregister.gov/api/v1/documents/2024-27333?publication_date=2024-11-22",
+  "mods_url": "https://www.govinfo.gov/metadata/granule/FR-2024-11-22/2024-27333/mods.xml",
+  "not_received_for_publication": null,
+  "page_length": 5,
+  "page_views": {
+    "count": 606,
+    "last_updated": "2026-07-24 00:15:03 -0400"
+  },
+  "pdf_url": "https://www.govinfo.gov/content/pkg/FR-2024-11-22/pdf/2024-27333.pdf",
+  "presidential_document_number": null,
+  "proclamation_number": null,
+  "public_inspection_pdf_url": "https://public-inspection.federalregister.gov/2024-27333.pdf?1732205770",
+  "publication_date": "2024-11-22",
+  "raw_text_url": "https://www.federalregister.gov/documents/full_text/text/2024/11/22/2024-27333.txt",
+  "regulation_id_number_info": {
+    "1004-AF01": {
+      "html_url": "https://www.federalregister.gov/regulations/1004-AF01/waste-prevention-production-subject-to-royalties-and-resource-conservation-technical-correction-to-p",
+      "issue": "202410",
+      "priority_category": "Info./Admin./Other",
+      "title": "Waste Prevention, Production Subject to Royalties, and Resource Conservation (Technical Correction to Previous Final Rule)",
+      "xml_url": "http://www.reginfo.gov/public/do/eAgendaViewRule?pubId=202410&RIN=1004-AF01&operation=OPERATION_EXPORT_XML"
+    }
+  },
+  "regulation_id_numbers": [
+    "1004-AF01"
+  ],
+  "regulations_dot_gov_info": {
+    "agency_id": "BLM",
+    "checked_regulationsdotgov_at": "2024-12-25T02:00:06Z",
+    "comments_count": 2,
+    "comments_url": "https://www.regulations.gov/docketBrowser?rpp=50&so=DESC&sb=postedDate&po=0&dct=PS&D=BLM-2024-0001",
+    "docket_id": "BLM-2024-0001",
+    "document_id": "BLM-2024-0001-0001",
+    "regulation_id_number": "1004-AF01",
+    "regulatory_plan": {
+      "html_url": "https://www.federalregister.gov/regulations/1004-AF01/waste-prevention-production-subject-to-royalties-and-resource-conservation-technical-correction-to-p",
+      "title": "Waste Prevention, Production Subject to Royalties, and Resource Conservation (Technical Correction to Previous Final Rule)"
+    },
+    "supporting_documents": [],
+    "supporting_documents_count": 0,
+    "title": "Waste Prevention, Production Subject to Royalties, and Resource Conservation"
+  },
+  "regulations_dot_gov_url": null,
+  "rin": "1004-AF01",
+  "rin_all": [
+    "1004-AF01"
+  ],
+  "significant": false,
+  "signing_date": null,
+  "start_page": 92602,
+  "subtype": null,
+  "title": "Waste Prevention, Production Subject to Royalties, and Resource Conservation",
+  "toc_doc": "Waste Prevention, Production Subject to Royalties, and Resource Conservation",
+  "toc_subject": null,
+  "topics": [
+    "Administrative practice and procedure",
+    "Incorporation by reference",
+    "Indians-lands",
+    "Mineral royalties",
+    "Oil and gas exploration",
+    "Reporting and recordkeeping requirements"
+  ],
+  "type": "Rule",
+  "volume": 89
+}

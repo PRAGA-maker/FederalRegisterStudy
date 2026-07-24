@@ -1,0 +1,117 @@
+[
+  {
+    "action": "Notification of enforcement discretion.",
+    "agencies": [
+      {
+        "id": 492,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/492",
+        "name": "Transportation Department",
+        "parent_id": null,
+        "raw_name": "DEPARTMENT OF TRANSPORTATION",
+        "slug": "transportation-department",
+        "url": "https://www.federalregister.gov/agencies/transportation-department"
+      }
+    ],
+    "citation": "90 FR 9846",
+    "docket_ids": [
+      "Docket No. DOT-OST-2024-0090"
+    ],
+    "document_number": "2025-02811",
+    "publication_date": "2025-02-19",
+    "regulation_id_numbers": [
+      "2105-AF05"
+    ],
+    "title": "Transportation for Individuals With Disabilities; Adoption of Accessibility Standards for Pedestrian Facilities in the Public Right-of-Way",
+    "type": "Rule"
+  },
+  {
+    "action": "Final rule.",
+    "agencies": [
+      {
+        "id": 492,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/492",
+        "name": "Transportation Department",
+        "parent_id": null,
+        "raw_name": "DEPARTMENT OF TRANSPORTATION",
+        "slug": "transportation-department",
+        "url": "https://www.federalregister.gov/agencies/transportation-department"
+      },
+      {
+        "raw_name": "Office of the Secretary"
+      }
+    ],
+    "citation": "89 FR 102800",
+    "docket_ids": [
+      "Docket No. DOT-OST-2024-0090"
+    ],
+    "document_number": "2024-29990",
+    "publication_date": "2024-12-18",
+    "regulation_id_numbers": [
+      "2105-AF05"
+    ],
+    "title": "Transportation for Individuals With Disabilities; Adoption of Accessibility Standards for Pedestrian Facilities in the Public Right-of-Way",
+    "type": "Rule"
+  },
+  {
+    "action": "Notice of proposed rulemaking (NPRM).",
+    "agencies": [
+      {
+        "id": 492,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/492",
+        "name": "Transportation Department",
+        "parent_id": null,
+        "raw_name": "DEPARTMENT OF TRANSPORTATION",
+        "slug": "transportation-department",
+        "url": "https://www.federalregister.gov/agencies/transportation-department"
+      },
+      {
+        "raw_name": "Office of the Secretary"
+      }
+    ],
+    "citation": "89 FR 67922",
+    "docket_ids": [
+      "Docket No. DOT-OST-2024-0090"
+    ],
+    "document_number": "2024-18496",
+    "publication_date": "2024-08-22",
+    "regulation_id_numbers": [
+      "2105-AF05"
+    ],
+    "title": "Transportation for Individuals With Disabilities; Adoption of Accessibility Standards for Pedestrian Facilities in the Public Right-of-Way",
+    "type": "Proposed Rule"
+  },
+  {
+    "action": "Final rule.",
+    "agencies": [
+      {
+        "id": 492,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/492",
+        "name": "Transportation Department",
+        "parent_id": null,
+        "raw_name": "DEPARTMENT OF TRANSPORTATION",
+        "slug": "transportation-department",
+        "url": "https://www.federalregister.gov/agencies/transportation-department"
+      },
+      {
+        "id": 170,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/170",
+        "name": "Federal Highway Administration",
+        "parent_id": 492,
+        "raw_name": "Federal Highway Administration",
+        "slug": "federal-highway-administration",
+        "url": "https://www.federalregister.gov/agencies/federal-highway-administration"
+      }
+    ],
+    "citation": "88 FR 87672",
+    "docket_ids": [
+      "FHWA Docket No. FHWA-2020-0001"
+    ],
+    "document_number": "2023-27178",
+    "publication_date": "2023-12-19",
+    "regulation_id_numbers": [
+      "2125-AF85"
+    ],
+    "title": "National Standards for Traffic Control Devices; the Manual on Uniform Traffic Control Devices for Streets and Highways; Revision",
+    "type": "Rule"
+  }
+]

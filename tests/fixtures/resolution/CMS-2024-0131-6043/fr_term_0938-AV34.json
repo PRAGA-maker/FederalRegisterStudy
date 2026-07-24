@@ -1,0 +1,316 @@
+[
+  {
+    "action": "Notice.",
+    "agencies": [
+      {
+        "id": 221,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/221",
+        "name": "Health and Human Services Department",
+        "parent_id": null,
+        "raw_name": "DEPARTMENT OF HEALTH AND HUMAN SERVICES",
+        "slug": "health-and-human-services-department",
+        "url": "https://www.federalregister.gov/agencies/health-and-human-services-department"
+      },
+      {
+        "id": 45,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/45",
+        "name": "Centers for Medicare & Medicaid Services",
+        "parent_id": 221,
+        "raw_name": "Centers for Medicare & Medicaid Services",
+        "slug": "centers-for-medicare-medicaid-services",
+        "url": "https://www.federalregister.gov/agencies/centers-for-medicare-medicaid-services"
+      }
+    ],
+    "citation": "89 FR 83015",
+    "docket_ids": [
+      "Document Identifier: CMS-855B, CMS-R-48 and CMS-10239"
+    ],
+    "document_number": "2024-23737",
+    "publication_date": "2024-10-15",
+    "regulation_id_numbers": [],
+    "title": "Agency Information Collection Activities: Submission for OMB Review; Comment Request",
+    "type": "Notice"
+  },
+  {
+    "action": "Notice.",
+    "agencies": [
+      {
+        "id": 221,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/221",
+        "name": "Health and Human Services Department",
+        "parent_id": null,
+        "raw_name": "DEPARTMENT OF HEALTH AND HUMAN SERVICES",
+        "slug": "health-and-human-services-department",
+        "url": "https://www.federalregister.gov/agencies/health-and-human-services-department"
+      },
+      {
+        "id": 45,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/45",
+        "name": "Centers for Medicare & Medicaid Services",
+        "parent_id": 221,
+        "raw_name": "Centers for Medicare & Medicaid Services",
+        "slug": "centers-for-medicare-medicaid-services",
+        "url": "https://www.federalregister.gov/agencies/centers-for-medicare-medicaid-services"
+      }
+    ],
+    "citation": "89 FR 65914",
+    "docket_ids": [
+      "Document Identifiers: CMS-10239"
+    ],
+    "document_number": "2024-18031",
+    "publication_date": "2024-08-13",
+    "regulation_id_numbers": [],
+    "title": "Agency Information Collection Activities: Proposed Collection; Comment Request",
+    "type": "Notice"
+  },
+  {
+    "action": "Notice.",
+    "agencies": [
+      {
+        "id": 221,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/221",
+        "name": "Health and Human Services Department",
+        "parent_id": null,
+        "raw_name": "DEPARTMENT OF HEALTH AND HUMAN SERVICES",
+        "slug": "health-and-human-services-department",
+        "url": "https://www.federalregister.gov/agencies/health-and-human-services-department"
+      },
+      {
+        "id": 45,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/45",
+        "name": "Centers for Medicare & Medicaid Services",
+        "parent_id": 221,
+        "raw_name": "Centers for Medicare & Medicaid Services",
+        "slug": "centers-for-medicare-medicaid-services",
+        "url": "https://www.federalregister.gov/agencies/centers-for-medicare-medicaid-services"
+      }
+    ],
+    "citation": "89 FR 64463",
+    "docket_ids": [
+      "Document Identifiers: CMS-R-48"
+    ],
+    "document_number": "2024-17484",
+    "publication_date": "2024-08-07",
+    "regulation_id_numbers": [],
+    "title": "Agency Information Collection Activities: Proposed Collection; Comment Request",
+    "type": "Notice"
+  },
+  {
+    "action": "Semiannual Regulatory Agenda.",
+    "agencies": [
+      {
+        "id": 221,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/221",
+        "name": "Health and Human Services Department",
+        "parent_id": null,
+        "raw_name": "DEPARTMENT OF HEALTH AND HUMAN SERVICES",
+        "slug": "health-and-human-services-department",
+        "url": "https://www.federalregister.gov/agencies/health-and-human-services-department"
+      },
+      {
+        "raw_name": "Office of the Secretary"
+      }
+    ],
+    "citation": "89 FR 66806",
+    "docket_ids": [],
+    "document_number": "2024-16451",
+    "publication_date": "2024-08-16",
+    "regulation_id_numbers": [],
+    "title": "Regulatory Agenda",
+    "type": "Proposed Rule"
+  },
+  {
+    "action": "Semiannual Regulatory Agenda.",
+    "agencies": [
+      {
+        "id": 221,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/221",
+        "name": "Health and Human Services Department",
+        "parent_id": null,
+        "raw_name": "DEPARTMENT OF HEALTH AND HUMAN SERVICES",
+        "slug": "health-and-human-services-department",
+        "url": "https://www.federalregister.gov/agencies/health-and-human-services-department"
+      },
+      {
+        "raw_name": "Office of the Secretary"
+      }
+    ],
+    "citation": "89 FR 9578",
+    "docket_ids": [],
+    "document_number": "2024-00453",
+    "publication_date": "2024-02-09",
+    "regulation_id_numbers": [],
+    "title": "Regulatory Agenda",
+    "type": "Proposed Rule"
+  },
+  {
+    "action": "Interim final action with comment period.",
+    "agencies": [
+      {
+        "id": 221,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/221",
+        "name": "Health and Human Services Department",
+        "parent_id": null,
+        "raw_name": "DEPARTMENT OF HEALTH AND HUMAN SERVICES",
+        "slug": "health-and-human-services-department",
+        "url": "https://www.federalregister.gov/agencies/health-and-human-services-department"
+      },
+      {
+        "id": 45,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/45",
+        "name": "Centers for Medicare & Medicaid Services",
+        "parent_id": 221,
+        "raw_name": "Centers for Medicare & Medicaid Services",
+        "slug": "centers-for-medicare-medicaid-services",
+        "url": "https://www.federalregister.gov/agencies/centers-for-medicare-medicaid-services"
+      }
+    ],
+    "citation": "89 FR 80405",
+    "docket_ids": [
+      "CMS-1808-IFC"
+    ],
+    "document_number": "2024-22765",
+    "publication_date": "2024-10-03",
+    "regulation_id_numbers": [
+      "0938-AV34"
+    ],
+    "title": "Medicare Program; Changes to the Fiscal Year 2025 Hospital Inpatient Prospective Payment System (IPPS) Rates Due to Court Decision",
+    "type": "Rule"
+  },
+  {
+    "action": "Final rule; correction",
+    "agencies": [
+      {
+        "id": 221,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/221",
+        "name": "Health and Human Services Department",
+        "parent_id": null,
+        "raw_name": "DEPARTMENT OF HEALTH AND HUMAN SERVICES",
+        "slug": "health-and-human-services-department",
+        "url": "https://www.federalregister.gov/agencies/health-and-human-services-department"
+      },
+      {
+        "id": 45,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/45",
+        "name": "Centers for Medicare & Medicaid Services",
+        "parent_id": 221,
+        "raw_name": "Centers for Medicare & Medicaid Services",
+        "slug": "centers-for-medicare-medicaid-services",
+        "url": "https://www.federalregister.gov/agencies/centers-for-medicare-medicaid-services"
+      }
+    ],
+    "citation": "89 FR 80098",
+    "docket_ids": [
+      "CMS-1808-CN2"
+    ],
+    "document_number": "2024-22501",
+    "publication_date": "2024-10-02",
+    "regulation_id_numbers": [
+      "0938-AV34"
+    ],
+    "title": "Medicare and Medicaid Programs and the Children's Health Insurance Program; Hospital Inpatient Prospective Payment Systems for Acute Care Hospitals and the Long-Term Care Hospital Prospective Payment System and Policy Changes and Fiscal Year 2025 Rates; Quality Programs Requirements; and Other Policy Changes; Correction",
+    "type": "Rule"
+  },
+  {
+    "action": "Final rule.",
+    "agencies": [
+      {
+        "id": 221,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/221",
+        "name": "Health and Human Services Department",
+        "parent_id": null,
+        "raw_name": "DEPARTMENT OF HEALTH AND HUMAN SERVICES",
+        "slug": "health-and-human-services-department",
+        "url": "https://www.federalregister.gov/agencies/health-and-human-services-department"
+      },
+      {
+        "id": 45,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/45",
+        "name": "Centers for Medicare & Medicaid Services",
+        "parent_id": 221,
+        "raw_name": "Centers for Medicare & Medicaid Services",
+        "slug": "centers-for-medicare-medicaid-services",
+        "url": "https://www.federalregister.gov/agencies/centers-for-medicare-medicaid-services"
+      }
+    ],
+    "citation": "89 FR 68986",
+    "docket_ids": [
+      "CMS-1808-F"
+    ],
+    "document_number": "2024-17021",
+    "publication_date": "2024-08-28",
+    "regulation_id_numbers": [
+      "0938-AV34"
+    ],
+    "title": "Medicare and Medicaid Programs and the Children's Health Insurance Program; Hospital Inpatient Prospective Payment Systems for Acute Care Hospitals and the Long-Term Care Hospital Prospective Payment System and Policy Changes and Fiscal Year 2025 Rates; Quality Programs Requirements; and Other Policy Changes",
+    "type": "Rule"
+  },
+  {
+    "action": "Proposed rule; correction",
+    "agencies": [
+      {
+        "id": 221,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/221",
+        "name": "Health and Human Services Department",
+        "parent_id": null,
+        "raw_name": "DEPARTMENT OF HEALTH AND HUMAN SERVICES",
+        "slug": "health-and-human-services-department",
+        "url": "https://www.federalregister.gov/agencies/health-and-human-services-department"
+      },
+      {
+        "id": 45,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/45",
+        "name": "Centers for Medicare & Medicaid Services",
+        "parent_id": 221,
+        "raw_name": "Centers for Medicare & Medicaid Services",
+        "slug": "centers-for-medicare-medicaid-services",
+        "url": "https://www.federalregister.gov/agencies/centers-for-medicare-medicaid-services"
+      }
+    ],
+    "citation": "89 FR 47884",
+    "docket_ids": [
+      "CMS-1808-CN"
+    ],
+    "document_number": "2024-12164",
+    "publication_date": "2024-06-04",
+    "regulation_id_numbers": [
+      "0938-AV34"
+    ],
+    "title": "Medicare and Medicaid Programs and the Children's Health Insurance Program; Hospital Inpatient Prospective Payment Systems for Acute Care Hospitals and the Long-Term Care Hospital Prospective Payment System and Policy Changes and Fiscal Year 2025 Rates; Quality Programs Requirements; and Other Policy Changes; Correction",
+    "type": "Proposed Rule"
+  },
+  {
+    "action": "Proposed rule.",
+    "agencies": [
+      {
+        "id": 221,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/221",
+        "name": "Health and Human Services Department",
+        "parent_id": null,
+        "raw_name": "DEPARTMENT OF HEALTH AND HUMAN SERVICES",
+        "slug": "health-and-human-services-department",
+        "url": "https://www.federalregister.gov/agencies/health-and-human-services-department"
+      },
+      {
+        "id": 45,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/45",
+        "name": "Centers for Medicare & Medicaid Services",
+        "parent_id": 221,
+        "raw_name": "Centers for Medicare & Medicaid Services",
+        "slug": "centers-for-medicare-medicaid-services",
+        "url": "https://www.federalregister.gov/agencies/centers-for-medicare-medicaid-services"
+      }
+    ],
+    "citation": "89 FR 35934",
+    "docket_ids": [
+      "CMS-1808-P"
+    ],
+    "document_number": "2024-07567",
+    "publication_date": "2024-05-02",
+    "regulation_id_numbers": [
+      "0938-AV34"
+    ],
+    "title": "Medicare and Medicaid Programs and the Children's Health Insurance Program; Hospital Inpatient Prospective Payment Systems for Acute Care Hospitals and the Long-Term Care Hospital Prospective Payment System and Policy Changes and Fiscal Year 2025 Rates; Quality Programs Requirements; and Other Policy Changes",
+    "type": "Proposed Rule"
+  }
+]

@@ -1,0 +1,28 @@
+[
+  {
+    "action": "Notice of proposed rulemaking; request for comment.",
+    "agencies": [
+      {
+        "id": 268,
+        "json_url": "https://www.federalregister.gov/api/v1/agencies/268",
+        "name": "Justice Department",
+        "parent_id": null,
+        "raw_name": "DEPARTMENT OF JUSTICE",
+        "slug": "justice-department",
+        "url": "https://www.federalregister.gov/agencies/justice-department"
+      }
+    ],
+    "citation": "89 FR 100404",
+    "docket_ids": [
+      "Docket No. FBI-158",
+      "AG Order No. 6100-2024"
+    ],
+    "document_number": "2024-28712",
+    "publication_date": "2024-12-12",
+    "regulation_id_numbers": [
+      "1110-AA36"
+    ],
+    "title": "Bipartisan Safer Communities Act of 2022 and Consolidated Appropriations Act of 2022-Implementation Revisions for National Instant Criminal Background Check System (NICS)",
+    "type": "Proposed Rule"
+  }
+]
