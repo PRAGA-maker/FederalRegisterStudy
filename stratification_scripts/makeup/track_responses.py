@@ -55,6 +55,9 @@ from stratification_scripts.makeup.fr_response_extractor import (
     ResponseExtract,
 )
 from stratification_scripts.federal_register.client import FederalRegisterClient
+from stratification_scripts.makeup.resolution_routing import (
+    ENVELOPE_VERSION, partition_by_resolution, ref_from_row, typed_fields,
+)
 
 logger = get_logger(__name__)
 
@@ -648,6 +651,7 @@ def _save_grounded_results(
     weight_map: Optional[Dict[str, float]],
     df_comments: Optional[pl.DataFrame],
     tracker_model: str,
+    typed_by_id: Optional[Dict[str, Dict]] = None,
 ) -> None:
     """Format + persist grounded (primary-source) Tier-1 results (per-comment)."""
     by_id = {str(c.get("comment_id")): (c, ext) for c, ext in grounded_meta}
@@ -673,6 +677,54 @@ def _save_grounded_results(
             "response_source": "fr_preamble",
             "response_citation": (ext.matched_header if ext else "") or "",
             "rtc_document_id": "",
+            **((typed_by_id or {}).get(comment_id, {})),
+        })
+    save_responses_incremental(responses_csv, rows, df_comments)
+
+
+def _save_resolved_norun_rows(
+    responses_csv: Path,
+    items: List,                       # [(comment_row, RoutedOutcome)]
+    weight_map: Optional[Dict[str, float]],
+    df_comments: Optional[pl.DataFrame],
+    kind: str,                         # "absent" | "unknown"
+) -> None:
+    """Persist typed rows for comments that need NO LLM call.
+
+    absent  -> response_found="no"        (envelope-relative: not found in any
+               declared bin, searched cleanly — spec §6 row 5)
+    unknown -> response_found="uncertain" (search incomplete; never collapsed to no)
+    """
+    verdict = "no" if kind == "absent" else "uncertain"
+    source = "resolver_envelope" if kind == "absent" else "resolver_unknown"
+    rows: List[Dict] = []
+    for c, outcome in items:
+        comment_id = str(c.get("comment_id"))
+        fields = typed_fields(outcome)
+        rows.append({
+            "comment_id": comment_id,
+            "document_number": str(c.get("document_number") or "N/A"),
+            "agency": str(c.get("agency") or "N/A"),
+            "response_found": verdict,
+            "agency_decision": "uncertain" if kind == "unknown" else "no_response",
+            "response_text": "N/A",
+            "response_location": "N/A",
+            "reasoning": (
+                f"Resolver: {fields['resolution_status']}"
+                + (f" ({fields['absence_reason']})" if fields["absence_reason"] else "")
+                + f" under envelope {fields['envelope_version']}"
+            ),
+            "processed_at": datetime.now().isoformat(),
+            "model": "none:resolver",
+            "comment_text_length": 0,
+            "has_attachment": bool(c.get("attachment_text")),
+            "lifecycle_stage": str(c.get("lifecycle_stage") or "UNKNOWN"),
+            "rin": str(c.get("rin") or "N/A"),
+            "response_sample_weight": weight_map.get(comment_id, 1.0) if weight_map else 1.0,
+            "response_source": source,
+            "response_citation": "",
+            "rtc_document_id": "",
+            **fields,
         })
     save_responses_incremental(responses_csv, rows, df_comments)
 
@@ -862,29 +914,29 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
             logger.warning(f"Could not initialize RegsGovClient: {e}")
             logger.warning("Will use existing attachment text only")
 
-        # --- Primary-source grounding (Approach A): build per-rule grounded cache ---
-        grounded_cache: Dict[str, ResponseExtract] = {}
-        if getattr(config, "enable_primary_source_grounding", True) and provider == "xai" and fr_csv.exists():
-            try:
-                doc_nums = [str(c.get("document_number")) for c in comments_to_process]
-                grounded_cache = build_grounded_cache(
-                    doc_nums, df_fr, getattr(config, "grounded_max_chars", 100_000)
-                )
-                logger.info(
-                    f"Primary-source grounding: {len(grounded_cache)} of {len(comments_to_process)} "
-                    f"comments have a Final-Rule response section (grounded, no web search)"
-                )
-            except Exception as e:
-                logger.warning(f"Grounded cache build failed; using web search for all: {e}")
-                grounded_cache = {}
+        # --- Resolution-layer routing (spec §6 row 5): resolver finds the venue;
+        # grounded judgment reads it; everything else is typed, never web-searched. ---
+        from stratification_scripts.federal_register.client import FederalRegisterClient
+        from stratification_scripts.reginfo.client import RegInfoClient
+        from stratification_scripts.resolution.resolver import DocumentResolver
 
-        # Partition comments: grounded primary-source path vs web-search fallback
-        grounded_items: List[tuple] = []
-        grounded_meta: List[tuple] = []
-        fallback: List[Dict] = []
-        for c in comments_to_process:
-            ext = grounded_cache.get(str(c.get("document_number")))
-            if ext is not None and ext.grounded_text:
+        fr_client = FederalRegisterClient(max_retries=6, sleep_between=0.4)
+        reginfo_client = RegInfoClient()
+        resolver = DocumentResolver(fr_client=fr_client, reginfo_client=reginfo_client)
+        try:
+            grounded, absent_items, unknown_items = partition_by_resolution(
+                comments_to_process, resolver
+            )
+            logger.info(
+                f"Resolution routing: {len(grounded)} grounded, "
+                f"{len(absent_items)} typed-absent, {len(unknown_items)} unknown "
+                f"(envelope {ENVELOPE_VERSION}; no web search)"
+            )
+
+            grounded_items: List[tuple] = []
+            grounded_meta: List[tuple] = []
+            typed_by_id: Dict[str, Dict] = {}
+            for c, outcome in grounded:
                 full_text = extract_full_comment_text(c, client=regs_client, max_pages=config.max_comment_pages)
                 meta = {
                     "comment_id": str(c.get("comment_id")),
@@ -893,34 +945,31 @@ def track_responses_for_year(config: PipelineConfig, limit: Optional[int] = None
                     "commenter_type": str(c.get("category", "N/A")),
                     "submission_date": str(c.get("posted_date", "N/A")),
                 }
-                grounded_items.append((full_text, ext.grounded_text, meta))
-                grounded_meta.append((c, ext))
-            else:
-                fallback.append(c)
+                grounded_items.append((full_text, outcome.extract.grounded_text, meta))
+                grounded_meta.append((c, outcome.extract))
+                typed_by_id[str(c.get("comment_id"))] = typed_fields(outcome)
 
-        # Process both paths (pass df_raw for duplicate propagation if dedup enabled)
-        try:
             if grounded_items:
-                logger.info(f"Tier 1 GROUNDED path: {len(grounded_items)} comments (primary-source, no web search)")
+                logger.info(f"GROUNDED path: {len(grounded_items)} comments (resolver-found venues)")
                 gres = asyncio.run(tracker.track_grounded_batch(grounded_items, max_concurrency=max_concurrency))
                 _save_grounded_results(
                     responses_csv, gres, grounded_meta, weight_map,
                     df_raw if has_deduplication else None, tracker.model,
+                    typed_by_id,
                 )
-            if fallback:
-                logger.info(f"Tier 1 WEB-SEARCH path: {len(fallback)} comments")
-                asyncio.run(process_responses_async(
-                    tracker,
-                    fallback,
-                    responses_csv,
-                    max_concurrency,
-                    regs_client,
-                    config.max_comment_pages,
-                    df_raw if has_deduplication else None,
-                    batch_size,
-                    weight_map,
-                ))
+            if absent_items:
+                _save_resolved_norun_rows(
+                    responses_csv, absent_items, weight_map,
+                    df_raw if has_deduplication else None, "absent",
+                )
+            if unknown_items:
+                _save_resolved_norun_rows(
+                    responses_csv, unknown_items, weight_map,
+                    df_raw if has_deduplication else None, "unknown",
+                )
         finally:
+            fr_client.close()
+            reginfo_client.close()
             if regs_client:
                 regs_client.close()
 
