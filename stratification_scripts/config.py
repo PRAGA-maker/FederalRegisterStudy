@@ -421,6 +421,16 @@ def get_rtc_inputs_dir() -> Path:
     return get_rtc_dir() / "inputs"
 
 
+def get_resolution_dir() -> Path:
+    """Root for document-resolution run outputs (regenerable, gitignored)."""
+    return get_project_root() / "resolution"
+
+
+def get_resolution_run_path(run_id: str) -> Path:
+    """Output directory for one resolution run."""
+    return get_resolution_dir() / run_id
+
+
 @dataclass
 class PipelineConfig:
     """
@@ -587,4 +597,3 @@ class PipelineConfig:
             return 4
         else:
             return 1
-

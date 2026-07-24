@@ -54,3 +54,6 @@ frozen/**/*.csv
 # provenance is in each run's parse_manifest.json). The parser + committed text
 # fixture (tests/fixtures/rtc_ccl5_slice.txt) define behavior.
 rtc/
+
+# Document-resolution run outputs (regenerable; provenance in each run manifest)
+/resolution/
